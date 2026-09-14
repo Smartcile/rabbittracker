@@ -118,10 +118,12 @@ Two options:
 **Prebuilt image (recommended).** Every push to `main` publishes
 `ghcr.io/smartcile/rabbittracker:latest` for `linux/amd64` and `linux/arm64` via GitHub Actions.
 In Portainer go to **Stacks → Add stack → Web editor**, paste
-[`compose.portainer.yaml`](compose.portainer.yaml), adjust the port or password if you like, and
-deploy. No `.env` is needed — the values are inline. If the image package is private, make it
-public under GitHub → Packages → rabbittracker → Package settings, or add a `ghcr.io` registry
-credential in Portainer (your GitHub username plus a classic PAT with the `read:packages` scope).
+[`compose.portainer.yaml`](compose.portainer.yaml) and deploy. Everything uses
+`${VAR:-default}` interpolation, so override `APP_PORT`, `POSTGRES_PASSWORD`, `COOKIE_SECURE` and
+friends in the stack's **Environment variables** section, or edit the defaults in place. If the
+image package is private, make it public under GitHub → Packages → rabbittracker → Package
+settings, or add a `ghcr.io` registry credential in Portainer (your GitHub username plus a classic
+PAT with the `read:packages` scope).
 
 **Build from Git.** Portainer can also build the repo itself: **Stacks → Add stack → Repository**,
 point it at this repository, set the compose path to `compose.yaml`, and paste any variables from
@@ -136,7 +138,8 @@ Copy `.env.example` to `.env` to override any of these (all optional):
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `APP_PORT` | `8091` | Host port the app is published on. |
+| `APP_PORT` | `8091` | Host port the app is published on (the container always listens on 8091). |
+| `DB_PORT` | `5434` | Host port for the bundled Postgres (local development; the Portainer stack does not publish it). |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `rabbittracker` | Database credentials for the bundled Postgres. |
 | `COOKIE_SECURE` | `false` | Set to `true` only when serving over HTTPS, otherwise login breaks on plain HTTP. |
 | `SESSION_IDLE_MINUTES` | `30` | Idle lock and server-side idle session expiry. |
