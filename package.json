@@ -1,0 +1,41 @@
+{
+  "name": "rabbittracker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c cyan,magenta \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "tsx watch server/src/index.ts",
+    "dev:client": "vite --config client/vite.config.ts",
+    "typecheck": "tsc -p server/tsconfig.json && tsc -p client/tsconfig.json",
+    "build": "npm run typecheck && npm run build:client",
+    "build:client": "vite build --config client/vite.config.ts",
+    "start": "tsx server/src/index.ts",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "db:generate": "drizzle-kit generate --config server/drizzle.config.ts",
+    "db:push": "drizzle-kit push --config server/drizzle.config.ts",
+    "db:studio": "drizzle-kit studio --config server/drizzle.config.ts"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "drizzle-orm": "^0.45.2",
+    "express": "^5.2.1",
+    "multer": "^2.3.0",
+    "pg": "^8.23.0",
+    "sharp": "^0.35.4",
+    "tsx": "^4.23.13",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^26.5.1",
+    "@types/pg": "^8.23.1",
+    "concurrently": "^10.0.5",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0"
+  }
+}
