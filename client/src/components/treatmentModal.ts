@@ -43,7 +43,12 @@ export function openTreatmentModal(options: {
   const route = lookupSelect("route", { initialLabel: editing?.route ?? "" });
   const frequency = lookupSelect("frequency", { initialLabel: editing?.frequency ?? "" });
   const reason = lookupSelect("reason", { initialLabel: editing?.reason ?? "" });
-  const startDate = h("input", { type: "date", name: "startDate", required: true, value: editing?.startDate ?? "" });
+  const startDate = h("input", {
+    type: "date",
+    name: "startDate",
+    required: true,
+    value: editing?.startDate ?? todayInputValue(),
+  });
   const endDate = h("input", { type: "date", name: "endDate", value: editing?.endDate ?? "" });
   const status = h(
     "select",
@@ -57,6 +62,25 @@ export function openTreatmentModal(options: {
 
   const weightField = h("div", { class: "field" }, h("label", null, "Weight for dose (kg)"), weight);
   weightField.style.display = "none";
+
+  let doseOverridden = false;
+  const resetDose = h(
+    "button",
+    {
+      class: "btn ghost small",
+      type: "button",
+      onClick: () => {
+        doseOverridden = false;
+        updatePreview();
+      },
+    },
+    "Use calculated dose",
+  );
+  resetDose.style.display = "none";
+  dose.addEventListener("input", () => {
+    doseOverridden = true;
+    updatePreview();
+  });
 
   const error = h("p", { class: "form-error" });
   error.style.display = "none";
@@ -75,6 +99,22 @@ export function openTreatmentModal(options: {
     return null;
   }
 
+  function parseDoseMilliUnits(text: string): number | null {
+    const match = /^([0-9]+(?:\.[0-9]+)?)/.exec(text.trim());
+    if (!match) return null;
+    const value = Number(match[1]);
+    if (!Number.isFinite(value) || value <= 0) return null;
+    return Math.round(value * 1000);
+  }
+
+  function effectivePerDose(drug: DrugDto): number | null {
+    if (doseOverridden) {
+      const parsed = parseDoseMilliUnits(dose.value);
+      if (parsed !== null) return parsed;
+    }
+    return perDoseMilliUnits(drug);
+  }
+
   function updatePreview(): void {
     const drug = selectedDrug();
     const structured =
@@ -84,6 +124,7 @@ export function openTreatmentModal(options: {
     info.style.display = drug ? "" : "none";
     weightField.style.display = structured ? "" : "none";
     summary.style.display = structured ? "" : "none";
+    resetDose.style.display = doseOverridden && structured ? "" : "none";
     info.replaceChildren();
     summary.replaceChildren();
     if (!drug) return;
@@ -111,9 +152,15 @@ export function openTreatmentModal(options: {
       ),
     );
     if (!structured) return;
-    const perDose = perDoseMilliUnits(drug);
+    const perDose = effectivePerDose(drug);
     if (perDose === null || perDose <= 0) {
-      summary.append(h("p", { class: "dim small", style: { margin: 0 } }, "Enter a weight to calculate the dose."));
+      summary.append(
+        h(
+          "p",
+          { class: "dim small", style: { margin: 0 } },
+          "Enter a weight to calculate the dose, or type a dose above to override it.",
+        ),
+      );
       return;
     }
     const total = courseTotalMilliUnits(
@@ -124,7 +171,7 @@ export function openTreatmentModal(options: {
       drug.durationDays,
     );
     const stock = stockTotalMilliUnits(drug.batches);
-    dose.value = formatDrugAmount(perDose, drug.unit);
+    if (!doseOverridden) dose.value = formatDrugAmount(perDose, drug.unit);
     summary.append(
       h(
         "div",
@@ -215,7 +262,7 @@ export function openTreatmentModal(options: {
             status: status.value,
             notes: notes.value.trim(),
             drugId: drug?.id ?? keepLink?.drugId ?? null,
-            doseMilliUnits: drug ? perDoseMilliUnits(drug) : keepLink?.doseMilliUnits ?? null,
+            doseMilliUnits: drug ? effectivePerDose(drug) : (keepLink?.doseMilliUnits ?? null),
           };
           try {
             const saved = editing
@@ -242,7 +289,14 @@ export function openTreatmentModal(options: {
       weightField,
       summary,
       h("div", { class: "field" }, h("label", null, "Medication"), medication),
-      h("div", { class: "field" }, h("label", null, "Dose"), dose),
+      h(
+        "div",
+        { class: "field" },
+        h("label", null, "Dose"),
+        dose,
+        h("span", { class: "dim small" }, "Type over the calculated dose to use a custom amount."),
+        resetDose,
+      ),
       h("div", { class: "field" }, h("label", null, "Route"), route.root),
       h("div", { class: "field" }, h("label", null, "Frequency"), frequency.root),
       h("div", { class: "field" }, h("label", null, "Reason"), reason.root),

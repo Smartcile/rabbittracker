@@ -124,7 +124,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
       (treatment) =>
         treatment.status === "active" &&
         treatment.startDate <= monthEnd &&
-        (treatment.endDate ?? treatment.startDate) >= monthStart,
+        (treatment.endDate === null || treatment.endDate >= monthStart),
     );
     const occurrences = entriesRes.entries.flatMap((entry) =>
       expandEntryStart(entry, from, to).map((at) => ({ entry, at })),
@@ -185,17 +185,27 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         const rabbitName = rabbitNames.get(treatment.rabbitId) ?? "Bunny";
         const open = () =>
           openTreatmentModal({ rabbits, treatment, onSaved: () => void refresh() });
-        if (treatment.startDate === key) {
-          cell.append(treatmentChip(`▶ ${rabbitName}: ${treatment.medication}`, open, canRecord));
-        }
-        if (
-          treatment.endDate !== null &&
-          treatment.endDate === key &&
-          treatment.endDate !== treatment.startDate
-        ) {
+        const startsToday = treatment.startDate === key;
+        const endsToday = treatment.endDate === key;
+        const activeToday =
+          date.getMonth() === view.getMonth() &&
+          treatment.startDate <= key &&
+          (treatment.endDate === null || treatment.endDate >= key);
+        if (startsToday) {
+          const frequency = treatment.frequency ? ` · ${treatment.frequency}` : "";
+          cell.append(
+            treatmentChip(
+              `▶ ${rabbitName}: ${treatment.medication}${frequency}`,
+              open,
+              canRecord,
+            ),
+          );
+        } else if (endsToday && treatment.endDate !== treatment.startDate) {
           cell.append(
             treatmentChip(`■ ${rabbitName}: ${treatment.medication} ends`, open, canRecord),
           );
+        } else if (activeToday) {
+          cell.append(treatmentChip(`${rabbitName}: ${treatment.medication}`, open, canRecord));
         }
       }
       for (const { entry } of entriesByDay.get(key) ?? []) {

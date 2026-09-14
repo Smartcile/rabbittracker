@@ -156,10 +156,11 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
         treatment.status === "active" &&
         byId.has(treatment.rabbitId) &&
         treatment.startDate <= todayKey &&
-        (treatment.endDate ?? treatment.startDate) >= todayKey,
+        (treatment.endDate === null || treatment.endDate >= todayKey),
     );
     for (const treatment of activeTreatments) {
       const rabbit = byId.get(treatment.rabbitId)!;
+      const detail = [treatment.dose, treatment.frequency, treatment.reason].filter(Boolean).join(" · ");
       rows.push(
         h(
           "div",
@@ -169,7 +170,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
             "div",
             { class: "stack", style: { gap: "0" } },
             h("strong", null, treatment.medication),
-            h("span", { class: "dim small" }, `${rabbit.name}${treatment.dose ? ` · ${treatment.dose}` : ""}`),
+            h("span", { class: "dim small" }, `${rabbit.name}${detail ? ` · ${detail}` : ""}`),
           ),
           h("span", { class: "spacer" }),
           canRecord
