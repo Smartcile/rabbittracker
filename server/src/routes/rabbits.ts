@@ -41,6 +41,7 @@ import {
   rabbitUpdateSchema,
 } from "../lib/validation.ts";
 import { deletePhotoDir, savePhoto } from "../services/photos.ts";
+import { buildReportBundle } from "../services/reportBundle.ts";
 import { needsAttention, weightSummary } from "../../../shared/health.ts";
 import type { AttentionBadgeDto, WeightAlert } from "../../../shared/types.ts";
 import { listChecksForRabbit } from "./checks.ts";
@@ -226,6 +227,17 @@ rabbitsRouter.get("/:id/checks", requireAuth, async (req, res) => {
   await findVisibleRabbit(req.user!, id);
   const rows = await listChecksForRabbit(id);
   res.json({ checks: rows.map(healthCheckToDto) });
+});
+
+rabbitsRouter.get("/:id/report", requireAuth, async (req, res) => {
+  const id = parseId(String(req.params.id));
+  await findVisibleRabbit(req.user!, id);
+  const bundle = await buildReportBundle(id, {
+    hideCosts: hideCosts(req.user!),
+    includeCarers: req.user!.isAdmin,
+  });
+  if (!bundle) throw new HttpError(404, "Rabbit not found");
+  res.json(bundle);
 });
 
 rabbitsRouter.put("/:id/carers", requireAuth, requireAdmin, async (req, res) => {

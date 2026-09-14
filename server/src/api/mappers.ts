@@ -98,6 +98,7 @@ export function settingsToDto(row: SettingsRow): SettingsDto {
   return {
     timezone: row.timezone,
     feedToken: row.feedToken,
+    shareToken: row.shareToken,
     demoMode: row.demoMode,
   };
 }

@@ -18,6 +18,7 @@ import { renderHomePage } from "./pages/home.ts";
 import { renderRabbitPage } from "./pages/rabbit.ts";
 import { renderRabbitReportPage } from "./pages/report.ts";
 import { renderSettingsPage } from "./pages/settings.ts";
+import { renderSharePage, stopShareRefresh } from "./pages/share.ts";
 import { renderUsersPage } from "./pages/users.ts";
 import { renderVetsPage } from "./pages/vets.ts";
 
@@ -125,6 +126,13 @@ function renderShell(ctx: PageContext, page: Node): HTMLElement {
 function render(): void {
   applyStoredTheme();
   document.title = "RabbitTracker";
+  stopShareRefresh();
+  const { name, params } = currentRoute();
+  if (name === "share") {
+    const id = Number(params[1]);
+    mount(appRoot, renderSharePage(params[0] ?? "", Number.isInteger(id) && id > 0 ? id : 0));
+    return;
+  }
   if (!me || me.needsSetup || !me.user) {
     mount(
       appRoot,
@@ -141,7 +149,6 @@ function render(): void {
     return;
   }
   const ctx: PageContext = { user: me.user, refresh: refreshMe, logout };
-  const { name, params } = currentRoute();
   let page: Node;
   switch (name) {
     case "settings":
@@ -202,6 +209,7 @@ window.addEventListener("hashchange", render);
 
 setInterval(() => {
   if (!me?.user) return;
+  if (currentRoute().name === "share") return;
   if (Date.now() - lastActivity > me.idleMinutes * 60_000) {
     me = null;
     location.hash = "#/login";

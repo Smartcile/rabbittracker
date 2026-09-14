@@ -1,4 +1,3 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { Router } from "express";
 import type { Request, Response } from "express";
@@ -20,6 +19,7 @@ import { hasPermission, requirePermission } from "../lib/access.ts";
 import { requireAuth } from "../lib/auth.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
 import { ensureFeedToken, getSettings, regenerateFeedToken } from "../lib/settingsStore.ts";
+import { tokenMatches } from "../lib/tokens.ts";
 import {
   calendarSubscriptionSchema,
   calendarSubscriptionUpdateSchema,
@@ -161,12 +161,6 @@ async function sendFeed(req: Request, res: Response, rabbitId: number | null): P
   res.setHeader("Content-Disposition", 'inline; filename="rabbittracker.ics"');
   res.setHeader("Cache-Control", "no-store");
   res.send(ics);
-}
-
-function tokenMatches(input: string, expected: string): boolean {
-  const a = createHash("sha256").update(input).digest();
-  const b = createHash("sha256").update(expected).digest();
-  return timingSafeEqual(a, b);
 }
 
 function parseSubscriptionId(value: string): number {

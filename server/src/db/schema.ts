@@ -15,6 +15,7 @@ export const settings = pgTable("settings", {
   id: integer("id").primaryKey().default(1),
   timezone: text("timezone").notNull().default("Pacific/Auckland"),
   feedToken: text("feed_token").notNull().default(""),
+  shareToken: text("share_token").notNull().default(""),
   demoMode: boolean("demo_mode").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

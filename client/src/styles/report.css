@@ -2,6 +2,16 @@
   margin: 0;
 }
 
+.share-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1rem 1rem 3rem;
+}
+
+.share-head h1 {
+  margin: 0;
+}
+
 .report-section h3 {
   margin: 0.9rem 0 0.35rem;
   font-size: 0.95rem;
@@ -43,7 +53,8 @@
 
   .topbar,
   .tabs,
-  .report-controls {
+  .report-controls,
+  .share-head {
     display: none !important;
   }
 

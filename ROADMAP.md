@@ -41,6 +41,10 @@
       light-themed PDF export of the full record — profile, weights, checks, daily checks,
       medication, treatments, vaccinations, routine care, appointments and journal, with optional
       photos.
+- [x] **Shareable live reports.** A public, token-gated link per bunny (`#/share/<token>/<id>`)
+      renders the read-only report screen without the app shell, auto-refreshes every minute, hides
+      costs, and can be revoked by regenerating the token in Settings. Photos load with the same
+      token, and the authenticated report and share page render from one shared bundle.
 - [x] **Profile groups + richer daily checks.** The bunny profile is grouped into collapsible
       sections (Observations, Health checks, Treatments & medication, Notes & photos, Appointments,
       Bunny details), daily check types can be multi-select, logs can carry photos, and a one-tap

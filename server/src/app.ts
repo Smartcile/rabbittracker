@@ -23,6 +23,7 @@ import { lookupsRouter } from "./routes/lookups.ts";
 import { photosRouter } from "./routes/photos.ts";
 import { rabbitsRouter } from "./routes/rabbits.ts";
 import { settingsRouter } from "./routes/settings.ts";
+import { shareRouter } from "./routes/share.ts";
 import { tasksRouter } from "./routes/tasks.ts";
 import { treatmentsRouter } from "./routes/treatments.ts";
 import { usersRouter } from "./routes/users.ts";
@@ -40,6 +41,7 @@ export function createApp(): Express {
   app.use("/api/auth", authRouter);
   app.use("/api/users", usersRouter);
   app.use("/api/settings", settingsRouter);
+  app.use("/api/share", shareRouter);
   app.use("/api/rabbits", careRabbitRouter);
   app.use("/api/rabbits", rabbitsRouter);
   app.use("/api/checks", checksRouter);

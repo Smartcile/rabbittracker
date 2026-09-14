@@ -35,37 +35,57 @@ import type {
   LookupDto,
   MedicationLogDto,
   RabbitDto,
+  ReportBundleDto,
   SettingsDto,
   TaskCompletionDto,
   TaskDto,
   TreatmentDto,
-  UserDto,
   VaccinationDto,
 } from "../../../shared/types.ts";
 import { api } from "../api.ts";
-import { loadChecklist } from "../checklist.ts";
-import { loadCheckLogTypes } from "../dailyLogs.ts";
-import { loadLookups } from "../lookups.ts";
 import { rabbitAvatar } from "../components/avatar.ts";
+import { toast } from "../components/toast.ts";
 import { optionButtons, toggleButton } from "../components/toggle.ts";
 import { renderWeightChart } from "../components/weightChart.ts";
 import type { PageContext } from "../context.ts";
-import { fmtCalendarDate, fmtDate, fmtTime, h, type Child } from "../dom.ts";
+import { copyText, fmtCalendarDate, fmtDate, fmtTime, h, type Child } from "../dom.ts";
 import { can } from "../permissions.ts";
 import { sexLabel } from "./bunnies.ts";
 
-type RabbitBundle = {
-  rabbit: RabbitDto;
-  carers: UserDto[];
-  bonds: RabbitDto[];
-  checks: HealthCheckDto[];
-  treatments: TreatmentDto[];
-  vaccinations: VaccinationDto[];
-  careSchedules: CareScheduleDto[];
-  careRecords: CareRecordDto[];
-  appointments: AppointmentDto[];
-  journal: JournalEntryDto[];
+export type ReportPhotoKind = "check" | "checklog" | "journal";
+
+export function reportPhotoUrl(kind: ReportPhotoKind, id: number): string {
+  return `/api/photos/${kind}/${id}?size=thumb`;
+}
+
+export type ReportView = {
+  bundle: ReportBundleDto;
+  range: ReportRange;
+  includePhotos: boolean;
+  showCost: boolean;
+  showCarers: boolean;
+  now: Date;
+  photoUrl: (kind: ReportPhotoKind, id: number) => string;
 };
+
+export function renderReportSections(view: ReportView): HTMLElement[] {
+  const { bundle, range, includePhotos, showCost, showCarers, now, photoUrl } = view;
+  const timezone = bundle.timezone;
+  return [
+    profileSection(bundle, showCarers),
+    dailyChecksSection(bundle.checkLogs, range, includePhotos, timezone, photoUrl),
+    bowlsSection(bundle.bowls, range, timezone),
+    tasksSection(bundle.tasks, bundle.taskCompletions, range, now, timezone),
+    weightSection(bundle.rabbit, bundle.checks, range, timezone),
+    checksSection(bundle.checks, bundle.checklist, bundle.logTypes, range, includePhotos, timezone, photoUrl),
+    vaccinationsSection(bundle.vaccinations, range, now),
+    careSection(bundle.careSchedules, bundle.careRecords, bundle.careTypes, range, now),
+    treatmentsSection(bundle.treatments, range, now),
+    medicationSection(bundle.medicationLogs, bundle.drugs, range, timezone),
+    appointmentsSection(bundle.appointments, range, showCost, timezone),
+    journalSection(bundle.journal, range, includePhotos, timezone, photoUrl),
+  ];
+}
 
 export function renderRabbitReportPage(ctx: PageContext, id: number): HTMLElement {
   document.documentElement.dataset.theme = "light";
@@ -74,17 +94,8 @@ export function renderRabbitReportPage(ctx: PageContext, id: number): HTMLElemen
   let customFrom = "";
   let customTo = "";
   let includePhotos = false;
-  let timezone: string | undefined;
-  let bundle: RabbitBundle | null = null;
-  let drugs: DrugDto[] = [];
-  let checklistSections: ChecklistSectionDto[] = [];
-  let careTypes: LookupDto[] = [];
-  let checkLogs: CheckLogDto[] = [];
-  let medLogs: MedicationLogDto[] = [];
-  let bowls: BowlDto[] = [];
-  let logTypes: CheckLogTypeDto[] = [];
-  let tasks: TaskDto[] = [];
-  let taskCompletions: TaskCompletionDto[] = [];
+  let shareToken = "";
+  let bundle: ReportBundleDto | null = null;
   const showCost = can(ctx.user, "canViewCosts");
   const isAdmin = ctx.user.isAdmin;
 
@@ -148,8 +159,21 @@ export function renderRabbitReportPage(ctx: PageContext, id: number): HTMLElemen
     "Download PDF",
   );
 
+  async function copyShareLink(): Promise<void> {
+    const url = new URL(`#/share/${shareToken}/${id}`, location.href).toString();
+    await copyText(url);
+    toast("Share link copied");
+  }
+
   function renderControls(): void {
     presets.setValues([preset]);
+    const share = shareToken
+      ? h(
+          "button",
+          { class: "btn outline", type: "button", onClick: () => void copyShareLink() },
+          "Copy share link",
+        )
+      : null;
     controls.replaceChildren(
       h(
         "div",
@@ -163,6 +187,7 @@ export function renderRabbitReportPage(ctx: PageContext, id: number): HTMLElemen
         "div",
         { class: "row wrap" },
         download,
+        share,
         h("a", { class: "btn outline", href: `#/rabbit/${id}` }, "Back to bunny"),
       ),
       h(
@@ -178,59 +203,29 @@ export function renderRabbitReportPage(ctx: PageContext, id: number): HTMLElemen
     const now = new Date();
     const range = resolveReportRange(preset, now, customFrom, customTo);
     body.replaceChildren(
-      head(bundle.rabbit, range, timezone),
-      profileSection(bundle, isAdmin),
-      dailyChecksSection(checkLogs, range, includePhotos, timezone),
-      bowlsSection(bowls, range, timezone),
-      tasksSection(tasks, taskCompletions, range, now, timezone),
-      weightSection(bundle.rabbit, bundle.checks, range, timezone),
-      checksSection(bundle.checks, checklistSections, logTypes, range, includePhotos, timezone),
-      vaccinationsSection(bundle.vaccinations, range, now),
-      careSection(bundle.careSchedules, bundle.careRecords, careTypes, range, now),
-      treatmentsSection(bundle.treatments, range, now),
-      medicationSection(medLogs, drugs, range, timezone),
-      appointmentsSection(bundle.appointments, range, showCost, timezone),
-      journalSection(bundle.journal, range, includePhotos, timezone),
+      head(bundle.rabbit, range, bundle.timezone),
+      ...renderReportSections({
+        bundle,
+        range,
+        includePhotos,
+        showCost,
+        showCarers: isAdmin,
+        now,
+        photoUrl: reportPhotoUrl,
+      }),
     );
   }
 
   async function load(): Promise<void> {
     try {
-      const [
-        rabbitBundle,
-        drugResponse,
-        sections,
-        lookups,
-        logTypesResponse,
-        logResponse,
-        medResponse,
-        bowlResponse,
-        taskResponse,
-        settingsResponse,
-      ] = await Promise.all([
-        api.get<RabbitBundle>(`/api/rabbits/${id}`),
-        api.get<{ drugs: DrugDto[] }>("/api/drugs"),
-        loadChecklist(),
-        loadLookups(),
-        loadCheckLogTypes(),
-        api.get<{ logs: CheckLogDto[] }>(`/api/check-logs?rabbitId=${id}`),
-        api.get<{ logs: MedicationLogDto[] }>(`/api/medication-logs?rabbitId=${id}`),
-        api.get<{ bowls: BowlDto[] }>(`/api/bowls?rabbitId=${id}`),
-        api.get<{ tasks: TaskDto[]; completions: TaskCompletionDto[] }>(`/api/tasks?rabbitId=${id}`),
+      const [report, settingsResponse] = await Promise.all([
+        api.get<ReportBundleDto>(`/api/rabbits/${id}/report`),
         api.get<{ settings: SettingsDto }>("/api/settings"),
       ]);
-      bundle = rabbitBundle;
-      drugs = drugResponse.drugs;
-      checklistSections = sections;
-      careTypes = lookups.filter((lookup) => lookup.kind === "care_type");
-      logTypes = logTypesResponse;
-      checkLogs = logResponse.logs;
-      medLogs = medResponse.logs;
-      bowls = bowlResponse.bowls;
-      tasks = taskResponse.tasks;
-      taskCompletions = taskResponse.completions;
-      timezone = settingsResponse.settings.timezone;
-      document.title = `${rabbitBundle.rabbit.name} report`;
+      bundle = report;
+      shareToken = settingsResponse.settings.shareToken;
+      document.title = `${report.rabbit.name} report`;
+      renderControls();
       renderBody();
     } catch (err) {
       body.replaceChildren(
@@ -276,7 +271,7 @@ function rangeLabel(range: ReportRange, timezone: string | undefined): string {
   return `${from} – ${to}`;
 }
 
-function profileSection(bundle: RabbitBundle, isAdmin: boolean): HTMLElement {
+function profileSection(bundle: ReportBundleDto, showCarers: boolean): HTMLElement {
   const rabbit = bundle.rabbit;
   const min = rabbit.targetWeightMinGrams;
   const max = rabbit.targetWeightMaxGrams;
@@ -302,7 +297,7 @@ function profileSection(bundle: RabbitBundle, isAdmin: boolean): HTMLElement {
     ["Target weight", target],
     ["Bonded with", bundle.bonds.length > 0 ? bundle.bonds.map((bond) => bond.name).join(", ") : "None"],
   ];
-  if (isAdmin) {
+  if (showCarers) {
     rows.push([
       "Carers",
       bundle.carers.length > 0
@@ -372,6 +367,7 @@ function checksSection(
   range: ReportRange,
   includePhotos: boolean,
   timezone: string | undefined,
+  photoUrl: (kind: ReportPhotoKind, id: number) => string,
 ): HTMLElement {
   const inRange = checks.filter((check) => isWithinRange(check.checkedAt, range));
   if (inRange.length === 0) {
@@ -395,9 +391,7 @@ function checksSection(
     if (includePhotos) {
       cells.push(
         check.hasPhoto
-          ? reportPhotos([
-              { src: `/api/photos/check/${check.id}?size=thumb`, alt: "Check photo" },
-            ])
+          ? reportPhotos([{ src: photoUrl("check", check.id), alt: "Check photo" }])
           : "—",
       );
     }
@@ -411,6 +405,7 @@ function dailyChecksSection(
   range: ReportRange,
   includePhotos: boolean,
   timezone: string | undefined,
+  photoUrl: (kind: ReportPhotoKind, id: number) => string,
 ): HTMLElement {
   const inRange = logs.filter((log) => isWithinRange(log.loggedAt, range));
   if (inRange.length === 0) {
@@ -435,7 +430,7 @@ function dailyChecksSection(
         log.photos.length > 0
           ? reportPhotos(
               log.photos.map((photo) => ({
-                src: `/api/photos/checklog/${photo.id}?size=thumb`,
+                src: photoUrl("checklog", photo.id),
                 alt: photo.caption || "Daily check photo",
               })),
             )
@@ -725,6 +720,7 @@ function journalSection(
   range: ReportRange,
   includePhotos: boolean,
   timezone: string | undefined,
+  photoUrl: (kind: ReportPhotoKind, id: number) => string,
 ): HTMLElement {
   const inRange = entries.filter((entry) => isWithinRange(entry.createdAt, range));
   if (inRange.length === 0) {
@@ -749,7 +745,7 @@ function journalSection(
           includePhotos && entry.photos.length > 0
             ? reportPhotos(
                 entry.photos.map((photo) => ({
-                  src: `/api/photos/journal/${photo.id}?size=thumb`,
+                  src: photoUrl("journal", photo.id),
                   alt: photo.caption || "Journal photo",
                 })),
               )

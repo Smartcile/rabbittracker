@@ -27,6 +27,7 @@ export type AuthMeDto = {
 export type SettingsDto = {
   timezone: string;
   feedToken: string;
+  shareToken: string;
   demoMode: boolean;
 };
 
@@ -425,4 +426,27 @@ export type ChecklistSectionDto = {
   multiple: boolean;
   options: ChecklistOptionDto[];
   photos: ChecklistPhotoDto[];
+};
+
+export type ReportBundleDto = {
+  timezone: string;
+  rabbit: RabbitDto;
+  bonds: RabbitDto[];
+  carers: UserDto[];
+  checks: HealthCheckDto[];
+  treatments: TreatmentDto[];
+  vaccinations: VaccinationDto[];
+  careSchedules: CareScheduleDto[];
+  careRecords: CareRecordDto[];
+  appointments: AppointmentDto[];
+  journal: JournalEntryDto[];
+  checkLogs: CheckLogDto[];
+  medicationLogs: MedicationLogDto[];
+  bowls: BowlDto[];
+  tasks: TaskDto[];
+  taskCompletions: TaskCompletionDto[];
+  drugs: DrugDto[];
+  checklist: ChecklistSectionDto[];
+  logTypes: CheckLogTypeDto[];
+  careTypes: LookupDto[];
 };

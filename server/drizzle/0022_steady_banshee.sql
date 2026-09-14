@@ -1,0 +1,1 @@
+ALTER TABLE "settings" ADD COLUMN "share_token" text DEFAULT '' NOT NULL;

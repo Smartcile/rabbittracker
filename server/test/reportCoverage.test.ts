@@ -32,7 +32,7 @@ describe("bunny report coverage", () => {
       .filter((name) => !REPORTED_TABLES.has(name) && !NON_REPORT_TABLES.has(name));
     expect(
       unaccounted,
-      `Add these tables to the bunny report or to NON_REPORT_TABLES: ${unaccounted.join(", ")}`,
+      `Add these tables to server/src/services/reportBundle.ts (and the report sections) or to NON_REPORT_TABLES: ${unaccounted.join(", ")}`,
     ).toEqual([]);
   });
 });

@@ -169,6 +169,7 @@ describe("settingsToDto", () => {
       id: 1,
       timezone: "Pacific/Auckland",
       feedToken: "abc123",
+      shareToken: "def456",
       demoMode: true,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       updatedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -176,6 +177,7 @@ describe("settingsToDto", () => {
     expect(settingsToDto(row)).toEqual({
       timezone: "Pacific/Auckland",
       feedToken: "abc123",
+      shareToken: "def456",
       demoMode: true,
     });
   });

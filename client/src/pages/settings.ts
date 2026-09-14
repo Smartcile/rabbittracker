@@ -24,6 +24,7 @@ export function renderSettingsPage(ctx: PageContext): HTMLElement {
     renderDailyChecksCard(),
     renderSubscribeCard(),
     renderSubscriptionsCard(),
+    renderShareCard(),
     renderExportCard(),
     renderDemoCard(),
     renderAccountCard(ctx),
@@ -155,6 +156,65 @@ function renderDemoCard(): HTMLElement {
       h("span", null, "Show demo data"),
     ),
     status,
+  );
+}
+
+function renderShareCard(): HTMLElement {
+  const token = h("span", { class: "mono" }, "…");
+  const error = h("p", { class: "form-error" });
+  error.style.display = "none";
+
+  async function load(): Promise<void> {
+    try {
+      const { settings } = await api.get<{ settings: SettingsDto }>("/api/settings");
+      token.textContent = settings.shareToken || "—";
+    } catch {
+      token.textContent = "—";
+    }
+  }
+
+  const regenerate = h(
+    "button",
+    {
+      class: "btn outline small",
+      type: "button",
+      onClick: async () => {
+        error.style.display = "none";
+        const confirmed = await confirmDialog({
+          title: "Regenerate share token?",
+          message: "Every existing share link stops working immediately.",
+          confirmLabel: "Regenerate",
+          danger: true,
+        });
+        if (!confirmed) return;
+        try {
+          const { settings } = await api.post<{ settings: SettingsDto }>(
+            "/api/settings/share-token/regenerate",
+          );
+          token.textContent = settings.shareToken;
+          toast("Share token regenerated");
+        } catch (err) {
+          error.textContent = err instanceof Error ? err.message : "Something went wrong";
+          error.style.display = "";
+        }
+      },
+    },
+    "Regenerate token",
+  );
+
+  void load();
+  return h(
+    "div",
+    { class: "card" },
+    h("h2", null, "Share links"),
+    h(
+      "p",
+      { class: "dim small" },
+      "A share link shows one bunny's live report to anyone who has the link — read-only, no login, costs hidden. Open a bunny's report and use Copy share link to get its URL. Great with a Cloudflare tunnel.",
+    ),
+    error,
+    h("p", { class: "dim small" }, "Token: ", token),
+    h("div", { class: "row wrap" }, regenerate),
   );
 }
 

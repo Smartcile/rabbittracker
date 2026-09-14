@@ -124,9 +124,9 @@ export async function loadSession(req: Request): Promise<{ user: UserRow } | nul
   return { user: row.user };
 }
 
-export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
+async function attachSession(req: Request): Promise<boolean> {
   const session = await loadSession(req);
-  if (!session) throw new HttpError(401, "Authentication required");
+  if (!session) return false;
   req.user = {
     id: session.user.id,
     username: session.user.username,
@@ -139,6 +139,16 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     canManageCalendar: session.user.canManageCalendar,
     canEditFaq: session.user.canEditFaq,
   };
+  return true;
+}
+
+export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
+  if (!(await attachSession(req))) throw new HttpError(401, "Authentication required");
+  next();
+}
+
+export async function optionalAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
+  await attachSession(req);
   next();
 }
 

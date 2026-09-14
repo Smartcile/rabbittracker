@@ -90,6 +90,9 @@ Desktop:
   quarantine.
 - Export health checks CSV, appointments CSV, a JSON backup and a full ZIP backup that adds every
   photo file.
+- **Share links** — a read-only live report URL per bunny (`#/share/<token>/<id>`) that
+  auto-refreshes every minute. Viewers need no login, costs are hidden, and regenerating the token
+  in Settings revokes every link at once.
 - Demo mode — a Settings switch that loads sample bunnies, records, appointments (dated around the
   current month), journal entries, bonds, a vet and a clinic, and removes every demo row when
   switched off.
@@ -173,7 +176,9 @@ Copy `.env.example` to `.env` to override any of these (all optional):
 | `DATABASE_URL` | built from the Postgres variables | Override to point at an external Postgres. |
 
 For phone access from outside the LAN, put the machine on [Tailscale](https://tailscale.com) and
-open `http://<machine-name>:8091` from the phone.
+open `http://<machine-name>:8091` from the phone. To share a bunny's live report with someone
+outside your network, expose the app through a Cloudflare tunnel and send the share link from that
+bunny's report page — viewers see only the report screen, never the app.
 
 ## Sign-in and roles
 
