@@ -111,6 +111,25 @@ docker compose ps
 docker compose logs -f app
 ```
 
+### Deploy with Portainer
+
+Two options:
+
+**Prebuilt image (recommended).** Every push to `main` publishes
+`ghcr.io/smartcile/rabbittracker:latest` for `linux/amd64` and `linux/arm64` via GitHub Actions.
+In Portainer go to **Stacks → Add stack → Web editor**, paste
+[`compose.portainer.yaml`](compose.portainer.yaml), adjust the port or password if you like, and
+deploy. No `.env` is needed — the values are inline. If the image package is private, make it
+public under GitHub → Packages → rabbittracker → Package settings, or add a `ghcr.io` registry
+credential in Portainer (your GitHub username plus a classic PAT with the `read:packages` scope).
+
+**Build from Git.** Portainer can also build the repo itself: **Stacks → Add stack → Repository**,
+point it at this repository, set the compose path to `compose.yaml`, and paste any variables from
+`.env.example` into the stack's environment variables. Portainer builds the image on the host.
+
+Either way the database and photo volumes (`rt_db`, `rt_data`) are named Docker volumes, so the
+stack survives container recreation.
+
 ### Environment variables
 
 Copy `.env.example` to `.env` to override any of these (all optional):

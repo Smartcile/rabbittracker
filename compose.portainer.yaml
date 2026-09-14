@@ -1,0 +1,59 @@
+# RabbitTracker — Portainer stack (prebuilt image, no build step, no .env needed).
+#
+# Portainer: Stacks -> Add stack -> Web editor, paste this file, then click
+# "Deploy the stack". Edit the values below directly if you want a different
+# port, password or session settings.
+#
+# The app image is published to GitHub Container Registry by
+# .github/workflows/docker-publish.yml. If the package is private, either make
+# it public in GitHub -> Packages -> rabbittracker -> Package settings, or add
+# a Portainer registry credential for ghcr.io (username: your GitHub username,
+# password: a classic PAT with the read:packages scope).
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: rabbittracker
+      # CHANGE ME before exposing this stack to anyone else.
+      POSTGRES_PASSWORD: rabbittracker
+      POSTGRES_DB: rabbittracker
+    volumes:
+      - rt_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rabbittracker -d rabbittracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    image: ghcr.io/smartcile/rabbittracker:latest
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_PORT: 8091
+      # Keep the user/password/database in sync with the db service above.
+      DATABASE_URL: postgres://rabbittracker:rabbittracker@db:5432/rabbittracker
+      # Set to "true" only when the app is served over HTTPS.
+      COOKIE_SECURE: "false"
+      SESSION_IDLE_MINUTES: "30"
+      SESSION_TTL_MINUTES: "10080"
+      DATA_DIR: /data
+    ports:
+      # Host port on the left — change it if 8091 is taken.
+      - "8091:8091"
+    volumes:
+      - rt_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8091/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  rt_data:
+  rt_db:

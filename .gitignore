@@ -4,3 +4,7 @@ data/
 .env
 *.log
 .DS_Store
+
+# Internal agent/prompt notes — keep local, never publish
+AGENTS.md
+PROMPT.md
