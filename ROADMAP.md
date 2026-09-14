@@ -37,6 +37,24 @@
 - [x] **Bunny powerhouse batch 1.** Quarantine flag with release date, target weight range,
       feeding plan, memorial details (date/reason), temperature and pain score on checks, bonded
       bunny links, per-bunny photo gallery, and a home dashboard stat row.
+- [x] **Printable bunny report.** Period presets (day, week, month, all time, custom) and a
+      light-themed PDF export of the full record — profile, weights, checks, daily checks,
+      medication, treatments, vaccinations, routine care, appointments and journal, with optional
+      photos.
+- [x] **Profile groups + richer daily checks.** The bunny profile is grouped into collapsible
+      sections (Observations, Health checks, Treatments & medication, Notes & photos, Appointments,
+      Bunny details), daily check types can be multi-select, logs can carry photos, and a one-tap
+      type bar logs poo, water, food or behaviour without opening the full form.
+- [x] **Bowl scale tracking.** Per-bunny food/water bowls with a starting weight, rolling weigh-ins
+      that calculate consumption since the last reading, automatic refill detection (or an entered
+      refill amount), and a refresh action that starts a new period with an optional final weight.
+- [x] **Daily routine tasks.** Repeating chores and medication rounds per bunny with
+      morning/afternoon/evening/anytime slots and an every-N-days repeat, one-tap completion from
+      the bunny profile or the home Today list, and automatic dose logging with FEFO stock
+      deduction (and undo) for tasks linked to a treatment.
+- [x] **Sunday check with daily observations.** The full health check form can switch on any
+      configured daily check type (poo, water, food, behaviour, …) as an optional section for that
+      check; amounts and text are stored on the check and shown in the history table.
 
 ## Planned features (agreed but not built)
 
@@ -54,17 +72,16 @@ These are queued from the "bunny powerhouse" list; pick them up in any order.
 - [ ] **Public adoption page** — shareable read-only bunny profile link for listings.
 
 **Health & medical**
-- [ ] **Medication due-dose checklist** — per-day doses generated from active treatments with
-      tick-off, so meds are never missed.
+- [ ] **Auto-generated dose tasks** — create routine tasks for each active treatment automatically,
+      so meds are never missed (manually linked tasks are done).
 - [ ] **Symptom episodes** — track an episode (e.g. gut stasis) separately from routine checks,
       with severity and outcome.
-- [ ] **Daily intake/output logging** — hay, water, pellets, urine and droppings for sick bunnies.
+- [ ] **Daily intake/output logging** — hay, pellets, urine and droppings for sick bunnies (bowl
+      weighing for food and water is done).
 - [ ] **Procedure & surgery records** — desexing, dental work, abscess surgery, etc. with dates
       and notes.
 - [ ] **Parasite treatments** — mites/fleas/worms log with retreat dates.
 - [ ] **Vaccination certificates** — upload a photo/PDF per vaccination.
-- [ ] **Weight-trend PDF / printable vet summary** — one-page profile, current meds, recent
-      weights, vaccines and notes for the vet.
 
 **Care & supplies**
 - [ ] **Food & supply inventory** — hay, pellets, critical care, litter with reorder levels, like
@@ -72,7 +89,8 @@ These are queued from the "bunny powerhouse" list; pick them up in any order.
 - [ ] **Purchase history & spend** — per supplier, with cost totals per bunny.
 
 **Scheduling & comms**
-- [ ] **Custom reminders** — one-off and recurring chores per bunny, assigned to a worker.
+- [ ] **Task assignment & reminders** — assign routine tasks to a worker and send due notifications
+      (recurring chores themselves are done).
 - [ ] **Medication/appointment notifications** — PWA push or email for due meds, vaccines, care
       and appointments, with per-user preferences.
 - [ ] **Foster rota/handover** — who has which bunny this week, with a handover note.

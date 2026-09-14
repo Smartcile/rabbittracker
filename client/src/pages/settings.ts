@@ -164,11 +164,17 @@ function renderExportCard(): HTMLElement {
     { class: "card" },
     h("h2", null, "Export"),
     h(
+      "p",
+      { class: "dim small" },
+      "The full backup is a ZIP with backup.json and every photo file — session tokens and password/PIN hashes are excluded.",
+    ),
+    h(
       "div",
       { class: "row wrap" },
+      h("a", { class: "btn primary", href: "/api/export/backup.zip" }, "Full backup (ZIP)"),
+      h("a", { class: "btn outline", href: "/api/export/backup.json" }, "JSON only"),
       h("a", { class: "btn outline", href: "/api/export/checks.csv" }, "Checks CSV"),
       h("a", { class: "btn outline", href: "/api/export/appointments.csv" }, "Appointments CSV"),
-      h("a", { class: "btn outline", href: "/api/export/backup.json" }, "JSON backup"),
     ),
   );
 }

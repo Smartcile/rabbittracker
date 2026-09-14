@@ -1,4 +1,14 @@
-import type { ChecklistSectionDto, HealthCheckDto, RabbitDto } from "../../../shared/types.ts";
+import type {
+  CheckLogTypeDto,
+  ChecklistSectionDto,
+  HealthCheckDto,
+  RabbitDto,
+} from "../../../shared/types.ts";
+import {
+  DAILY_CHECK_KEY_PREFIX,
+  isDailyCheckAnswerKey,
+} from "../../../shared/checklist.ts";
+import { formatLogNumber } from "../../../shared/checkLogs.ts";
 import { formatWeight } from "../../../shared/health.ts";
 import { api } from "../api.ts";
 import { fmtDate, fmtTime, h } from "../dom.ts";
@@ -10,6 +20,7 @@ export type ChecksTableOptions = {
   checks: HealthCheckDto[];
   rabbits: RabbitDto[];
   sections?: ChecklistSectionDto[];
+  logTypes?: CheckLogTypeDto[];
   showRabbit?: boolean;
   timezone?: string;
   canEdit?: boolean;
@@ -97,36 +108,56 @@ function statusSummary(check: HealthCheckDto): Node {
 
 function checklistFilled(check: HealthCheckDto): boolean {
   return Object.values(check.checklist ?? {}).some(
-    (answer) => answer.values.length > 0 || answer.other.length > 0,
+    (answer) =>
+      answer.values.length > 0 ||
+      answer.other.length > 0 ||
+      answer.numberMilli != null ||
+      (answer.text ?? "").length > 0,
   );
 }
 
-function checklistLines(check: HealthCheckDto, sections: ChecklistSectionDto[]): HTMLElement[] {
-  const entries = sections.length > 0
-    ? sections.flatMap((section) => {
-        const answer = check.checklist?.[section.key];
-        return answer ? [{ label: section.label, answer, section }] : [];
-      })
-    : Object.entries(check.checklist ?? {}).map(([key, answer]) => ({
-        label: key,
-        answer,
-        section: undefined as ChecklistSectionDto | undefined,
-      }));
-  return entries.flatMap(({ label, answer, section }) => {
-    if (answer.values.length === 0 && !answer.other) return [];
+function checklistLines(
+  check: HealthCheckDto,
+  sections: ChecklistSectionDto[],
+  logTypes: CheckLogTypeDto[],
+): HTMLElement[] {
+  const lines: HTMLElement[] = [];
+  const answers = check.checklist ?? {};
+  const covered = new Set<string>();
+  for (const section of sections) {
+    const answer = answers[section.key];
+    if (!answer) continue;
+    covered.add(section.key);
     const parts = answer.values.map(
-      (value) => section?.options.find((option) => option.value === value)?.label ?? value,
+      (value) => section.options.find((option) => option.value === value)?.label ?? value,
     );
     if (answer.other) parts.push(`Other: ${answer.other}`);
-    return [
-      h(
-        "div",
-        { class: "checklist-line" },
-        h("strong", null, label),
-        h("span", null, parts.join(", ")),
-      ),
-    ];
-  });
+    if (parts.length > 0) lines.push(checklistLine(section.label, parts));
+  }
+  const typeByKey = new Map(logTypes.map((type) => [type.key, type]));
+  for (const [key, answer] of Object.entries(answers)) {
+    if (covered.has(key)) continue;
+    const type = isDailyCheckAnswerKey(key)
+      ? typeByKey.get(key.slice(DAILY_CHECK_KEY_PREFIX.length))
+      : undefined;
+    const label =
+      type?.label ?? (isDailyCheckAnswerKey(key) ? key.slice(DAILY_CHECK_KEY_PREFIX.length) : key);
+    const parts = [...answer.values];
+    if (answer.numberMilli != null) parts.push(formatLogNumber(answer.numberMilli, type?.unit ?? ""));
+    if (answer.text) parts.push(answer.text);
+    if (answer.other) parts.push(`Other: ${answer.other}`);
+    if (parts.length > 0) lines.push(checklistLine(label, parts));
+  }
+  return lines;
+}
+
+function checklistLine(label: string, parts: string[]): HTMLElement {
+  return h(
+    "div",
+    { class: "checklist-line" },
+    h("strong", null, label),
+    h("span", null, parts.join(", ")),
+  );
 }
 
 function detail(check: HealthCheckDto, options: ChecksTableOptions, refresh: () => void): Node {
@@ -134,7 +165,7 @@ function detail(check: HealthCheckDto, options: ChecksTableOptions, refresh: () 
 
   if (check.notes) content.append(h("p", { style: { margin: 0 } }, check.notes));
 
-  const lines = checklistLines(check, options.sections ?? []);
+  const lines = checklistLines(check, options.sections ?? [], options.logTypes ?? []);
   if (lines.length > 0) {
     content.append(h("div", { class: "checklist-summary" }, ...lines));
   }

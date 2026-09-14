@@ -4,9 +4,11 @@ import type {
   DrugDto,
   HealthCheckDto,
   RabbitSummaryDto,
+  TaskDto,
   TreatmentDto,
 } from "../../../shared/types.ts";
-import { ageLabel, upcomingAppointments } from "../../../shared/health.ts";
+import { ageLabel, taskDueStatus, upcomingAppointments } from "../../../shared/health.ts";
+import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
 import { api } from "../api.ts";
 import { loadCheckLogTypes } from "../dailyLogs.ts";
 import { rabbitAvatar } from "../components/avatar.ts";
@@ -65,18 +67,20 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
   );
 
   async function load(): Promise<void> {
-    const [{ rabbits }, { appointments }, { treatments }, { drugs }, logTypes] = await Promise.all([
-      api.get<{ rabbits: RabbitSummaryDto[] }>("/api/rabbits"),
-      api.get<{ appointments: AppointmentDto[] }>("/api/appointments"),
-      api.get<{ treatments: TreatmentDto[] }>("/api/treatments"),
-      api.get<{ drugs: DrugDto[] }>("/api/drugs"),
-      loadCheckLogTypes(),
-    ]);
+    const [{ rabbits }, { appointments }, { treatments }, { drugs }, logTypes, { tasks }] =
+      await Promise.all([
+        api.get<{ rabbits: RabbitSummaryDto[] }>("/api/rabbits"),
+        api.get<{ appointments: AppointmentDto[] }>("/api/appointments"),
+        api.get<{ treatments: TreatmentDto[] }>("/api/treatments"),
+        api.get<{ drugs: DrugDto[] }>("/api/drugs"),
+        loadCheckLogTypes(),
+        api.get<{ tasks: TaskDto[] }>("/api/tasks"),
+      ]);
     const hasActive = rabbits.some((rabbit) => rabbit.status === "active");
     quickLog.disabled = !hasActive;
     fab.disabled = !hasActive;
     renderStats(rabbits, appointments, treatments);
-    renderToday(rabbits, appointments, treatments, drugs, logTypes);
+    renderToday(rabbits, appointments, treatments, drugs, logTypes, tasks);
     renderAttention(rabbits);
     renderUpcoming(appointments, rabbits);
     if (rabbits.length === 0) {
@@ -125,6 +129,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
     treatments: TreatmentDto[],
     drugs: DrugDto[],
     logTypes: CheckLogTypeDto[],
+    tasks: TaskDto[],
   ): void {
     const activeRabbits = rabbits.filter((rabbit) => rabbit.status === "active");
     const byId = new Map(activeRabbits.map((rabbit) => [rabbit.id, rabbit]));
@@ -147,6 +152,47 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
           h("span", { class: "dim small" }, appointment.title),
           h("span", { class: "spacer" }),
           h("span", { class: "mono small" }, fmtTime(appointment.scheduledAt)),
+        ),
+      );
+    }
+
+    const dueTasks = tasks
+      .filter(
+        (task) =>
+          task.active &&
+          byId.has(task.rabbitId) &&
+          taskDueStatus(task.lastCompletedAt, task.intervalDays, new Date()) === "due",
+      )
+      .sort(
+        (a, b) => TASK_SLOTS.indexOf(a.slot) - TASK_SLOTS.indexOf(b.slot) || a.id - b.id,
+      );
+    for (const task of dueTasks) {
+      const rabbit = byId.get(task.rabbitId)!;
+      const treatment = task.treatmentId != null ? treatments.find((item) => item.id === task.treatmentId) : undefined;
+      const detail = [TASK_SLOT_LABELS[task.slot], treatment?.medication].filter(Boolean).join(" · ");
+      rows.push(
+        h(
+          "div",
+          { class: "list-row" },
+          h("span", { class: "badge accent" }, "Task"),
+          h(
+            "div",
+            { class: "stack", style: { gap: "0" } },
+            h("strong", null, task.label),
+            h("span", { class: "dim small" }, `${rabbit.name}${detail ? ` · ${detail}` : ""}`),
+          ),
+          h("span", { class: "spacer" }),
+          canRecord
+            ? h(
+                "button",
+                {
+                  class: "btn primary small",
+                  type: "button",
+                  onClick: () => void completeTask(task),
+                },
+                "Done",
+              )
+            : null,
         ),
       );
     }
@@ -337,6 +383,19 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
     const active = rabbits.filter((rabbit) => rabbit.status === "active");
     if (active.length === 0) return;
     openCheckModal({ rabbits: active, onSaved: (_check: HealthCheckDto) => void load() });
+  }
+
+  async function completeTask(task: TaskDto): Promise<void> {
+    try {
+      await api.post(`/api/tasks/${task.id}/complete`, {
+        completedAt: new Date().toISOString(),
+        notes: "",
+      });
+      toast(task.treatmentId != null ? "Done — dose logged" : "Done");
+      await load();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not complete the task", "error");
+    }
   }
 
   void load();

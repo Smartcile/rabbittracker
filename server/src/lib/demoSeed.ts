@@ -2,15 +2,23 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../db/index.ts";
 import {
   appointments,
+  bowlReadings,
+  bowls,
   careRecords,
   careSchedules,
+  checkLogs,
+  checkLogTypes,
   clinics,
+  drugs,
   healthChecks,
   journalEntries,
+  medicationLogs,
   rabbitBonds,
   rabbitCarers,
   rabbits,
+  rabbitTasks,
   settings,
+  taskCompletions,
   treatments,
   users,
   vaccinations,
@@ -106,6 +114,48 @@ type DemoJournalEntry = {
   note: string;
 };
 
+type DemoCheckLog = {
+  rabbitIndex: number;
+  typeKey: string;
+  hoursAgo: number;
+  valueLabels: string[];
+  valueMilli: number | null;
+  valueText: string;
+  notes: string;
+};
+
+type DemoMedicationLog = {
+  rabbitIndex: number;
+  treatmentIndex: number;
+  hoursAgo: number;
+  amountMilliUnits: number;
+  notes: string;
+};
+
+type DemoBowlReading = {
+  hoursAgo: number;
+  kind: "start" | "weigh" | "refill" | "refresh";
+  weightGrams: number;
+  notes: string;
+};
+
+type DemoBowl = {
+  rabbitIndex: number;
+  label: string;
+  readings: DemoBowlReading[];
+};
+
+type DemoTask = {
+  rabbitIndex: number;
+  label: string;
+  slot: "morning" | "afternoon" | "evening" | "anytime";
+  intervalDays: number;
+  treatmentIndex: number | null;
+  notes: string;
+  active: boolean;
+  completionsHoursAgo: number[];
+};
+
 export type DemoDataset = {
   rabbits: DemoRabbit[];
   checks: DemoCheck[];
@@ -115,6 +165,10 @@ export type DemoDataset = {
   careRecords: DemoCareRecord[];
   appointments: DemoAppointment[];
   journal: DemoJournalEntry[];
+  checkLogs: DemoCheckLog[];
+  medicationLogs: DemoMedicationLog[];
+  bowls: DemoBowl[];
+  tasks: DemoTask[];
   bonds: { a: number; b: number }[];
   clinic: { name: string; phone: string; email: string; address: string; notes: string };
   vet: { name: string; phone: string; email: string; notes: string };
@@ -133,6 +187,10 @@ function dateOnly(date: Date): string {
 
 function monthDay(now: Date, day: number, hour: number, minute: number): Date {
   return new Date(now.getFullYear(), now.getMonth(), day, hour, minute, 0, 0);
+}
+
+function hoursAgo(hours: number): Date {
+  return new Date(Date.now() - hours * 3_600_000);
 }
 
 export function buildDemoDataset(now: Date): DemoDataset {
@@ -389,6 +447,222 @@ export function buildDemoDataset(now: Date): DemoDataset {
     { rabbitIndex: 2, daysAgo: 6, note: "Pepper is isolating after the mite treatment. Weigh-in on Friday." },
   ];
 
+  const checkLogs: DemoCheckLog[] = [
+    {
+      rabbitIndex: 0,
+      typeKey: "poo",
+      hoursAgo: 2,
+      valueLabels: ["Soft"],
+      valueMilli: null,
+      valueText: "",
+      notes: "Smaller than usual.",
+    },
+    {
+      rabbitIndex: 0,
+      typeKey: "water",
+      hoursAgo: 4,
+      valueLabels: [],
+      valueMilli: 180000,
+      valueText: "",
+      notes: "",
+    },
+    {
+      rabbitIndex: 0,
+      typeKey: "behaviour",
+      hoursAgo: 26,
+      valueLabels: ["Quiet", "Hiding"],
+      valueMilli: null,
+      valueText: "",
+      notes: "Settled after the evening dose.",
+    },
+    {
+      rabbitIndex: 0,
+      typeKey: "food",
+      hoursAgo: 30,
+      valueLabels: [],
+      valueMilli: 45000,
+      valueText: "Mostly hay",
+      notes: "Left the pellets.",
+    },
+    {
+      rabbitIndex: 0,
+      typeKey: "poo",
+      hoursAgo: 50,
+      valueLabels: ["Normal"],
+      valueMilli: null,
+      valueText: "",
+      notes: "",
+    },
+    {
+      rabbitIndex: 0,
+      typeKey: "water",
+      hoursAgo: 74,
+      valueLabels: [],
+      valueMilli: 240000,
+      valueText: "",
+      notes: "",
+    },
+    {
+      rabbitIndex: 1,
+      typeKey: "poo",
+      hoursAgo: 3,
+      valueLabels: ["Normal"],
+      valueMilli: null,
+      valueText: "",
+      notes: "",
+    },
+    {
+      rabbitIndex: 1,
+      typeKey: "behaviour",
+      hoursAgo: 8,
+      valueLabels: ["Binkies", "Active"],
+      valueMilli: null,
+      valueText: "",
+      notes: "Zoomies around the lounge.",
+    },
+    {
+      rabbitIndex: 1,
+      typeKey: "water",
+      hoursAgo: 27,
+      valueLabels: [],
+      valueMilli: 260000,
+      valueText: "",
+      notes: "",
+    },
+    {
+      rabbitIndex: 1,
+      typeKey: "food",
+      hoursAgo: 51,
+      valueLabels: [],
+      valueMilli: 52000,
+      valueText: "Pellets and greens",
+      notes: "",
+    },
+    {
+      rabbitIndex: 2,
+      typeKey: "water",
+      hoursAgo: 28,
+      valueLabels: [],
+      valueMilli: 150000,
+      valueText: "",
+      notes: "",
+    },
+    {
+      rabbitIndex: 2,
+      typeKey: "food",
+      hoursAgo: 32,
+      valueLabels: [],
+      valueMilli: 30000,
+      valueText: "Soft greens only",
+      notes: "Senior diet.",
+    },
+    {
+      rabbitIndex: 2,
+      typeKey: "poo",
+      hoursAgo: 52,
+      valueLabels: ["Small"],
+      valueMilli: null,
+      valueText: "",
+      notes: "",
+    },
+    {
+      rabbitIndex: 2,
+      typeKey: "behaviour",
+      hoursAgo: 100,
+      valueLabels: ["Hiding", "Quiet"],
+      valueMilli: null,
+      valueText: "",
+      notes: "Still settling after the move.",
+    },
+  ];
+
+  const medicationLogs: DemoMedicationLog[] = [26, 50, 74, 98].map((hours, index) => ({
+    rabbitIndex: 0,
+    treatmentIndex: 0,
+    hoursAgo: hours,
+    amountMilliUnits: 300,
+    notes: index === 0 ? "Gave with food." : "",
+  }));
+
+  const bowls: DemoBowl[] = [
+    {
+      rabbitIndex: 0,
+      label: "Water bowl",
+      readings: [
+        { hoursAgo: 72, kind: "start", weightGrams: 900, notes: "" },
+        { hoursAgo: 48, kind: "weigh", weightGrams: 650, notes: "" },
+        { hoursAgo: 24, kind: "weigh", weightGrams: 400, notes: "Drinking well." },
+        { hoursAgo: 20, kind: "refill", weightGrams: 950, notes: "" },
+        { hoursAgo: 4, kind: "weigh", weightGrams: 800, notes: "" },
+      ],
+    },
+    {
+      rabbitIndex: 1,
+      label: "Pellets bowl",
+      readings: [
+        { hoursAgo: 96, kind: "start", weightGrams: 300, notes: "" },
+        { hoursAgo: 72, kind: "weigh", weightGrams: 150, notes: "" },
+        { hoursAgo: 70, kind: "refill", weightGrams: 320, notes: "" },
+        { hoursAgo: 24, kind: "weigh", weightGrams: 80, notes: "" },
+        { hoursAgo: 6, kind: "refresh", weightGrams: 300, notes: "Washed and refilled." },
+      ],
+    },
+    {
+      rabbitIndex: 2,
+      label: "Food bowl",
+      readings: [
+        { hoursAgo: 120, kind: "start", weightGrams: 500, notes: "" },
+        { hoursAgo: 96, kind: "weigh", weightGrams: 380, notes: "" },
+        { hoursAgo: 72, kind: "weigh", weightGrams: 250, notes: "Eating less." },
+        { hoursAgo: 68, kind: "refill", weightGrams: 520, notes: "" },
+        { hoursAgo: 24, kind: "weigh", weightGrams: 300, notes: "" },
+      ],
+    },
+  ];
+
+  const tasks: DemoTask[] = [
+    {
+      rabbitIndex: 0,
+      label: "Meloxicam dose",
+      slot: "evening",
+      intervalDays: 1,
+      treatmentIndex: 0,
+      notes: "Give with food.",
+      active: true,
+      completionsHoursAgo: [26, 50, 74, 98],
+    },
+    {
+      rabbitIndex: 1,
+      label: "Clean litter tray",
+      slot: "morning",
+      intervalDays: 3,
+      treatmentIndex: null,
+      notes: "",
+      active: true,
+      completionsHoursAgo: [30],
+    },
+    {
+      rabbitIndex: 2,
+      label: "Weigh Pepper",
+      slot: "anytime",
+      intervalDays: 7,
+      treatmentIndex: null,
+      notes: "Senior check.",
+      active: true,
+      completionsHoursAgo: [100],
+    },
+    {
+      rabbitIndex: 2,
+      label: "Nail check",
+      slot: "afternoon",
+      intervalDays: 30,
+      treatmentIndex: null,
+      notes: "Paused while in quarantine.",
+      active: false,
+      completionsHoursAgo: [],
+    },
+  ];
+
   const bonds = [{ a: 0, b: 1 }];
 
   return {
@@ -400,6 +674,10 @@ export function buildDemoDataset(now: Date): DemoDataset {
     careRecords,
     appointments,
     journal,
+    checkLogs,
+    medicationLogs,
+    bowls,
+    tasks,
     bonds,
     clinic: {
       name: "Happy Paws Vet Clinic",
@@ -461,21 +739,26 @@ export async function enableDemoData(): Promise<void> {
         })),
       );
     }
+    let treatmentIds: number[] = [];
     if (dataset.treatments.length > 0) {
-      await tx.insert(treatments).values(
-        dataset.treatments.map((treatment) => ({
-          rabbitId: rabbitIds[treatment.rabbitIndex],
-          medication: treatment.medication,
-          dose: treatment.dose,
-          route: treatment.route,
-          frequency: treatment.frequency,
-          reason: treatment.reason,
-          startDate: treatment.startDate,
-          endDate: treatment.endDate,
-          status: treatment.status,
-          notes: treatment.notes,
-        })),
-      );
+      const insertedTreatments = await tx
+        .insert(treatments)
+        .values(
+          dataset.treatments.map((treatment) => ({
+            rabbitId: rabbitIds[treatment.rabbitIndex],
+            medication: treatment.medication,
+            dose: treatment.dose,
+            route: treatment.route,
+            frequency: treatment.frequency,
+            reason: treatment.reason,
+            startDate: treatment.startDate,
+            endDate: treatment.endDate,
+            status: treatment.status,
+            notes: treatment.notes,
+          })),
+        )
+        .returning({ id: treatments.id });
+      treatmentIds = insertedTreatments.map((row) => row.id);
     }
     if (dataset.vaccinations.length > 0) {
       await tx.insert(vaccinations).values(
@@ -533,6 +816,94 @@ export async function enableDemoData(): Promise<void> {
           createdAt: addDays(new Date(), -entry.daysAgo),
         })),
       );
+    }
+    if (dataset.checkLogs.length > 0) {
+      const typeRows = await tx
+        .select({ id: checkLogTypes.id, key: checkLogTypes.key })
+        .from(checkLogTypes);
+      const typeByKey = new Map(typeRows.map((row) => [row.key, row.id]));
+      const values: (typeof checkLogs.$inferInsert)[] = [];
+      for (const log of dataset.checkLogs) {
+        const typeId = typeByKey.get(log.typeKey);
+        if (!typeId) continue;
+        values.push({
+          rabbitId: rabbitIds[log.rabbitIndex],
+          typeId,
+          loggedAt: hoursAgo(log.hoursAgo),
+          valueLabels: log.valueLabels,
+          valueMilli: log.valueMilli,
+          valueText: log.valueText,
+          notes: log.notes,
+        });
+      }
+      if (values.length > 0) await tx.insert(checkLogs).values(values);
+    }
+    let medLogIds: number[] = [];
+    if (dataset.medicationLogs.length > 0) {
+      const [drug] = await tx
+        .select({ id: drugs.id })
+        .from(drugs)
+        .where(eq(drugs.activeIngredient, "meloxicam"))
+        .limit(1);
+      const insertedLogs = await tx
+        .insert(medicationLogs)
+        .values(
+          dataset.medicationLogs.map((log) => ({
+            rabbitId: rabbitIds[log.rabbitIndex],
+            treatmentId: treatmentIds[log.treatmentIndex] ?? null,
+            drugId: drug?.id ?? null,
+            givenAt: hoursAgo(log.hoursAgo),
+            amountMilliUnits: log.amountMilliUnits,
+            notes: log.notes,
+          })),
+        )
+        .returning({ id: medicationLogs.id });
+      medLogIds = insertedLogs.map((row) => row.id);
+    }
+    if (dataset.bowls.length > 0) {
+      for (const bowl of dataset.bowls) {
+        const [bowlRow] = await tx
+          .insert(bowls)
+          .values({ rabbitId: rabbitIds[bowl.rabbitIndex], label: bowl.label })
+          .returning({ id: bowls.id });
+        await tx.insert(bowlReadings).values(
+          bowl.readings.map((reading) => ({
+            bowlId: bowlRow.id,
+            readAt: hoursAgo(reading.hoursAgo),
+            kind: reading.kind,
+            weightGrams: reading.weightGrams,
+            notes: reading.notes,
+          })),
+        );
+      }
+    }
+    if (dataset.tasks.length > 0) {
+      for (const task of dataset.tasks) {
+        const [taskRow] = await tx
+          .insert(rabbitTasks)
+          .values({
+            rabbitId: rabbitIds[task.rabbitIndex],
+            label: task.label,
+            slot: task.slot,
+            intervalDays: task.intervalDays,
+            treatmentId:
+              task.treatmentIndex !== null ? treatmentIds[task.treatmentIndex] ?? null : null,
+            notes: task.notes,
+            active: task.active,
+          })
+          .returning({ id: rabbitTasks.id });
+        if (task.completionsHoursAgo.length > 0) {
+          await tx.insert(taskCompletions).values(
+            task.completionsHoursAgo.map((hours, index) => ({
+              taskId: taskRow.id,
+              completedAt: hoursAgo(hours),
+              completedBy: null,
+              medicationLogId: task.treatmentIndex !== null ? medLogIds[index] ?? null : null,
+              notes: "",
+            })),
+          );
+        }
+      }
     }
     if (dataset.bonds.length > 0) {
       await tx.insert(rabbitBonds).values(

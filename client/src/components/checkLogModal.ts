@@ -1,7 +1,8 @@
-import type { CheckLogDto, CheckLogTypeDto, RabbitDto } from "../../../shared/types.ts";
+import type { CheckLogDto, CheckLogPhotoDto, CheckLogTypeDto, RabbitDto } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { h } from "../dom.ts";
 import { openModal } from "./modal.ts";
+import { openLightbox, photoPicker } from "./photoPicker.ts";
 import { toast } from "./toast.ts";
 import { optionButtons } from "./toggle.ts";
 
@@ -9,6 +10,7 @@ export function openCheckLogModal(options: {
   rabbit: RabbitDto;
   types: CheckLogTypeDto[];
   log?: CheckLogDto;
+  initialTypeId?: number;
   onSaved: () => void;
 }): void {
   const editing = options.log;
@@ -17,7 +19,7 @@ export function openCheckLogModal(options: {
     null,
     options.types.map((type) => h("option", { value: String(type.id) }, type.label)),
   );
-  typeSelect.value = String(editing?.typeId ?? options.types[0]?.id ?? "");
+  typeSelect.value = String(editing?.typeId ?? options.initialTypeId ?? options.types[0]?.id ?? "");
 
   const when = h("input", { type: "datetime-local" });
   when.value = toLocalInputValue(editing ? new Date(editing.loggedAt) : new Date());
@@ -36,12 +38,18 @@ export function openCheckLogModal(options: {
     }
     const parts: Node[] = [];
     if (type.options.length > 0) {
+      const selected =
+        editing && String(editing.typeId) === String(type.id)
+          ? editing.valueLabels.length > 0
+            ? editing.valueLabels
+            : editing.valueText
+              ? [editing.valueText]
+              : []
+          : [];
       group = optionButtons(
         type.options.map((label) => ({ value: label, label })),
-        editing && String(editing.typeId) === String(type.id) && editing.valueText
-          ? [editing.valueText]
-          : [],
-        false,
+        selected,
+        type.multiple,
       );
       parts.push(h("div", { class: "field" }, h("label", null, type.label), group.root));
     } else if (type.hasText) {
@@ -71,6 +79,52 @@ export function openCheckLogModal(options: {
   });
   renderFields();
 
+  const photos = editing ? [...editing.photos] : [];
+  const photoList = h("div", { class: "check-photos" });
+  const renderPhotos = () => {
+    photoList.replaceChildren(
+      ...photos.map((photo) => {
+        const image = h("img", {
+          class: "check-photo",
+          src: `/api/photos/checklog/${photo.id}?size=thumb`,
+          alt: photo.caption || "Check photo",
+        });
+        image.addEventListener("click", () =>
+          openLightbox(`/api/photos/checklog/${photo.id}?size=full`, photo.caption || "Check photo"),
+        );
+        return h(
+          "figure",
+          { class: "check-photo-figure" },
+          image,
+          h(
+            "button",
+            {
+              class: "btn ghost small",
+              type: "button",
+              onClick: () => void removePhoto(photo),
+            },
+            "Remove",
+          ),
+        );
+      }),
+    );
+    photoList.style.display = photos.length > 0 ? "" : "none";
+  };
+
+  const removePhoto = async (photo: CheckLogPhotoDto): Promise<void> => {
+    try {
+      await api.del(`/api/check-logs/photos/${photo.id}`);
+      const index = photos.findIndex((item) => item.id === photo.id);
+      if (index >= 0) photos.splice(index, 1);
+      renderPhotos();
+      toast("Photo removed");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not remove photo", "error");
+    }
+  };
+  renderPhotos();
+
+  const picker = photoPicker({ label: "Add photo" });
   const notes = h("textarea", null, editing?.notes ?? "");
   const error = h("p", { class: "form-error" });
   error.style.display = "none";
@@ -103,24 +157,33 @@ export function openCheckLogModal(options: {
             error.style.display = "";
             return;
           }
-          const valueText =
-            type.options.length > 0 ? (group?.read()[0] ?? "") : type.hasText ? textInput.value.trim() : "";
+          const valueLabels = type.options.length > 0 ? (group?.read() ?? []) : [];
+          const valueText = type.options.length === 0 && type.hasText ? textInput.value.trim() : "";
           save.disabled = true;
           try {
             const payload = {
               loggedAt: loggedAt.toISOString(),
               valueMilli,
+              valueLabels,
               valueText,
               notes: notes.value.trim(),
             };
+            let logId = editing?.id;
             if (editing) {
               await api.patch(`/api/check-logs/${editing.id}`, payload);
             } else {
-              await api.post("/api/check-logs", {
+              const created = await api.post<{ log: CheckLogDto }>("/api/check-logs", {
                 ...payload,
                 rabbitId: options.rabbit.id,
                 typeId: type.id,
               });
+              logId = created.log.id;
+            }
+            const file = picker.file();
+            if (file && logId != null) {
+              const form = new FormData();
+              form.append("photo", file);
+              await api.upload(`/api/check-logs/${logId}/photos`, form);
             }
             toast(editing ? "Log updated" : "Logged");
             options.onSaved();
@@ -139,6 +202,8 @@ export function openCheckLogModal(options: {
         : h("p", { class: "form-error" }, "No check types yet — add one in Settings → Daily checks."),
       h("div", { class: "field" }, h("label", null, "When"), when),
       fields,
+      photoList,
+      h("div", { class: "field" }, h("label", null, "Photo"), picker.root),
       h("div", { class: "field" }, h("label", null, "Notes"), notes),
       h(
         "div",

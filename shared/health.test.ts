@@ -9,6 +9,8 @@ import {
   needsAttention,
   overdueFollowUps,
   parseWeightInput,
+  taskDueStatus,
+  taskNextDueOn,
   upcomingAppointments,
   validateBodyCondition,
   weightChangePct,
@@ -291,6 +293,30 @@ describe("careDueStatus", () => {
 
   it("treats one day overdue as overdue", () => {
     expect(careDueStatus("2026-05-15", 30, now)).toBe("overdue");
+  });
+});
+
+describe("taskDueStatus", () => {
+  const now = new Date("2026-06-15T12:00:00.000Z");
+
+  it("treats a never-completed task as due", () => {
+    expect(taskDueStatus(null, 1, now)).toBe("due");
+    expect(taskNextDueOn(null, 1)).toBeNull();
+  });
+
+  it("is upcoming once completed today for a daily task", () => {
+    expect(taskDueStatus("2026-06-15T08:00:00.000Z", 1, now)).toBe("upcoming");
+    expect(taskNextDueOn("2026-06-15T08:00:00.000Z", 1)).toBe("2026-06-16");
+  });
+
+  it("is due when the interval has elapsed", () => {
+    expect(taskDueStatus("2026-06-13T08:00:00.000Z", 2, now)).toBe("due");
+    expect(taskDueStatus("2026-06-13T08:00:00.000Z", 1, now)).toBe("due");
+  });
+
+  it("stays upcoming for a longer interval", () => {
+    expect(taskDueStatus("2026-06-14T08:00:00.000Z", 3, now)).toBe("upcoming");
+    expect(taskNextDueOn("2026-06-14T08:00:00.000Z", 3)).toBe("2026-06-17");
   });
 });
 

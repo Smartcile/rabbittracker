@@ -9,6 +9,7 @@ const DEFAULT_CHECK_LOG_TYPES = [
     unit: "",
     hasNumber: false,
     hasText: false,
+    multiple: false,
     options: ["Normal", "Soft", "Runny", "None"],
   },
   {
@@ -17,6 +18,7 @@ const DEFAULT_CHECK_LOG_TYPES = [
     unit: "ml",
     hasNumber: true,
     hasText: false,
+    multiple: false,
     options: [],
   },
   {
@@ -25,7 +27,26 @@ const DEFAULT_CHECK_LOG_TYPES = [
     unit: "g",
     hasNumber: true,
     hasText: true,
+    multiple: false,
     options: [],
+  },
+  {
+    key: "behaviour",
+    label: "Behaviour",
+    unit: "",
+    hasNumber: false,
+    hasText: false,
+    multiple: true,
+    options: [
+      "Binkies",
+      "Exploring",
+      "Flopped",
+      "Comfortable",
+      "Uncomfortable",
+      "Hiding",
+      "Quiet",
+      "Active",
+    ],
   },
 ];
 

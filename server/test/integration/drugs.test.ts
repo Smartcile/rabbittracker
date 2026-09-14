@@ -1,5 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { DrugBatchDto, DrugDto, RabbitDto, TreatmentDto } from "../../../shared/types.ts";
+import type {
+  DrugBatchDto,
+  DrugDto,
+  MedicationLogDto,
+  RabbitDto,
+  TreatmentDto,
+} from "../../../shared/types.ts";
 import { api, resetBusinessData, startTestServer } from "./helpers.ts";
 import type { TestContext } from "./helpers.ts";
 
@@ -88,28 +94,65 @@ describe("drug stock integration", () => {
     return treatment;
   }
 
+  async function logDose(
+    rabbitId: number,
+    body: Record<string, unknown>,
+  ): Promise<MedicationLogDto> {
+    const { log } = await api<{ log: MedicationLogDto }>(ctx, "/api/medication-logs", {
+      method: "POST",
+      body: { rabbitId, givenAt: "2026-01-02T08:00:00.000Z", ...body },
+    });
+    return log;
+  }
+
   it("requires authentication", async () => {
     const response = await fetch(`${ctx.baseUrl}/api/drugs`);
     expect(response.status).toBe(401);
   });
 
-  it("deducts the course total when a treatment is created", async () => {
+  it("does not deduct stock when a treatment is created", async () => {
     const rabbit = await createRabbit();
     const drug = await createDrug();
     await addBatch(drug.id, 10000);
     const treatment = await createTreatment(rabbit.id, drug, 667);
-    expect(treatment.stockDeductedMilliUnits).toBe(6670);
-    const updated = await getDrug(drug.id);
-    expect(updated.batches[0].quantityMilliUnits).toBe(3330);
+    expect(treatment.stockDeductedMilliUnits).toBe(0);
+    expect((await getDrug(drug.id)).batches[0].quantityMilliUnits).toBe(10000);
   });
 
-  it("deducts from the earliest expiry first", async () => {
+  it("does not touch stock when the course changes or the treatment is deleted", async () => {
+    const rabbit = await createRabbit();
+    const drug = await createDrug();
+    await addBatch(drug.id, 10000);
+    const treatment = await createTreatment(rabbit.id, drug, 667);
+    const patched = await patchTreatment(treatment.id, { endDate: "2026-01-03" });
+    expect(patched.stockDeductedMilliUnits).toBe(0);
+    expect((await getDrug(drug.id)).batches[0].quantityMilliUnits).toBe(10000);
+    await api(ctx, `/api/treatments/${treatment.id}`, { method: "DELETE" });
+    expect((await getDrug(drug.id)).batches[0].quantityMilliUnits).toBe(10000);
+  });
+
+  it("switches the treatment drug without touching stock", async () => {
+    const rabbit = await createRabbit();
+    const first = await createDrug();
+    const second = await createDrug({ name: "Enrofloxacin", dosesPerDay: 2 });
+    await addBatch(first.id, 10000);
+    await addBatch(second.id, 5000);
+    const treatment = await createTreatment(rabbit.id, first, 667);
+    const patched = await patchTreatment(treatment.id, {
+      drugId: second.id,
+      doseMilliUnits: 100,
+    });
+    expect(patched.drugId).toBe(second.id);
+    expect((await getDrug(first.id)).batches[0].quantityMilliUnits).toBe(10000);
+    expect((await getDrug(second.id)).batches[0].quantityMilliUnits).toBe(5000);
+  });
+
+  it("deducts a logged dose from the earliest expiry first", async () => {
     const rabbit = await createRabbit();
     const drug = await createDrug();
     await addBatch(drug.id, 500, "2026-01-01");
     await addBatch(drug.id, 1000, "2026-02-01");
-    const treatment = await createTreatment(rabbit.id, drug, 120);
-    expect(treatment.stockDeductedMilliUnits).toBe(1200);
+    await logDose(rabbit.id, { drugId: drug.id, amountMilliUnits: 1200 });
     const updated = await getDrug(drug.id);
     const byExpiry = new Map(
       updated.batches.map((batch) => [batch.expiryDate, batch.quantityMilliUnits]),
@@ -118,54 +161,36 @@ describe("drug stock integration", () => {
     expect(byExpiry.get("2026-02-01")).toBe(300);
   });
 
-  it("clamps to available stock and stores the actual deduction", async () => {
+  it("clamps a logged dose to available stock", async () => {
     const rabbit = await createRabbit();
     const drug = await createDrug();
     await addBatch(drug.id, 1000);
-    const treatment = await createTreatment(rabbit.id, drug, 667);
-    expect(treatment.stockDeductedMilliUnits).toBe(1000);
-    const updated = await getDrug(drug.id);
-    expect(updated.batches[0].quantityMilliUnits).toBe(0);
+    await logDose(rabbit.id, { drugId: drug.id, amountMilliUnits: 6670 });
+    expect((await getDrug(drug.id)).batches[0].quantityMilliUnits).toBe(0);
   });
 
-  it("restores the difference when the course is shortened", async () => {
+  it("resolves the drug and dose from a linked treatment", async () => {
     const rabbit = await createRabbit();
     const drug = await createDrug();
     await addBatch(drug.id, 10000);
     const treatment = await createTreatment(rabbit.id, drug, 667);
-    expect((await getDrug(drug.id)).batches[0].quantityMilliUnits).toBe(3330);
-    const patched = await patchTreatment(treatment.id, { endDate: "2026-01-03" });
-    expect(patched.stockDeductedMilliUnits).toBe(4002);
-    expect((await getDrug(drug.id)).batches[0].quantityMilliUnits).toBe(5998);
+    const log = await logDose(rabbit.id, { treatmentId: treatment.id });
+    expect(log.drugId).toBe(drug.id);
+    expect(log.amountMilliUnits).toBe(667);
+    expect((await getDrug(drug.id)).batches[0].quantityMilliUnits).toBe(9333);
   });
 
-  it("restores stock when the treatment is deleted", async () => {
+  it("restores stock when a dose log is deleted", async () => {
     const rabbit = await createRabbit();
     const drug = await createDrug();
     await addBatch(drug.id, 10000);
-    const treatment = await createTreatment(rabbit.id, drug, 667);
-    await api(ctx, `/api/treatments/${treatment.id}`, { method: "DELETE" });
+    const log = await logDose(rabbit.id, { drugId: drug.id, amountMilliUnits: 2000 });
+    expect((await getDrug(drug.id)).batches[0].quantityMilliUnits).toBe(8000);
+    await api(ctx, `/api/medication-logs/${log.id}`, { method: "DELETE" });
     expect((await getDrug(drug.id)).batches[0].quantityMilliUnits).toBe(10000);
   });
 
-  it("restores the old drug and deducts the new one when switching", async () => {
-    const rabbit = await createRabbit();
-    const first = await createDrug();
-    const second = await createDrug({ name: "Enrofloxacin", dosesPerDay: 2 });
-    await addBatch(first.id, 10000);
-    await addBatch(second.id, 5000);
-    const treatment = await createTreatment(rabbit.id, first, 667);
-    expect((await getDrug(first.id)).batches[0].quantityMilliUnits).toBe(3330);
-    const patched = await patchTreatment(treatment.id, {
-      drugId: second.id,
-      doseMilliUnits: 100,
-    });
-    expect(patched.stockDeductedMilliUnits).toBe(1000);
-    expect((await getDrug(first.id)).batches[0].quantityMilliUnits).toBe(10000);
-    expect((await getDrug(second.id)).batches[0].quantityMilliUnits).toBe(4000);
-  });
-
-  it("unlinks and restores when the drug link is cleared", async () => {
+  it("clears the dose when the drug link is removed", async () => {
     const rabbit = await createRabbit();
     const drug = await createDrug();
     await addBatch(drug.id, 10000);

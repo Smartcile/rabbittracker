@@ -2,6 +2,7 @@ import { z } from "zod";
 import { CALENDAR_REPEATS } from "../../../shared/calendar.ts";
 import type { HealthChecklistDto } from "../../../shared/checklist.ts";
 import { LOOKUP_KINDS } from "../../../shared/lookups.ts";
+import { TASK_SLOTS } from "../../../shared/tasks.ts";
 
 export const usernameSchema = z.preprocess(
   (value) => (typeof value === "string" ? value.trim().toLowerCase() : value),
@@ -176,6 +177,8 @@ export const rabbitBondsPutSchema = z.object({
 export const checklistAnswerSchema = z.object({
   values: z.array(z.string().trim().min(1).max(60)).max(50).default([]),
   other: z.string().trim().max(500).default(""),
+  numberMilli: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
+  text: z.string().trim().max(500).optional(),
 });
 
 export const checklistSchema = z.record(
@@ -279,6 +282,7 @@ export const checkLogTypeCreateSchema = z.object({
   unit: z.string().trim().max(30).default(""),
   hasNumber: z.boolean().default(true),
   hasText: z.boolean().default(false),
+  multiple: z.boolean().default(false),
   options: z.array(z.string().trim().min(1).max(100)).max(20).default([]),
 });
 
@@ -288,6 +292,7 @@ export const checkLogTypeUpdateSchema = z
     unit: z.string().trim().max(30).optional(),
     hasNumber: z.boolean().optional(),
     hasText: z.boolean().optional(),
+    multiple: z.boolean().optional(),
     options: z.array(z.string().trim().min(1).max(100)).max(20).optional(),
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
@@ -299,6 +304,7 @@ export const checkLogCreateSchema = z.object({
   typeId: z.number().int().positive(),
   loggedAt: z.coerce.date(),
   valueMilli: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
+  valueLabels: z.array(z.string().trim().min(1).max(100)).max(20).default([]),
   valueText: z.string().trim().max(500).default(""),
   notes: z.string().trim().max(2000).default(""),
 });
@@ -307,12 +313,67 @@ export const checkLogUpdateSchema = z
   .object({
     loggedAt: z.coerce.date().optional(),
     valueMilli: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
+    valueLabels: z.array(z.string().trim().min(1).max(100)).max(20).optional(),
     valueText: z.string().trim().max(500).optional(),
     notes: z.string().trim().max(2000).optional(),
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: "No changes provided",
   });
+
+export const bowlCreateSchema = z.object({
+  rabbitId: z.number().int().positive(),
+  label: z.string().trim().min(1, "Name is required").max(100),
+  startWeightGrams: z.number().int().min(0).max(1_000_000),
+  startedAt: z.coerce.date(),
+  notes: z.string().trim().max(2000).default(""),
+});
+
+export const bowlUpdateSchema = z.object({
+  label: z.string().trim().min(1, "Name is required").max(100),
+});
+
+export const bowlReadingCreateSchema = z
+  .object({
+    kind: z.enum(["weigh", "refill", "refresh"]),
+    readAt: z.coerce.date(),
+    weightGrams: z.number().int().min(0).max(1_000_000).optional(),
+    refillGrams: z.number().int().min(1).max(1_000_000).optional(),
+    finalWeightGrams: z.number().int().min(0).max(1_000_000).optional(),
+    notes: z.string().trim().max(2000).default(""),
+  })
+  .refine(
+    (value) => (value.kind === "refill" ? value.refillGrams !== undefined : value.weightGrams !== undefined),
+    { message: "Enter a weight" },
+  );
+
+export const taskCreateSchema = z.object({
+  rabbitId: z.number().int().positive(),
+  label: z.string().trim().min(1, "Name is required").max(200),
+  slot: z.enum(TASK_SLOTS).default("anytime"),
+  intervalDays: z.number().int().min(1).max(3650).default(1),
+  treatmentId: z.number().int().positive().nullable().optional(),
+  notes: z.string().trim().max(2000).default(""),
+  active: z.boolean().default(true),
+});
+
+export const taskUpdateSchema = z
+  .object({
+    label: z.string().trim().min(1, "Name is required").max(200).optional(),
+    slot: z.enum(TASK_SLOTS).optional(),
+    intervalDays: z.number().int().min(1).max(3650).optional(),
+    treatmentId: z.number().int().positive().nullable().optional(),
+    notes: z.string().trim().max(2000).optional(),
+    active: z.boolean().optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: "No changes provided",
+  });
+
+export const taskCompleteSchema = z.object({
+  completedAt: z.coerce.date(),
+  notes: z.string().trim().max(2000).default(""),
+});
 
 export const medicationLogCreateSchema = z.object({
   rabbitId: z.number().int().positive(),
@@ -383,7 +444,11 @@ export type CheckContent = {
 export function hasChecklistContent(checklist: HealthChecklistDto | null | undefined): boolean {
   if (!checklist) return false;
   return Object.values(checklist).some(
-    (answer) => answer.values.length > 0 || answer.other.trim().length > 0,
+    (answer) =>
+      answer.values.length > 0 ||
+      answer.other.trim().length > 0 ||
+      answer.numberMilli != null ||
+      (answer.text ?? "").trim().length > 0,
   );
 }
 

@@ -1,7 +1,8 @@
 import "./styles/theme.css";
+import "./styles/report.css";
 import type { AuthMeDto } from "../../shared/types.ts";
 import { api, setUnauthorizedHandler } from "./api.ts";
-import { themeToggle } from "./components/theme.ts";
+import { applyStoredTheme, themeToggle } from "./components/theme.ts";
 import type { PageContext } from "./context.ts";
 import { h, mount } from "./dom.ts";
 import { renderAuthPage } from "./pages/auth.ts";
@@ -15,6 +16,7 @@ import { renderHistoryPage } from "./pages/history.ts";
 import { renderLookupsPage } from "./pages/lookups.ts";
 import { renderHomePage } from "./pages/home.ts";
 import { renderRabbitPage } from "./pages/rabbit.ts";
+import { renderRabbitReportPage } from "./pages/report.ts";
 import { renderSettingsPage } from "./pages/settings.ts";
 import { renderUsersPage } from "./pages/users.ts";
 import { renderVetsPage } from "./pages/vets.ts";
@@ -121,6 +123,8 @@ function renderShell(ctx: PageContext, page: Node): HTMLElement {
 }
 
 function render(): void {
+  applyStoredTheme();
+  document.title = "RabbitTracker";
   if (!me || me.needsSetup || !me.user) {
     mount(
       appRoot,
@@ -163,7 +167,11 @@ function render(): void {
       break;
     case "rabbit": {
       const id = Number(params[0]);
-      page = Number.isInteger(id) && id > 0 ? renderRabbitPage(ctx, id) : renderBunniesPage(ctx);
+      if (!Number.isInteger(id) || id <= 0) {
+        page = renderBunniesPage(ctx);
+      } else {
+        page = params[1] === "report" ? renderRabbitReportPage(ctx, id) : renderRabbitPage(ctx, id);
+      }
       break;
     }
     case "history":

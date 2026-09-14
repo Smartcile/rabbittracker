@@ -1,6 +1,7 @@
 import type { HealthCheckDto, RabbitDto } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { loadChecklist } from "../checklist.ts";
+import { loadCheckLogTypes } from "../dailyLogs.ts";
 import { renderChecksTable } from "../components/checksTable.ts";
 import type { PageContext } from "../context.ts";
 import { h } from "../dom.ts";
@@ -23,9 +24,10 @@ export function renderHistoryPage(ctx: PageContext): HTMLElement {
     if (rabbitSelect.value) params.set("rabbitId", rabbitSelect.value);
     if (from.value) params.set("from", new Date(`${from.value}T00:00:00`).toISOString());
     if (to.value) params.set("to", new Date(`${to.value}T23:59:59.999`).toISOString());
-    const [{ checks }, sections] = await Promise.all([
+    const [{ checks }, sections, logTypes] = await Promise.all([
       api.get<{ checks: HealthCheckDto[] }>(`/api/checks?${params.toString()}`),
       loadChecklist(),
+      loadCheckLogTypes(),
     ]);
     if (checks.length === 0) {
       results.replaceChildren(h("div", { class: "empty" }, "No checks in this range."));
@@ -36,6 +38,7 @@ export function renderHistoryPage(ctx: PageContext): HTMLElement {
         checks,
         rabbits,
         sections,
+        logTypes,
         showRabbit: true,
         canEdit: can(ctx.user, "canRecordHealth"),
         onChanged: refresh,

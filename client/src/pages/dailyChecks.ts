@@ -44,7 +44,9 @@ export function renderDailyChecksPage(_ctx: PageContext): HTMLElement {
 
   function card(type: CheckLogTypeDto): HTMLElement {
     const bits = [
-      type.options.length > 0 ? `${type.options.length} options` : null,
+      type.options.length > 0
+        ? `${type.options.length} options${type.multiple ? " · multi-select" : ""}`
+        : null,
       type.hasNumber ? `number${type.unit ? ` (${type.unit})` : ""}` : null,
       type.hasText ? "text" : null,
     ].filter(Boolean);
@@ -101,6 +103,7 @@ function openTypeModal(type: CheckLogTypeDto | undefined, reload: () => Promise<
   const unit = h("input", { value: type?.unit ?? "", placeholder: "ml, g, …" });
   const hasNumber = toggleButton({ label: "Number", checked: type?.hasNumber ?? true });
   const hasText = toggleButton({ label: "Free text", checked: type?.hasText ?? false });
+  const multiple = toggleButton({ label: "Allow multiple", checked: type?.multiple ?? false });
   const options = h("input", {
     value: type?.options.join(", ") ?? "",
     placeholder: "Normal, Soft, Runny",
@@ -122,6 +125,7 @@ function openTypeModal(type: CheckLogTypeDto | undefined, reload: () => Promise<
             unit: unit.value.trim(),
             hasNumber: hasNumber.checked(),
             hasText: hasText.checked(),
+            multiple: multiple.checked(),
             options: options.value
               .split(",")
               .map((value) => value.trim())
@@ -148,13 +152,22 @@ function openTypeModal(type: CheckLogTypeDto | undefined, reload: () => Promise<
       error,
       h("div", { class: "field" }, h("label", null, "Name"), label),
       h("div", { class: "field" }, h("label", null, "Unit (optional)"), unit),
-      h("div", { class: "field" }, h("label", null, "Fields"), h("div", { class: "row wrap" }, hasNumber.root, hasText.root)),
+      h(
+        "div",
+        { class: "field" },
+        h("label", null, "Fields"),
+        h("div", { class: "row wrap" }, hasNumber.root, hasText.root, multiple.root),
+      ),
       h(
         "div",
         { class: "field" },
         h("label", null, "Option buttons (optional)"),
         options,
-        h("span", { class: "dim small" }, "Comma-separated. If set, these are shown as single-select buttons."),
+        h(
+          "span",
+          { class: "dim small" },
+          "Comma-separated. If set, these are shown as buttons instead of free text. Allow multiple lets you pick several.",
+        ),
       ),
       h(
         "div",

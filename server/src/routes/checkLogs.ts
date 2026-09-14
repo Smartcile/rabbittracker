@@ -3,10 +3,11 @@ import { Router } from "express";
 import { slugifyLabel } from "../../../shared/checklist.ts";
 import { checkLogToDto, checkLogTypeToDto } from "../api/mappers.ts";
 import { db } from "../db/index.ts";
-import { checkLogs, checkLogTypes } from "../db/schema.ts";
-import type { CheckLogTypeRow } from "../db/schema.ts";
+import { checkLogPhotos, checkLogs, checkLogTypes } from "../db/schema.ts";
+import type { CheckLogPhotoRow, CheckLogTypeRow } from "../db/schema.ts";
 import { findVisibleRabbit, requirePermission, visibleRabbitIds } from "../lib/access.ts";
 import { requireAdmin, requireAuth } from "../lib/auth.ts";
+import { listCheckLogTypes } from "../lib/checkLogStore.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
 import {
   checkLogCreateSchema,
@@ -14,15 +15,10 @@ import {
   checkLogTypeUpdateSchema,
   checkLogUpdateSchema,
 } from "../lib/validation.ts";
+import { deletePhotoDir, savePhoto } from "../services/photos.ts";
+import { photoUpload } from "./photos.ts";
 
 export const checkLogsRouter = Router();
-
-export async function listCheckLogTypes(): Promise<CheckLogTypeRow[]> {
-  return db
-    .select()
-    .from(checkLogTypes)
-    .orderBy(asc(checkLogTypes.sortOrder), asc(checkLogTypes.id));
-}
 
 checkLogsRouter.get("/types", requireAuth, async (_req, res) => {
   res.json({ types: (await listCheckLogTypes()).map(checkLogTypeToDto) });
@@ -81,7 +77,23 @@ checkLogsRouter.get("/", requireAuth, async (req, res) => {
     .orderBy(desc(checkLogs.loggedAt))
     .limit(500);
   const types = new Map((await listCheckLogTypes()).map((type) => [type.id, type]));
-  res.json({ logs: rows.map((row) => checkLogToDto(row, types.get(row.typeId))) });
+  const photos =
+    rows.length > 0
+      ? await db
+          .select()
+          .from(checkLogPhotos)
+          .where(inArray(checkLogPhotos.logId, rows.map((row) => row.id)))
+          .orderBy(asc(checkLogPhotos.sortOrder), asc(checkLogPhotos.id))
+      : [];
+  res.json({
+    logs: rows.map((row) =>
+      checkLogToDto(
+        row,
+        types.get(row.typeId),
+        photos.filter((photo) => photo.logId === row.id),
+      ),
+    ),
+  });
 });
 
 checkLogsRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {
@@ -95,6 +107,7 @@ checkLogsRouter.post("/", requireAuth, requirePermission("canRecordHealth"), asy
       typeId: input.typeId,
       loggedAt: input.loggedAt,
       valueMilli: input.valueMilli ?? null,
+      valueLabels: input.valueLabels,
       valueText: input.valueText,
       notes: input.notes,
     })
@@ -112,20 +125,74 @@ checkLogsRouter.patch("/:id", requireAuth, requirePermission("canRecordHealth"),
     .set({
       loggedAt: input.loggedAt ?? existing.loggedAt,
       valueMilli: input.valueMilli !== undefined ? input.valueMilli : existing.valueMilli,
+      valueLabels: input.valueLabels !== undefined ? input.valueLabels : existing.valueLabels,
       valueText: input.valueText !== undefined ? input.valueText : existing.valueText,
       notes: input.notes !== undefined ? input.notes : existing.notes,
     })
     .where(eq(checkLogs.id, id))
     .returning();
   const type = await findType(row.typeId);
-  res.json({ log: checkLogToDto(row, type) });
+  const photos = await listPhotosForLog(id);
+  res.json({ log: checkLogToDto(row, type, photos) });
 });
+
+checkLogsRouter.post(
+  "/:id/photos",
+  requireAuth,
+  requirePermission("canRecordHealth"),
+  photoUpload.single("photo"),
+  async (req, res) => {
+    const id = parseId(String(req.params.id), "Check log not found");
+    const log = await findLog(id);
+    await findVisibleRabbit(req.user!, log.rabbitId);
+    if (!req.file) throw new HttpError(400, "No photo uploaded");
+    const caption =
+      typeof req.body?.caption === "string" ? req.body.caption.trim().slice(0, 200) : "";
+    const [{ value: highest }] = await db
+      .select({ value: max(checkLogPhotos.sortOrder) })
+      .from(checkLogPhotos)
+      .where(eq(checkLogPhotos.logId, id));
+    const [row] = await db
+      .insert(checkLogPhotos)
+      .values({ logId: id, caption, sortOrder: (highest ?? -1) + 1 })
+      .returning();
+    try {
+      await savePhoto("checklog", row.id, req.file);
+    } catch (err) {
+      await db.delete(checkLogPhotos).where(eq(checkLogPhotos.id, row.id));
+      throw err;
+    }
+    res.status(201).json({ photo: { id: row.id, caption: row.caption, sortOrder: row.sortOrder } });
+  },
+);
+
+checkLogsRouter.delete(
+  "/photos/:id",
+  requireAuth,
+  requirePermission("canRecordHealth"),
+  async (req, res) => {
+    const id = parseId(String(req.params.id), "Check log photo not found");
+    const photo = await findPhoto(id);
+    const log = await findLog(photo.logId);
+    await findVisibleRabbit(req.user!, log.rabbitId);
+    await db.delete(checkLogPhotos).where(eq(checkLogPhotos.id, id));
+    await deletePhotoDir("checklog", id);
+    res.json({ ok: true });
+  },
+);
 
 checkLogsRouter.delete("/:id", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {
   const id = parseId(String(req.params.id), "Check log not found");
   const existing = await findLog(id);
   await findVisibleRabbit(req.user!, existing.rabbitId);
+  const photos = await db
+    .select({ id: checkLogPhotos.id })
+    .from(checkLogPhotos)
+    .where(eq(checkLogPhotos.logId, id));
   await db.delete(checkLogs).where(eq(checkLogs.id, id));
+  for (const photo of photos) {
+    await deletePhotoDir("checklog", photo.id);
+  }
   res.json({ ok: true });
 });
 
@@ -148,6 +215,20 @@ async function findType(id: number): Promise<CheckLogTypeRow> {
 async function findLog(id: number) {
   const rows = await db.select().from(checkLogs).where(eq(checkLogs.id, id)).limit(1);
   if (!rows[0]) throw new HttpError(404, "Check log not found");
+  return rows[0];
+}
+
+async function listPhotosForLog(logId: number): Promise<CheckLogPhotoRow[]> {
+  return db
+    .select()
+    .from(checkLogPhotos)
+    .where(eq(checkLogPhotos.logId, logId))
+    .orderBy(asc(checkLogPhotos.sortOrder), asc(checkLogPhotos.id));
+}
+
+async function findPhoto(id: number): Promise<CheckLogPhotoRow> {
+  const rows = await db.select().from(checkLogPhotos).where(eq(checkLogPhotos.id, id)).limit(1);
+  if (!rows[0]) throw new HttpError(404, "Check log photo not found");
   return rows[0];
 }
 

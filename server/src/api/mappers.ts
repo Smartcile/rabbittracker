@@ -2,6 +2,8 @@ import type {
   Appetite,
   AppointmentDto,
   AppointmentStatus,
+  BowlDto,
+  BowlReadingKind,
   CalendarEntryDto,
   CalendarEventDto,
   CalendarRepeat,
@@ -27,6 +29,9 @@ import type {
   RabbitSex,
   RabbitStatus,
   SettingsDto,
+  TaskCompletionDto,
+  TaskDto,
+  TaskSlot,
   TreatmentDto,
   TreatmentStatus,
   UserDto,
@@ -35,14 +40,18 @@ import type {
   VetDto,
 } from "../../../shared/types.ts";
 import type { DrugForm } from "../../../shared/drugs.ts";
+import { summarizeBowl } from "../../../shared/bowls.ts";
 import { emptyChecklist } from "../../../shared/checklist.ts";
 import type {
   AppointmentRow,
+  BowlReadingRow,
+  BowlRow,
   CalendarEntryRow,
   CalendarEventRow,
   CalendarSubscriptionRow,
   CareRecordRow,
   CareScheduleRow,
+  CheckLogPhotoRow,
   CheckLogRow,
   CheckLogTypeRow,
   ChecklistOptionRow,
@@ -58,7 +67,9 @@ import type {
   JournalPhotoRow,
   LookupRow,
   RabbitRow,
+  RabbitTaskRow,
   SettingsRow,
+  TaskCompletionRow,
   TreatmentRow,
   UserRow,
   VaccinationRow,
@@ -291,12 +302,17 @@ export function checkLogTypeToDto(row: CheckLogTypeRow): CheckLogTypeDto {
     unit: row.unit,
     hasNumber: row.hasNumber,
     hasText: row.hasText,
+    multiple: row.multiple,
     options: row.options,
     sortOrder: row.sortOrder,
   };
 }
 
-export function checkLogToDto(row: CheckLogRow, type?: CheckLogTypeRow): CheckLogDto {
+export function checkLogToDto(
+  row: CheckLogRow,
+  type?: CheckLogTypeRow,
+  photos: CheckLogPhotoRow[] = [],
+): CheckLogDto {
   return {
     id: row.id,
     rabbitId: row.rabbitId,
@@ -305,10 +321,88 @@ export function checkLogToDto(row: CheckLogRow, type?: CheckLogTypeRow): CheckLo
     typeUnit: type?.unit ?? "",
     loggedAt: row.loggedAt.toISOString(),
     valueMilli: row.valueMilli,
+    valueLabels: row.valueLabels,
     valueText: row.valueText,
+    notes: row.notes,
+    photos: photos.map((photo) => ({
+      id: photo.id,
+      caption: photo.caption,
+      sortOrder: photo.sortOrder,
+    })),
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export function bowlToDto(row: BowlRow, readings: BowlReadingRow[]): BowlDto {
+  const summary = summarizeBowl(readings);
+  const computedById = new Map(summary.readings.map((item) => [item.id, item]));
+  return {
+    id: row.id,
+    rabbitId: row.rabbitId,
+    label: row.label,
+    currentWeightGrams: summary.currentWeightGrams,
+    periodStartAt: summary.periodStartAt ? summary.periodStartAt.toISOString() : null,
+    periodConsumptionGrams: summary.periodConsumptionGrams,
+    periodRefillGrams: summary.periodRefillGrams,
+    totalConsumptionGrams: summary.totalConsumptionGrams,
+    totalRefillGrams: summary.totalRefillGrams,
+    readings: [...readings]
+      .sort((a, b) => b.readAt.getTime() - a.readAt.getTime() || b.id - a.id)
+      .map((reading) => {
+        const computed = computedById.get(reading.id);
+        return {
+          id: reading.id,
+          bowlId: reading.bowlId,
+          readAt: reading.readAt.toISOString(),
+          kind: bowlReadingKind(reading.kind),
+          weightGrams: reading.weightGrams,
+          consumptionGrams: computed?.consumptionGrams ?? 0,
+          refillGrams: computed?.refillGrams ?? 0,
+          periodStart: computed?.periodStart ?? false,
+          notes: reading.notes,
+          createdAt: reading.createdAt.toISOString(),
+        };
+      }),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+function bowlReadingKind(value: string): BowlReadingKind {
+  return value === "start" || value === "refill" || value === "refresh" ? value : "weigh";
+}
+
+export function taskToDto(row: RabbitTaskRow, lastCompletedAt: Date | null): TaskDto {
+  return {
+    id: row.id,
+    rabbitId: row.rabbitId,
+    label: row.label,
+    slot: taskSlot(row.slot),
+    intervalDays: row.intervalDays,
+    treatmentId: row.treatmentId,
+    notes: row.notes,
+    active: row.active,
+    lastCompletedAt: lastCompletedAt ? lastCompletedAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+export function taskCompletionToDto(row: TaskCompletionRow, rabbitId: number): TaskCompletionDto {
+  return {
+    id: row.id,
+    taskId: row.taskId,
+    rabbitId,
+    completedAt: row.completedAt.toISOString(),
+    completedBy: row.completedBy,
+    medicationLogId: row.medicationLogId,
     notes: row.notes,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+function taskSlot(value: string): TaskSlot {
+  return value === "morning" || value === "afternoon" || value === "evening" ? value : "anytime";
 }
 
 export function medicationLogToDto(row: MedicationLogRow): MedicationLogDto {

@@ -1,12 +1,14 @@
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { Router } from "express";
+import type { ChecklistDailyTypeConfig } from "../../../shared/checklist.ts";
+import { validateChecklistAnswers } from "../../../shared/checklist.ts";
 import { healthCheckToDto } from "../api/mappers.ts";
 import { db } from "../db/index.ts";
 import { healthChecks } from "../db/schema.ts";
 import type { HealthCheckRow } from "../db/schema.ts";
-import { validateChecklistAnswers } from "../../../shared/checklist.ts";
 import { findVisibleRabbit, requirePermission, visibleRabbitIds } from "../lib/access.ts";
 import { requireAuth } from "../lib/auth.ts";
+import { listCheckLogTypes } from "../lib/checkLogStore.ts";
 import { listChecklistSections } from "../lib/checklistStore.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
 import { checkCreateSchema, checkUpdateSchema, hasCheckContent } from "../lib/validation.ts";
@@ -48,7 +50,11 @@ checksRouter.get("/", requireAuth, async (req, res) => {
 checksRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {
   const input = parseInput(checkCreateSchema, req.body);
   if (input.checklist) {
-    const problem = validateChecklistAnswers(input.checklist, await listChecklistSections());
+    const problem = validateChecklistAnswers(
+      input.checklist,
+      await listChecklistSections(),
+      await dailyTypeConfigs(),
+    );
     if (problem) throw new HttpError(400, problem);
   }
   await findVisibleRabbit(req.user!, input.rabbitId);
@@ -77,7 +83,11 @@ checksRouter.patch("/:id", requireAuth, requirePermission("canRecordHealth"), as
   await findVisibleRabbit(req.user!, existing.rabbitId);
   const input = parseInput(checkUpdateSchema, req.body);
   if (input.checklist !== undefined) {
-    const problem = validateChecklistAnswers(input.checklist, await listChecklistSections());
+    const problem = validateChecklistAnswers(
+      input.checklist,
+      await listChecklistSections(),
+      await dailyTypeConfigs(),
+    );
     if (problem) throw new HttpError(400, problem);
   }
   const merged = {
@@ -145,6 +155,17 @@ checksRouter.delete("/:id/photo", requireAuth, requirePermission("canRecordHealt
     .returning();
   res.json({ check: healthCheckToDto(row) });
 });
+
+async function dailyTypeConfigs(): Promise<ChecklistDailyTypeConfig[]> {
+  return (await listCheckLogTypes()).map((type) => ({
+    key: type.key,
+    label: type.label,
+    multiple: type.multiple,
+    hasNumber: type.hasNumber,
+    hasText: type.hasText,
+    options: type.options,
+  }));
+}
 
 function parseCheckId(value: string): number {
   const id = Number(value);

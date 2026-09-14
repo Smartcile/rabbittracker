@@ -248,7 +248,14 @@ export type CheckLogTypeDto = {
   unit: string;
   hasNumber: boolean;
   hasText: boolean;
+  multiple: boolean;
   options: string[];
+  sortOrder: number;
+};
+
+export type CheckLogPhotoDto = {
+  id: number;
+  caption: string;
   sortOrder: number;
 };
 
@@ -260,7 +267,66 @@ export type CheckLogDto = {
   typeUnit: string;
   loggedAt: string;
   valueMilli: number | null;
+  valueLabels: string[];
   valueText: string;
+  notes: string;
+  photos: CheckLogPhotoDto[];
+  createdAt: string;
+};
+
+export type BowlReadingKind = "start" | "weigh" | "refill" | "refresh";
+
+export type BowlReadingDto = {
+  id: number;
+  bowlId: number;
+  readAt: string;
+  kind: BowlReadingKind;
+  weightGrams: number;
+  consumptionGrams: number;
+  refillGrams: number;
+  periodStart: boolean;
+  notes: string;
+  createdAt: string;
+};
+
+export type BowlDto = {
+  id: number;
+  rabbitId: number;
+  label: string;
+  currentWeightGrams: number | null;
+  periodStartAt: string | null;
+  periodConsumptionGrams: number;
+  periodRefillGrams: number;
+  totalConsumptionGrams: number;
+  totalRefillGrams: number;
+  readings: BowlReadingDto[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TaskSlot = "morning" | "afternoon" | "evening" | "anytime";
+
+export type TaskDto = {
+  id: number;
+  rabbitId: number;
+  label: string;
+  slot: TaskSlot;
+  intervalDays: number;
+  treatmentId: number | null;
+  notes: string;
+  active: boolean;
+  lastCompletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TaskCompletionDto = {
+  id: number;
+  taskId: number;
+  rabbitId: number;
+  completedAt: string;
+  completedBy: number | null;
+  medicationLogId: number | null;
   notes: string;
   createdAt: string;
 };

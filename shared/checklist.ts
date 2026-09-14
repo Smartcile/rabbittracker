@@ -14,9 +14,30 @@ export type ChecklistSectionConfig = {
 export type ChecklistAnswerDto = {
   values: string[];
   other: string;
+  numberMilli?: number | null;
+  text?: string;
 };
 
 export type HealthChecklistDto = Record<string, ChecklistAnswerDto>;
+
+export type ChecklistDailyTypeConfig = {
+  key: string;
+  label: string;
+  multiple: boolean;
+  hasNumber: boolean;
+  hasText: boolean;
+  options: string[];
+};
+
+export const DAILY_CHECK_KEY_PREFIX = "daily:";
+
+export function dailyCheckAnswerKey(typeKey: string): string {
+  return `${DAILY_CHECK_KEY_PREFIX}${typeKey}`;
+}
+
+export function isDailyCheckAnswerKey(key: string): boolean {
+  return key.startsWith(DAILY_CHECK_KEY_PREFIX);
+}
 
 export const DEFAULT_CHECKLIST_SECTIONS: ChecklistSectionConfig[] = [
   {
@@ -177,10 +198,35 @@ export function emptyChecklist(): HealthChecklistDto {
 export function validateChecklistAnswers(
   answers: HealthChecklistDto,
   sections: ChecklistSectionConfig[],
+  dailyTypes: ChecklistDailyTypeConfig[] = [],
 ): string | null {
+  const dailyByKey = new Map(dailyTypes.map((type) => [type.key, type]));
   for (const [key, answer] of Object.entries(answers)) {
+    if (isDailyCheckAnswerKey(key)) {
+      const type = dailyByKey.get(key.slice(DAILY_CHECK_KEY_PREFIX.length));
+      if (!type) return `Unknown daily check: ${key}`;
+      if (answer.numberMilli != null) {
+        if (!type.hasNumber) return `${type.label} does not take an amount`;
+        if (!Number.isInteger(answer.numberMilli) || answer.numberMilli < 0) {
+          return `Invalid amount for ${type.label}`;
+        }
+      }
+      if (answer.text && !type.hasText) return `${type.label} does not take text`;
+      if (answer.values.length > 0) {
+        if (type.options.length === 0) return `${type.label} does not take options`;
+        if (!type.multiple && answer.values.length > 1) {
+          return `${type.label} allows only one answer`;
+        }
+        const allowed = new Set(type.options);
+        for (const value of answer.values) {
+          if (!allowed.has(value)) return `Unknown option for ${type.label}: ${value}`;
+        }
+      }
+      continue;
+    }
     const section = sections.find((item) => item.key === key);
     if (!section) return `Unknown checklist section: ${key}`;
+    if (answer.numberMilli != null || answer.text) return `Unexpected value for ${section.label}`;
     if (!section.multiple && answer.values.length > 1) {
       return `${section.label} allows only one answer`;
     }

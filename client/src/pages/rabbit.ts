@@ -1,6 +1,10 @@
 import { emptyChecklist } from "../../../shared/checklist.ts";
+import { bowlReadingKindLabel } from "../../../shared/bowls.ts";
+import { checkLogValueParts } from "../../../shared/checkLogs.ts";
+import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
 import type {
   AppointmentDto,
+  BowlDto,
   CareKind,
   CareRecordDto,
   CareScheduleDto,
@@ -13,20 +17,30 @@ import type {
   LookupDto,
   MedicationLogDto,
   RabbitDto,
+  TaskCompletionDto,
+  TaskDto,
   TreatmentDto,
   UserDto,
   VaccinationDto,
 } from "../../../shared/types.ts";
 import { formatDrugAmount, stockLevel, stockTotalMilliUnits } from "../../../shared/drugs.ts";
-import { ageLabel, careDueStatus, dueStatus, formatWeight, weightTrend } from "../../../shared/health.ts";
+import {
+  ageLabel,
+  careDueStatus,
+  dueStatus,
+  formatWeight,
+  taskDueStatus,
+  weightTrend,
+} from "../../../shared/health.ts";
 import { api } from "../api.ts";
 import { loadChecklist } from "../checklist.ts";
-import { formatLogNumber, loadCheckLogTypes } from "../dailyLogs.ts";
+import { loadCheckLogTypes } from "../dailyLogs.ts";
 import { loadLookups } from "../lookups.ts";
 import { openAppointmentModal } from "../components/appointmentModal.ts";
 import { openCheckLogModal } from "../components/checkLogModal.ts";
 import { openMedicationLogModal } from "../components/medicationLogModal.ts";
 import { rabbitAvatar } from "../components/avatar.ts";
+import { openBowlModal, openBowlReadingModal } from "../components/bowlModal.ts";
 import { renderChecksTable } from "../components/checksTable.ts";
 import { openCheckModal } from "../components/checkModal.ts";
 import { renderChecklistPhotos } from "../components/checklistPhotos.ts";
@@ -34,6 +48,7 @@ import { openDrugModal } from "../components/drugModal.ts";
 import { confirmDialog, openModal } from "../components/modal.ts";
 import { openLightbox, photoPicker } from "../components/photoPicker.ts";
 import { openRabbitModal } from "../components/rabbitModal.ts";
+import { openTaskModal } from "../components/taskModal.ts";
 import { toast } from "../components/toast.ts";
 import { optionButtons } from "../components/toggle.ts";
 import { openTreatmentModal } from "../components/treatmentModal.ts";
@@ -66,33 +81,98 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
 
   async function load(): Promise<void> {
     try {
-      const [bundle, drugResponse, checklistSections, lookups, logTypes, checkLogResponse, medLogResponse] =
-        await Promise.all([
-          api.get<RabbitBundle>(`/api/rabbits/${id}`),
-          api.get<{ drugs: DrugDto[] }>("/api/drugs"),
-          loadChecklist(),
-          loadLookups(),
-          loadCheckLogTypes(),
-          api.get<{ logs: CheckLogDto[] }>(`/api/check-logs?rabbitId=${id}`),
-          api.get<{ logs: MedicationLogDto[] }>(`/api/medication-logs?rabbitId=${id}`),
-        ]);
+      const [
+        bundle,
+        drugResponse,
+        checklistSections,
+        lookups,
+        logTypes,
+        checkLogResponse,
+        medLogResponse,
+        bowlResponse,
+        taskResponse,
+      ] = await Promise.all([
+        api.get<RabbitBundle>(`/api/rabbits/${id}`),
+        api.get<{ drugs: DrugDto[] }>("/api/drugs"),
+        loadChecklist(),
+        loadLookups(),
+        loadCheckLogTypes(),
+        api.get<{ logs: CheckLogDto[] }>(`/api/check-logs?rabbitId=${id}`),
+        api.get<{ logs: MedicationLogDto[] }>(`/api/medication-logs?rabbitId=${id}`),
+        api.get<{ bowls: BowlDto[] }>(`/api/bowls?rabbitId=${id}`),
+        api.get<{ tasks: TaskDto[]; completions: TaskCompletionDto[] }>(`/api/tasks?rabbitId=${id}`),
+      ]);
       const careTypes = lookups.filter((lookup) => lookup.kind === "care_type");
       const sections: (HTMLElement | null)[] = [
         header(bundle.rabbit, bundle.checks, load, canEdit),
-        weightCard(bundle.rabbit, bundle.checks, load, canRecord),
-        quickLogCard(bundle.rabbit, checklistSections, load, canRecord),
-        checksCard(bundle.rabbit, bundle.checks, checklistSections, load, canRecord),
-        dailyChecksCard(bundle.rabbit, logTypes, checkLogResponse.logs, load, canRecord),
-        journalCard(bundle.rabbit, bundle.journal, load, canRecord),
-        galleryCard(bundle.checks, bundle.journal),
-        feedingCard(bundle.rabbit, canEdit, load),
-        bondsCard(bundle.rabbit, bundle.bonds, load, canEdit),
-        treatmentsCard(bundle.rabbit, bundle.treatments, drugResponse.drugs, load, canRecord),
-        medicationCard(bundle.rabbit, bundle.treatments, medLogResponse.logs, drugResponse.drugs, load, canRecord),
-        vaccinationsCard(bundle.rabbit, bundle.vaccinations, load, canRecord),
-        careCard(bundle.rabbit, bundle.careSchedules, bundle.careRecords, careTypes, load, canRecord),
-        appointmentsCard(bundle.rabbit, bundle.appointments, load, canRecord, showCost),
-        ctx.user.isAdmin ? carersCard(bundle.rabbit, bundle.carers) : null,
+        profileGroup(
+          { id: "observations", title: "Observations", hint: "Quick logging", open: true },
+          [
+            dailyChecksCard(bundle.rabbit, logTypes, checkLogResponse.logs, load, canRecord),
+            bowlsCard(bundle.rabbit, bowlResponse.bowls, load, canRecord),
+            quickLogCard(bundle.rabbit, checklistSections, load, canRecord),
+          ],
+        ),
+        profileGroup(
+          { id: "routine", title: "Daily routine", hint: "Repeating chores and med rounds", open: true },
+          [
+            tasksCard(
+              bundle.rabbit,
+              taskResponse.tasks,
+              taskResponse.completions,
+              bundle.treatments,
+              load,
+              canRecord,
+            ),
+          ],
+        ),
+        profileGroup(
+          {
+            id: "health",
+            title: "Health checks",
+            hint: "Weight, weekly checks, vaccines and routine care",
+            open: true,
+          },
+          [
+            weightCard(bundle.rabbit, bundle.checks, load, canRecord),
+            checksCard(bundle.rabbit, bundle.checks, checklistSections, logTypes, load, canRecord),
+            vaccinationsCard(bundle.rabbit, bundle.vaccinations, load, canRecord),
+            careCard(bundle.rabbit, bundle.careSchedules, bundle.careRecords, careTypes, load, canRecord),
+          ],
+        ),
+        profileGroup(
+          { id: "treatment", title: "Treatments & medication", hint: "Courses, doses and stock" },
+          [
+            treatmentsCard(bundle.rabbit, bundle.treatments, drugResponse.drugs, load, canRecord),
+            medicationCard(
+              bundle.rabbit,
+              bundle.treatments,
+              medLogResponse.logs,
+              drugResponse.drugs,
+              load,
+              canRecord,
+            ),
+          ],
+        ),
+        profileGroup(
+          { id: "notes", title: "Notes & photos" },
+          [
+            journalCard(bundle.rabbit, bundle.journal, load, canRecord),
+            galleryCard(bundle.checks, bundle.journal, checkLogResponse.logs),
+          ],
+        ),
+        profileGroup(
+          { id: "schedule", title: "Appointments" },
+          [appointmentsCard(bundle.rabbit, bundle.appointments, load, canRecord, showCost)],
+        ),
+        profileGroup(
+          { id: "details", title: "Bunny details", hint: "Feeding plan, bonds and carers" },
+          [
+            feedingCard(bundle.rabbit, canEdit, load),
+            bondsCard(bundle.rabbit, bundle.bonds, load, canEdit),
+            ctx.user.isAdmin ? carersCard(bundle.rabbit, bundle.carers) : null,
+          ],
+        ),
       ];
       container.replaceChildren(...sections.filter((section): section is HTMLElement => section !== null));
     } catch (err) {
@@ -104,6 +184,47 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
 
   void load();
   return container;
+}
+
+const PROFILE_GROUP_STATE_KEY = "rt-profile-groups";
+
+function profileGroup(
+  options: { id: string; title: string; hint?: string; open?: boolean },
+  children: (HTMLElement | null)[],
+): HTMLElement | null {
+  const content = children.filter((child): child is HTMLElement => child !== null);
+  if (content.length === 0) return null;
+  const details = h("details", { class: "profile-group" });
+  details.open = readProfileGroups()[options.id] ?? options.open ?? false;
+  details.append(
+    h(
+      "summary",
+      null,
+      h("h2", null, options.title),
+      options.hint ? h("span", { class: "dim small" }, options.hint) : null,
+    ),
+    h("div", { class: "profile-group-body" }, content),
+  );
+  details.addEventListener("toggle", () => {
+    try {
+      const state = readProfileGroups();
+      state[options.id] = details.open;
+      localStorage.setItem(PROFILE_GROUP_STATE_KEY, JSON.stringify(state));
+    } catch {
+      // storage may be unavailable
+    }
+  });
+  return details;
+}
+
+function readProfileGroups(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(PROFILE_GROUP_STATE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
 }
 
 function header(
@@ -184,17 +305,22 @@ function header(
           rabbit.quarantined ? h("span", { class: "badge watch" }, "Quarantine") : null,
           rabbit.status === "deceased" ? h("span", { class: "badge alert" }, "Deceased") : null,
         ),
-        canEdit
-          ? h(
-              "button",
-              {
-                class: "btn outline small",
-                type: "button",
-                onClick: () => openRabbitModal({ rabbit, onSaved: () => void reload() }),
-              },
-              "Edit details",
-            )
-          : null,
+        h(
+          "div",
+          { class: "row wrap" },
+          canEdit
+            ? h(
+                "button",
+                {
+                  class: "btn outline small",
+                  type: "button",
+                  onClick: () => openRabbitModal({ rabbit, onSaved: () => void reload() }),
+                },
+                "Edit details",
+              )
+            : null,
+          h("a", { class: "btn outline small", href: `#/rabbit/${rabbit.id}/report` }, "Report"),
+        ),
       ),
     ),
     photoError,
@@ -415,7 +541,11 @@ function bondsCard(
   );
 }
 
-function galleryCard(checks: HealthCheckDto[], journal: JournalEntryDto[]): HTMLElement | null {
+function galleryCard(
+  checks: HealthCheckDto[],
+  journal: JournalEntryDto[],
+  logs: CheckLogDto[],
+): HTMLElement | null {
   const photos: { thumb: string; full: string; alt: string; date: string }[] = [];
   for (const check of checks) {
     if (!check.hasPhoto) continue;
@@ -433,6 +563,16 @@ function galleryCard(checks: HealthCheckDto[], journal: JournalEntryDto[]): HTML
         full: `/api/photos/journal/${photo.id}?size=full`,
         alt: photo.caption || "Journal photo",
         date: entry.createdAt,
+      });
+    }
+  }
+  for (const log of logs) {
+    for (const photo of log.photos) {
+      photos.push({
+        thumb: `/api/photos/checklog/${photo.id}?size=thumb`,
+        full: `/api/photos/checklog/${photo.id}?size=full`,
+        alt: photo.caption || `${log.typeLabel} photo`,
+        date: log.loggedAt,
       });
     }
   }
@@ -461,18 +601,50 @@ function dailyChecksCard(
   reload: () => Promise<void>,
   canRecord: boolean,
 ): HTMLElement {
+  const openLog = (initialTypeId?: number) =>
+    openCheckLogModal({ rabbit, types, initialTypeId, onSaved: () => void reload() });
+
+  const quickButtons =
+    canRecord && types.length > 0
+      ? h(
+          "div",
+          { class: "row wrap quick-log-buttons" },
+          types.map((type) =>
+            h(
+              "button",
+              { class: "btn outline small", type: "button", onClick: () => openLog(type.id) },
+              type.label,
+            ),
+          ),
+        )
+      : null;
+
   const list = h("div", { class: "stack", style: { gap: "0" } });
   const recent = logs.slice(0, 10);
   if (recent.length === 0) {
     list.append(h("p", { class: "dim small", style: { margin: 0 } }, "No daily checks logged yet."));
   }
   for (const entry of recent) {
-    const value = [
-      entry.valueText,
-      entry.valueMilli != null ? formatLogNumber(entry.valueMilli, entry.typeUnit) : null,
-    ]
-      .filter(Boolean)
-      .join(" · ");
+    const value = checkLogValueParts(entry).join(" · ");
+    const photos =
+      entry.photos.length > 0
+        ? h(
+            "div",
+            { class: "check-photos" },
+            entry.photos.map((photo) => {
+              const alt = photo.caption || `${entry.typeLabel} photo`;
+              const image = h("img", {
+                class: "check-photo",
+                src: `/api/photos/checklog/${photo.id}?size=thumb`,
+                alt,
+              });
+              image.addEventListener("click", () =>
+                openLightbox(`/api/photos/checklog/${photo.id}?size=full`, alt),
+              );
+              return image;
+            }),
+          )
+        : null;
     list.append(
       h(
         "div",
@@ -483,9 +655,21 @@ function dailyChecksCard(
           h("strong", null, entry.typeLabel),
           value ? h("span", { class: "dim small" }, value) : null,
           entry.notes ? h("span", { class: "dim small" }, entry.notes) : null,
+          photos,
         ),
         h("span", { class: "spacer" }),
         h("span", { class: "dim small" }, `${fmtDate(entry.loggedAt)} ${fmtTime(entry.loggedAt)}`),
+        canRecord
+          ? h(
+              "button",
+              {
+                class: "btn ghost small",
+                type: "button",
+                onClick: () => openCheckLogModal({ rabbit, types, log: entry, onSaved: () => void reload() }),
+              },
+              "Edit",
+            )
+          : null,
         canRecord
           ? h(
               "button",
@@ -501,7 +685,7 @@ function dailyChecksCard(
     {
       class: "btn primary small",
       type: "button",
-      onClick: () => openCheckLogModal({ rabbit, types, onSaved: () => void reload() }),
+      onClick: () => openLog(),
     },
     "Log",
   );
@@ -515,7 +699,12 @@ function dailyChecksCard(
       h("span", { class: "spacer" }),
       canRecord && types.length > 0 ? log : null,
     ),
-    h("p", { class: "dim small" }, "Poo, water, food and anything else worth tracking each day."),
+    h(
+      "p",
+      { class: "dim small" },
+      "Poo, water, food, behaviour and anything else worth tracking each day. Tap a type to log it, add photos, or pick several options at once.",
+    ),
+    quickButtons,
     list,
   );
 }
@@ -531,6 +720,347 @@ async function removeCheckLog(entry: CheckLogDto, reload: () => Promise<void>): 
   await api.del(`/api/check-logs/${entry.id}`);
   toast("Log deleted");
   await reload();
+}
+
+function bowlsCard(
+  rabbit: RabbitDto,
+  bowls: BowlDto[],
+  reload: () => Promise<void>,
+  canRecord: boolean,
+): HTMLElement {
+  const add = canRecord
+    ? h(
+        "button",
+        { class: "btn outline small", type: "button", onClick: () => openBowlModal({ rabbit, onSaved: () => void reload() }) },
+        "Add bowl",
+      )
+    : null;
+  const list = h("div", { class: "stack", style: { gap: "0.75rem" } });
+  if (bowls.length === 0) {
+    list.append(h("p", { class: "dim small", style: { margin: 0 } }, "No bowls tracked yet."));
+  }
+  for (const bowl of bowls) list.append(bowlPanel(rabbit, bowl, reload, canRecord));
+  return h(
+    "div",
+    { class: "card" },
+    h("div", { class: "card-title" }, h("h2", null, "Food & water"), h("span", { class: "spacer" }), add),
+    h(
+      "p",
+      { class: "dim small" },
+      "Track consumption by weighing the bowl. Each weigh-in rolls the baseline forward, top-ups count as refills, and refresh starts a new period.",
+    ),
+    list,
+  );
+}
+
+function bowlPanel(
+  rabbit: RabbitDto,
+  bowl: BowlDto,
+  reload: () => Promise<void>,
+  canRecord: boolean,
+): HTMLElement {
+  const parts = [
+    bowl.periodStartAt ? `Since ${fmtDate(bowl.periodStartAt)}` : null,
+    bowl.currentWeightGrams != null ? `${bowl.currentWeightGrams} g now` : null,
+    `${bowl.periodConsumptionGrams} g consumed`,
+    bowl.periodRefillGrams > 0 ? `${bowl.periodRefillGrams} g refilled` : null,
+  ].filter(Boolean);
+  const actions = canRecord
+    ? h(
+        "div",
+        { class: "row wrap" },
+        h(
+          "button",
+          { class: "btn outline small", type: "button", onClick: () => openBowlReadingModal({ bowl, mode: "weigh", onSaved: () => void reload() }) },
+          "Weigh",
+        ),
+        h(
+          "button",
+          { class: "btn outline small", type: "button", onClick: () => openBowlReadingModal({ bowl, mode: "refill", onSaved: () => void reload() }) },
+          "Refill",
+        ),
+        h(
+          "button",
+          { class: "btn outline small", type: "button", onClick: () => openBowlReadingModal({ bowl, mode: "refresh", onSaved: () => void reload() }) },
+          "Refresh",
+        ),
+        h(
+          "button",
+          { class: "btn ghost small", type: "button", onClick: () => openBowlModal({ rabbit, bowl, onSaved: () => void reload() }) },
+          "Rename",
+        ),
+        h(
+          "button",
+          { class: "btn ghost small", type: "button", onClick: () => void removeBowl(bowl, reload) },
+          "Delete",
+        ),
+      )
+    : null;
+  const readingsWrap = h("div", { class: "stack", style: { gap: "0" } });
+  const more = h("button", { class: "btn ghost small", type: "button" }, "");
+  let expanded = false;
+  const renderReadings = () => {
+    const shown = expanded ? bowl.readings : bowl.readings.slice(0, 5);
+    readingsWrap.replaceChildren(
+      ...shown.map((reading) => bowlReadingRow(bowl, reading, reload, canRecord)),
+    );
+    more.textContent = expanded ? "Show recent" : `Show all (${bowl.readings.length})`;
+    more.style.display = bowl.readings.length > 5 ? "" : "none";
+  };
+  more.addEventListener("click", () => {
+    expanded = !expanded;
+    renderReadings();
+  });
+  renderReadings();
+  return h(
+    "div",
+    { class: "bowl-panel" },
+    h(
+      "div",
+      { class: "row wrap" },
+      h("strong", null, bowl.label),
+      h("span", { class: "dim small" }, parts.join(" · ")),
+    ),
+    actions,
+    bowl.readings.length > 0
+      ? h("div", { class: "stack", style: { gap: "0.4rem" } }, readingsWrap, more)
+      : null,
+  );
+}
+
+function bowlReadingRow(
+  bowl: BowlDto,
+  reading: BowlDto["readings"][number],
+  reload: () => Promise<void>,
+  canRecord: boolean,
+): HTMLElement {
+  const delta =
+    reading.consumptionGrams > 0
+      ? `-${reading.consumptionGrams} g`
+      : reading.refillGrams > 0
+        ? `+${reading.refillGrams} g`
+        : null;
+  return h(
+    "div",
+    { class: "list-row" },
+    h(
+      "div",
+      { class: "stack", style: { gap: "0.15rem" } },
+      h(
+        "span",
+        null,
+        bowlReadingKindLabel(reading.kind),
+        delta ? h("span", { class: "dim small" }, ` ${delta}`) : null,
+      ),
+      reading.notes ? h("span", { class: "dim small" }, reading.notes) : null,
+    ),
+    h("span", { class: "spacer" }),
+    h("span", { class: "dim small" }, `${fmtDate(reading.readAt)} ${fmtTime(reading.readAt)} · ${reading.weightGrams} g`),
+    canRecord
+      ? h(
+          "button",
+          {
+            class: "btn ghost small",
+            type: "button",
+            onClick: () => void removeBowlReading(bowl, reading.id, reload),
+          },
+          "Delete",
+        )
+      : null,
+  );
+}
+
+async function removeBowl(bowl: BowlDto, reload: () => Promise<void>): Promise<void> {
+  const confirmed = await confirmDialog({
+    title: `Delete ${bowl.label}?`,
+    message: "This removes the bowl and its readings.",
+    confirmLabel: "Delete",
+    danger: true,
+  });
+  if (!confirmed) return;
+  await api.del(`/api/bowls/${bowl.id}`);
+  toast("Bowl deleted");
+  await reload();
+}
+
+async function removeBowlReading(
+  bowl: BowlDto,
+  readingId: number,
+  reload: () => Promise<void>,
+): Promise<void> {
+  const confirmed = await confirmDialog({
+    title: "Delete reading?",
+    message: "Consumption totals are recalculated from the remaining readings.",
+    confirmLabel: "Delete",
+    danger: true,
+  });
+  if (!confirmed) return;
+  await api.del(`/api/bowls/${bowl.id}/readings/${readingId}`);
+  toast("Reading deleted");
+  await reload();
+}
+
+function tasksCard(
+  rabbit: RabbitDto,
+  tasks: TaskDto[],
+  completions: TaskCompletionDto[],
+  treatments: TreatmentDto[],
+  reload: () => Promise<void>,
+  canRecord: boolean,
+): HTMLElement {
+  const now = new Date();
+  const treatmentById = new Map(treatments.map((treatment) => [treatment.id, treatment]));
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const due = tasks
+    .filter(
+      (task) => task.active && taskDueStatus(task.lastCompletedAt, task.intervalDays, now) === "due",
+    )
+    .sort((a, b) => TASK_SLOTS.indexOf(a.slot) - TASK_SLOTS.indexOf(b.slot) || a.id - b.id);
+
+  const list = h("div", { class: "stack", style: { gap: "0" } });
+  if (due.length === 0) {
+    list.append(h("p", { class: "dim small", style: { margin: 0 } }, "Nothing due right now."));
+  }
+  let currentSlot: TaskDto["slot"] | null = null;
+  for (const task of due) {
+    if (task.slot !== currentSlot) {
+      currentSlot = task.slot;
+      list.append(h("p", { class: "task-slot dim small" }, TASK_SLOT_LABELS[task.slot]));
+    }
+    const treatment = task.treatmentId != null ? treatmentById.get(task.treatmentId) : undefined;
+    const detail = [
+      treatment
+        ? `${treatment.medication}${treatment.dose ? ` · ${treatment.dose}` : ""}`
+        : null,
+      task.intervalDays === 1 ? "every day" : `every ${task.intervalDays} days`,
+      task.lastCompletedAt ? `last done ${fmtDate(task.lastCompletedAt)}` : "not done yet",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    list.append(
+      h(
+        "div",
+        { class: "list-row" },
+        h(
+          "div",
+          { class: "stack", style: { gap: "0.15rem" } },
+          h("strong", null, task.label),
+          h("span", { class: "dim small" }, detail),
+          task.notes ? h("span", { class: "dim small" }, task.notes) : null,
+        ),
+        h("span", { class: "spacer" }),
+        canRecord
+          ? h(
+              "button",
+              { class: "btn primary small", type: "button", onClick: () => void completeTask(task) },
+              "Done",
+            )
+          : null,
+        canRecord
+          ? h(
+              "button",
+              {
+                class: "btn ghost small",
+                type: "button",
+                onClick: () =>
+                  openTaskModal({ rabbit, task, treatments, onSaved: () => void reload() }),
+              },
+              "Edit",
+            )
+          : null,
+      ),
+    );
+  }
+
+  const recent = completions.slice(0, 5);
+  if (recent.length > 0) {
+    list.append(h("p", { class: "task-slot dim small" }, "Recently completed"));
+    for (const completion of recent) {
+      const task = taskById.get(completion.taskId);
+      list.append(
+        h(
+          "div",
+          { class: "list-row" },
+          h("span", { class: "badge ok" }, "Done"),
+          h(
+            "div",
+            { class: "stack", style: { gap: "0.15rem" } },
+            h("strong", null, task?.label ?? "Task"),
+            h(
+              "span",
+              { class: "dim small" },
+              `${fmtDate(completion.completedAt)} ${fmtTime(completion.completedAt)}${completion.medicationLogId != null ? " · dose logged" : ""}`,
+            ),
+          ),
+          h("span", { class: "spacer" }),
+          canRecord
+            ? h(
+                "button",
+                {
+                  class: "btn ghost small",
+                  type: "button",
+                  onClick: () => void undoCompletion(completion),
+                },
+                "Undo",
+              )
+            : null,
+        ),
+      );
+    }
+  }
+
+  const add = canRecord
+    ? h(
+        "button",
+        {
+          class: "btn outline small",
+          type: "button",
+          onClick: () => openTaskModal({ rabbit, treatments, onSaved: () => void reload() }),
+        },
+        "Add task",
+      )
+    : null;
+
+  return h(
+    "div",
+    { class: "card" },
+    h("div", { class: "card-title" }, h("h2", null, "Daily routine"), h("span", { class: "spacer" }), add),
+    h(
+      "p",
+      { class: "dim small" },
+      "Repeating chores and medication rounds. Tap Done when finished — linked medication logs the dose automatically.",
+    ),
+    list,
+  );
+
+  async function completeTask(task: TaskDto): Promise<void> {
+    try {
+      await api.post(`/api/tasks/${task.id}/complete`, {
+        completedAt: new Date().toISOString(),
+        notes: "",
+      });
+      toast(task.treatmentId != null ? "Done — dose logged" : "Done");
+      await reload();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not complete the task", "error");
+    }
+  }
+
+  async function undoCompletion(completion: TaskCompletionDto): Promise<void> {
+    const confirmed = await confirmDialog({
+      title: "Undo completion?",
+      message:
+        completion.medicationLogId != null
+          ? "The logged dose is removed and returned to drug stock."
+          : "The task becomes due again.",
+      confirmLabel: "Undo",
+      danger: true,
+    });
+    if (!confirmed) return;
+    await api.del(`/api/tasks/completions/${completion.id}`);
+    toast("Completion removed");
+    await reload();
+  }
 }
 
 function medicationCard(
@@ -930,6 +1460,7 @@ function checksCard(
   rabbit: RabbitDto,
   checks: HealthCheckDto[],
   sections: ChecklistSectionDto[],
+  logTypes: CheckLogTypeDto[],
   reload: () => Promise<void>,
   canRecord: boolean,
 ): HTMLElement {
@@ -965,6 +1496,7 @@ function checksCard(
           checks,
           rabbits: [rabbit],
           sections,
+          logTypes,
           onChanged: reload,
           canEdit: canRecord,
         }),

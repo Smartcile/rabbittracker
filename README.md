@@ -31,22 +31,38 @@ Desktop:
 - Quarantine flag with a release date, target weight range and a feeding plan.
 - Bonded-bunny links (symmetric) shown on each profile.
 - Photo gallery per bunny, combining check photos and journal photos.
+- Collapsible profile groups — Observations, Health checks, Treatments & medication, Notes &
+  photos, Appointments and Bunny details — with the open/closed state remembered per browser.
 
 **Health**
 - Health checks with weight, appetite, droppings, energy, body condition (1–5), temperature,
   pain score (0–10), vet notes and a photo.
 - The RRR weekly health checklist (posture, demeanour, eyes, breathing, coat & skin, behaviour,
   bum, ears, nails, genitals, hocks) with tick-button answers, per-section notes and example
-  photos. The checklist itself is editable in Settings.
+  photos. The checklist itself is editable in Settings. The full check form can also switch on any
+  of your daily check types (Poo, Water, Food, Behaviour, …) so the Sunday check captures them too.
 - Quick log — tick any checklist item from the bunny page and save it as a health check without
   the full form.
-- **Daily checks** — define your own types in Settings (Poo, Water intake, Food, …) with option
-  buttons, a number with a unit and free text, then log them against any bunny in seconds.
+- **Daily checks** — define your own types in Settings (Poo, Water intake, Food, Behaviour, …) with
+  option buttons (single or multi-select), a number with a unit and free text, plus photos on any
+  log. A one-tap bar on the bunny profile logs a type in seconds.
+- **Food & water bowl tracking** — set a starting weight for a bowl, then log scale readings as you
+  go: consumption is calculated since the last reading and the baseline rolls forward. Top-ups count
+  as refills (or enter the amount added), and refresh starts a new period with an optional final
+  weight. Plain ml/g daily checks still work alongside.
+- **Daily routine tasks** — repeating chores and medication rounds per bunny with morning, afternoon,
+  evening or anytime slots and an every-N-days repeat. Tick them off from the bunny page or the home
+  Today list; completing a task linked to a treatment logs the dose and deducts drug stock, and undo
+  puts it back.
 - **Medication log** — record every dose given (linked to a treatment and drug). Logged doses
   deduct from drug stock earliest-expiry-first and deleting a log puts it back.
 - Manual weigh-ins with a one-tap "Log weight" action.
 - Weight trend chart with loss alerts and target-range checks.
 - Timestamped notes & photos journal per bunny.
+- **Printable bunny report** — pick a period (day, week, month, all time or custom dates) and save
+  a light-themed PDF of the full record: profile, weights, health checks, daily checks, bowl
+  tracking, routine tasks, medication doses, treatments, vaccinations, routine care, appointments
+  and journal notes, with optional photos.
 
 **Care & treatment**
 - Treatments with dose, route, frequency, reason, dates and status, plus a drug cabinet with stock
@@ -72,7 +88,8 @@ Desktop:
 - Admin-only user management, checklist editor, vet/clinic directory and list editor.
 - Home dashboard stats: in care, needing attention, appointments (14 days), active treatments and
   quarantine.
-- Export health checks CSV, appointments CSV and a full JSON backup.
+- Export health checks CSV, appointments CSV, a JSON backup and a full ZIP backup that adds every
+  photo file.
 - Demo mode — a Settings switch that loads sample bunnies, records, appointments (dated around the
   current month), journal entries, bonds, a vet and a clinic, and removes every demo row when
   switched off.
@@ -171,10 +188,11 @@ open `http://<machine-name>:8091` from the phone.
 ## Demo data
 
 **Settings → Demo data** loads a full sample dataset: three bunnies with weight history, checklist
-answers, temperatures and pain scores, treatments, vaccinations, care schedules, appointments
-placed around the current month, journal entries, bonded pairs, plus a clinic and a vet. Switch it
-off to delete every demo row — your own data is untouched. Handy for trying the app or taking
-screenshots.
+answers, temperatures and pain scores, treatments with logged medication doses, recent daily check
+logs (single- and multi-select, numbers and notes), bowl readings, routine tasks with completions,
+vaccinations, care schedules, appointments placed around the current month, journal entries, bonded
+pairs, plus a clinic and a vet. Switch it off to delete every demo row — your own data is untouched.
+Handy for trying the app or taking screenshots.
 
 ## Local development
 
@@ -203,7 +221,8 @@ On Windows PowerShell use `npm.cmd` (the `npm.ps1` shim is blocked by default).
 ## Data and backups
 
 - Postgres data lives in the `rt_db` volume; photos live in the `rt_data` volume. Back up volumes,
-  not containers — or use **Settings → Export → JSON backup** for a portable dump.
+  not containers — or use **Settings → Export → Full backup (ZIP)** for a portable archive of every
+  table plus every photo file (session tokens and password/PIN hashes are excluded).
 - Weight is stored as integer grams and money as integer cents; temperatures as tenths of a degree.
   No floats in the database.
 - Migrations are committed under `server/drizzle/` and applied automatically at boot.

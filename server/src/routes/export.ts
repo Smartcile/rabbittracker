@@ -1,39 +1,24 @@
+import { asc, is } from "drizzle-orm";
+import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import { Router } from "express";
 import type { Response } from "express";
-import {
-  appointmentToDto,
-  calendarEventToDto,
-  careRecordToDto,
-  careScheduleToDto,
-  drugToDto,
-  faqEntryToDto,
-  healthCheckToDto,
-  rabbitToDto,
-  settingsToDto,
-  treatmentToDto,
-  userToDto,
-  vaccinationToDto,
-} from "../api/mappers.ts";
+import { join } from "node:path";
+import { config } from "../config.ts";
 import { db } from "../db/index.ts";
-import {
-  appointments,
-  calendarEvents,
-  careRecords,
-  careSchedules,
-  drugBatches,
-  drugs,
-  faqEntries,
-  healthChecks,
-  rabbits,
-  treatments,
-  users,
-  vaccinations,
-} from "../db/schema.ts";
+import { appointments, healthChecks, rabbits } from "../db/schema.ts";
+import * as schema from "../db/schema.ts";
 import { requireAdmin, requireAuth } from "../lib/auth.ts";
 import { getSettings } from "../lib/settingsStore.ts";
+import { listPhotoFiles, writeBackupZip } from "../services/backupArchive.ts";
 import { formatDateInZone, formatDateTimeInZone, toCsv } from "../services/csv.ts";
 
 export const exportRouter = Router();
+
+const BACKUP_EXCLUDED_TABLES = new Set(["sessions"]);
+
+const BACKUP_REDACTED_COLUMNS: Record<string, string[]> = {
+  users: ["passwordHash", "pinHash"],
+};
 
 exportRouter.get("/checks.csv", requireAuth, requireAdmin, async (_req, res) => {
   const settings = await getSettings();
@@ -88,58 +73,47 @@ exportRouter.get("/appointments.csv", requireAuth, requireAdmin, async (_req, re
 });
 
 exportRouter.get("/backup.json", requireAuth, requireAdmin, async (_req, res) => {
-  const [
-    rabbitRows,
-    checkRows,
-    treatmentRows,
-    vaccinationRows,
-    scheduleRows,
-    recordRows,
-    appointmentRows,
-    eventRows,
-    faqRows,
-    drugRows,
-    batchRows,
-    userRows,
-    settingsRow,
-  ] = await Promise.all([
-    db.select().from(rabbits),
-    db.select().from(healthChecks),
-    db.select().from(treatments),
-    db.select().from(vaccinations),
-    db.select().from(careSchedules),
-    db.select().from(careRecords),
-    db.select().from(appointments),
-    db.select().from(calendarEvents),
-    db.select().from(faqEntries),
-    db.select().from(drugs),
-    db.select().from(drugBatches),
-    db.select().from(users),
-    getSettings(),
-  ]);
   res.setHeader("Content-Disposition", 'attachment; filename="rabbittracker-backup.json"');
-  res.json({
-    exportedAt: new Date().toISOString(),
-    version: 1,
-    rabbits: rabbitRows.map(rabbitToDto),
-    checks: checkRows.map(healthCheckToDto),
-    treatments: treatmentRows.map(treatmentToDto),
-    vaccinations: vaccinationRows.map(vaccinationToDto),
-    careSchedules: scheduleRows.map(careScheduleToDto),
-    careRecords: recordRows.map(careRecordToDto),
-    appointments: appointmentRows.map((row) => appointmentToDto(row)),
-    calendarEvents: eventRows.map(calendarEventToDto),
-    faqEntries: faqRows.map(faqEntryToDto),
-    drugs: drugRows.map((row) =>
-      drugToDto(
-        row,
-        batchRows.filter((batch) => batch.drugId === row.id),
-      ),
-    ),
-    users: userRows.map(userToDto),
-    settings: settingsToDto(settingsRow),
-  });
+  res.json(await buildBackup());
 });
+
+exportRouter.get("/backup.zip", requireAuth, requireAdmin, async (_req, res) => {
+  const backup = await buildBackup();
+  const photos = await listPhotoFiles(join(config.dataDir, "photos"));
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", 'attachment; filename="rabbittracker-backup.zip"');
+  await writeBackupZip(res, JSON.stringify(backup, null, 2), photos);
+  res.end();
+});
+
+async function buildBackup(): Promise<{
+  exportedAt: string;
+  version: number;
+  tables: Record<string, Record<string, unknown>[]>;
+}> {
+  const tables: Record<string, Record<string, unknown>[]> = {};
+  for (const { name, table } of backupTables()) {
+    const primary = getTableConfig(table).columns.find((column) => column.primary);
+    const query = db.select().from(table);
+    const rows = primary ? await query.orderBy(asc(primary)) : await query;
+    const redacted = BACKUP_REDACTED_COLUMNS[name] ?? [];
+    tables[name] = rows.map((row) => {
+      const record = { ...(row as Record<string, unknown>) };
+      for (const column of redacted) delete record[column];
+      return record;
+    });
+  }
+  return { exportedAt: new Date().toISOString(), version: 2, tables };
+}
+
+function backupTables(): { name: string; table: PgTable }[] {
+  const values: unknown[] = Object.values(schema);
+  return values
+    .filter((value): value is PgTable => is(value, PgTable))
+    .map((table) => ({ name: getTableConfig(table).name, table }))
+    .filter(({ name }) => !BACKUP_EXCLUDED_TABLES.has(name))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
 
 function sendCsv(res: Response, filename: string, rows: (string | number | null)[][]): void {
   res.setHeader("Content-Type", "text/csv; charset=utf-8");

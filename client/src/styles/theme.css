@@ -950,6 +950,71 @@ input.switch:focus-visible {
   margin-bottom: 0.5rem;
 }
 
+.quick-log-buttons {
+  margin-bottom: 0.6rem;
+}
+
+.bowl-panel {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.task-slot {
+  margin: 0.7rem 0 0.1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 650;
+  font-size: 0.72rem;
+}
+
+.profile-group {
+  margin-bottom: 1.25rem;
+}
+
+.profile-group > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  cursor: pointer;
+  list-style: none;
+  padding: 0.35rem 0.15rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.85rem;
+}
+
+.profile-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.profile-group > summary h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.profile-group > summary::after {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-left: auto;
+  align-self: center;
+  border-right: 2px solid var(--text-dim);
+  border-bottom: 2px solid var(--text-dim);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+}
+
+.profile-group[open] > summary::after {
+  transform: rotate(-135deg);
+}
+
+.profile-group-body > .card:last-child {
+  margin-bottom: 0;
+}
+
 .modal-warning-row {
   display: flex;
   align-items: center;

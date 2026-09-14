@@ -173,6 +173,30 @@ export function careDueStatus(
   return "ok";
 }
 
+export function taskNextDueOn(
+  lastCompletedAt: string | null | undefined,
+  intervalDays: number,
+): string | null {
+  if (!lastCompletedAt) return null;
+  if (!Number.isFinite(intervalDays) || intervalDays <= 0) return null;
+  const last = utcDay(lastCompletedAt);
+  if (last === null) return null;
+  return new Date(last + intervalDays * 86_400_000).toISOString().slice(0, 10);
+}
+
+export function taskDueStatus(
+  lastCompletedAt: string | null | undefined,
+  intervalDays: number,
+  now: Date,
+): "due" | "upcoming" {
+  if (!lastCompletedAt) return "due";
+  const dueOn = taskNextDueOn(lastCompletedAt, intervalDays);
+  if (!dueOn) return "due";
+  const due = utcDay(`${dueOn}T00:00:00.000Z`);
+  if (due === null) return "due";
+  return due <= todayUtc(now) ? "due" : "upcoming";
+}
+
 export type AttentionKind = "weight" | "vaccination" | "care" | "follow-up";
 export type AttentionSeverity = "watch" | "alert";
 

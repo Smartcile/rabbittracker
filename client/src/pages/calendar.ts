@@ -1,4 +1,5 @@
 import { expandEntryStart } from "../../../shared/calendar.ts";
+import { checkLogValueSummary } from "../../../shared/checkLogs.ts";
 import type {
   AppointmentDto,
   CalendarEntryDto,
@@ -11,7 +12,6 @@ import type {
   TreatmentDto,
 } from "../../../shared/types.ts";
 import { api } from "../api.ts";
-import { formatLogNumber } from "../dailyLogs.ts";
 import { openAppointmentModal } from "../components/appointmentModal.ts";
 import { openCalendarEntryModal } from "../components/calendarEntryModal.ts";
 import { toast } from "../components/toast.ts";
@@ -226,12 +226,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         );
       }
       for (const log of logsByDay.get(key) ?? []) {
-        const value = [
-          log.valueText,
-          log.valueMilli != null ? formatLogNumber(log.valueMilli, log.typeUnit) : null,
-        ]
-          .filter(Boolean)
-          .join(" · ");
+        const value = checkLogValueSummary(log);
         cell.append(
           h(
             "a",

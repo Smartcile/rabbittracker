@@ -1,0 +1,844 @@
+import { bowlReadingKindLabel } from "../../../shared/bowls.ts";
+import { checkLogValueSummary } from "../../../shared/checkLogs.ts";
+import { formatDrugAmount } from "../../../shared/drugs.ts";
+import {
+  ageLabel,
+  careDueStatus,
+  dueStatus,
+  formatWeight,
+  taskDueStatus,
+  taskNextDueOn,
+  weightTrend,
+} from "../../../shared/health.ts";
+import {
+  checklistAnswerLines,
+  dateRangesOverlap,
+  isDateWithinRange,
+  isWithinRange,
+  localDateValue,
+  resolveReportRange,
+  type ReportPreset,
+  type ReportRange,
+} from "../../../shared/report.ts";
+import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
+import type {
+  AppointmentDto,
+  BowlDto,
+  CareRecordDto,
+  CareScheduleDto,
+  CheckLogDto,
+  CheckLogTypeDto,
+  ChecklistSectionDto,
+  DrugDto,
+  HealthCheckDto,
+  JournalEntryDto,
+  LookupDto,
+  MedicationLogDto,
+  RabbitDto,
+  SettingsDto,
+  TaskCompletionDto,
+  TaskDto,
+  TreatmentDto,
+  UserDto,
+  VaccinationDto,
+} from "../../../shared/types.ts";
+import { api } from "../api.ts";
+import { loadChecklist } from "../checklist.ts";
+import { loadCheckLogTypes } from "../dailyLogs.ts";
+import { loadLookups } from "../lookups.ts";
+import { rabbitAvatar } from "../components/avatar.ts";
+import { optionButtons, toggleButton } from "../components/toggle.ts";
+import { renderWeightChart } from "../components/weightChart.ts";
+import type { PageContext } from "../context.ts";
+import { fmtCalendarDate, fmtDate, fmtTime, h, type Child } from "../dom.ts";
+import { can } from "../permissions.ts";
+import { sexLabel } from "./bunnies.ts";
+
+type RabbitBundle = {
+  rabbit: RabbitDto;
+  carers: UserDto[];
+  bonds: RabbitDto[];
+  checks: HealthCheckDto[];
+  treatments: TreatmentDto[];
+  vaccinations: VaccinationDto[];
+  careSchedules: CareScheduleDto[];
+  careRecords: CareRecordDto[];
+  appointments: AppointmentDto[];
+  journal: JournalEntryDto[];
+};
+
+export function renderRabbitReportPage(ctx: PageContext, id: number): HTMLElement {
+  document.documentElement.dataset.theme = "light";
+
+  let preset: ReportPreset = "week";
+  let customFrom = "";
+  let customTo = "";
+  let includePhotos = false;
+  let timezone: string | undefined;
+  let bundle: RabbitBundle | null = null;
+  let drugs: DrugDto[] = [];
+  let checklistSections: ChecklistSectionDto[] = [];
+  let careTypes: LookupDto[] = [];
+  let checkLogs: CheckLogDto[] = [];
+  let medLogs: MedicationLogDto[] = [];
+  let bowls: BowlDto[] = [];
+  let logTypes: CheckLogTypeDto[] = [];
+  let tasks: TaskDto[] = [];
+  let taskCompletions: TaskCompletionDto[] = [];
+  const showCost = can(ctx.user, "canViewCosts");
+  const isAdmin = ctx.user.isAdmin;
+
+  const controls = h("div", { class: "card report-controls" });
+  const body = h("div", { class: "report-body" });
+
+  const presets = optionButtons(
+    [
+      { value: "day", label: "Day" },
+      { value: "week", label: "Week" },
+      { value: "month", label: "Month" },
+      { value: "all", label: "All time" },
+      { value: "custom", label: "Custom" },
+    ],
+    [preset],
+    false,
+    (values) => {
+      const next = values[0] as ReportPreset | undefined;
+      if (!next) {
+        presets.setValues([preset]);
+        return;
+      }
+      preset = next;
+      if (preset === "custom" && !customFrom && !customTo) {
+        const week = resolveReportRange("week", new Date());
+        if (week.from && week.to) {
+          customFrom = localDateValue(week.from);
+          customTo = localDateValue(week.to);
+          fromInput.value = customFrom;
+          toInput.value = customTo;
+        }
+      }
+      renderControls();
+      renderBody();
+    },
+  );
+
+  const fromInput = h("input", { type: "date", value: customFrom });
+  const toInput = h("input", { type: "date", value: customTo });
+  fromInput.addEventListener("change", () => {
+    customFrom = fromInput.value;
+    renderBody();
+  });
+  toInput.addEventListener("change", () => {
+    customTo = toInput.value;
+    renderBody();
+  });
+
+  const photosToggle = toggleButton({
+    label: "Include photos",
+    checked: includePhotos,
+    onChange: (checked) => {
+      includePhotos = checked;
+      renderBody();
+    },
+  });
+
+  const download = h(
+    "button",
+    { class: "btn primary", type: "button", onClick: () => window.print() },
+    "Download PDF",
+  );
+
+  function renderControls(): void {
+    presets.setValues([preset]);
+    controls.replaceChildren(
+      h(
+        "div",
+        { class: "filters" },
+        h("div", { class: "field" }, h("label", null, "Period"), presets.root),
+        preset === "custom" ? h("div", { class: "field" }, h("label", null, "From"), fromInput) : null,
+        preset === "custom" ? h("div", { class: "field" }, h("label", null, "To"), toInput) : null,
+        h("div", { class: "field" }, h("label", null, "Photos"), photosToggle.root),
+      ),
+      h(
+        "div",
+        { class: "row wrap" },
+        download,
+        h("a", { class: "btn outline", href: `#/rabbit/${id}` }, "Back to bunny"),
+      ),
+      h(
+        "p",
+        { class: "dim small", style: { margin: "0.6rem 0 0" } },
+        "Download PDF opens your browser's print dialog — choose Save as PDF.",
+      ),
+    );
+  }
+
+  function renderBody(): void {
+    if (!bundle) return;
+    const now = new Date();
+    const range = resolveReportRange(preset, now, customFrom, customTo);
+    body.replaceChildren(
+      head(bundle.rabbit, range, timezone),
+      profileSection(bundle, isAdmin),
+      dailyChecksSection(checkLogs, range, includePhotos, timezone),
+      bowlsSection(bowls, range, timezone),
+      tasksSection(tasks, taskCompletions, range, now, timezone),
+      weightSection(bundle.rabbit, bundle.checks, range, timezone),
+      checksSection(bundle.checks, checklistSections, logTypes, range, includePhotos, timezone),
+      vaccinationsSection(bundle.vaccinations, range, now),
+      careSection(bundle.careSchedules, bundle.careRecords, careTypes, range, now),
+      treatmentsSection(bundle.treatments, range, now),
+      medicationSection(medLogs, drugs, range, timezone),
+      appointmentsSection(bundle.appointments, range, showCost, timezone),
+      journalSection(bundle.journal, range, includePhotos, timezone),
+    );
+  }
+
+  async function load(): Promise<void> {
+    try {
+      const [
+        rabbitBundle,
+        drugResponse,
+        sections,
+        lookups,
+        logTypesResponse,
+        logResponse,
+        medResponse,
+        bowlResponse,
+        taskResponse,
+        settingsResponse,
+      ] = await Promise.all([
+        api.get<RabbitBundle>(`/api/rabbits/${id}`),
+        api.get<{ drugs: DrugDto[] }>("/api/drugs"),
+        loadChecklist(),
+        loadLookups(),
+        loadCheckLogTypes(),
+        api.get<{ logs: CheckLogDto[] }>(`/api/check-logs?rabbitId=${id}`),
+        api.get<{ logs: MedicationLogDto[] }>(`/api/medication-logs?rabbitId=${id}`),
+        api.get<{ bowls: BowlDto[] }>(`/api/bowls?rabbitId=${id}`),
+        api.get<{ tasks: TaskDto[]; completions: TaskCompletionDto[] }>(`/api/tasks?rabbitId=${id}`),
+        api.get<{ settings: SettingsDto }>("/api/settings"),
+      ]);
+      bundle = rabbitBundle;
+      drugs = drugResponse.drugs;
+      checklistSections = sections;
+      careTypes = lookups.filter((lookup) => lookup.kind === "care_type");
+      logTypes = logTypesResponse;
+      checkLogs = logResponse.logs;
+      medLogs = medResponse.logs;
+      bowls = bowlResponse.bowls;
+      tasks = taskResponse.tasks;
+      taskCompletions = taskResponse.completions;
+      timezone = settingsResponse.settings.timezone;
+      document.title = `${rabbitBundle.rabbit.name} report`;
+      renderBody();
+    } catch (err) {
+      body.replaceChildren(
+        h("div", { class: "empty" }, err instanceof Error ? err.message : "Could not load this report."),
+      );
+    }
+  }
+
+  renderControls();
+  body.append(h("div", { class: "empty" }, "Loading report…"));
+  void load();
+
+  return h("section", { class: "stack" }, controls, body);
+}
+
+function head(rabbit: RabbitDto, range: ReportRange, timezone: string | undefined): HTMLElement {
+  return h(
+    "div",
+    { class: "card report-head" },
+    h(
+      "div",
+      { class: "row wrap", style: { alignItems: "flex-start" } },
+      rabbitAvatar(rabbit, "lg"),
+      h(
+        "div",
+        { class: "stack", style: { gap: "0.25rem" } },
+        h("h1", { style: { margin: 0 } }, rabbit.name),
+        h("p", { class: "dim small", style: { margin: 0 } }, rangeLabel(range, timezone)),
+      ),
+    ),
+    h(
+      "p",
+      { class: "dim small", style: { margin: "0.6rem 0 0" } },
+      `Generated ${fmtDate(new Date(), timezone)}`,
+    ),
+  );
+}
+
+function rangeLabel(range: ReportRange, timezone: string | undefined): string {
+  if (!range.from && !range.to) return "All time";
+  const from = range.from ? fmtDate(range.from, timezone) : "Beginning";
+  const to = range.to ? fmtDate(range.to, timezone) : "Today";
+  return `${from} – ${to}`;
+}
+
+function profileSection(bundle: RabbitBundle, isAdmin: boolean): HTMLElement {
+  const rabbit = bundle.rabbit;
+  const min = rabbit.targetWeightMinGrams;
+  const max = rabbit.targetWeightMaxGrams;
+  const target =
+    min != null || max != null
+      ? `${min != null ? formatWeight(min) : "?"} – ${max != null ? formatWeight(max) : "?"}`
+      : "—";
+  const rows: [string, string][] = [
+    ["Sex", sexLabel(rabbit.sex)],
+    ["Age", ageLabel(rabbit.dateOfBirth)],
+    ["Born", fmtCalendarDate(rabbit.dateOfBirth)],
+    ["Breed", rabbit.breed || "—"],
+    ["Colour", rabbit.colour || "—"],
+    ["Microchip", rabbit.microchip || "—"],
+    ["Desexed", rabbit.desexed ? "Yes" : "No"],
+    ["Status", rabbit.status === "deceased" ? "Deceased" : "Active"],
+    [
+      "Quarantine",
+      rabbit.quarantined
+        ? `Yes${rabbit.quarantineUntil ? ` until ${fmtCalendarDate(rabbit.quarantineUntil)}` : ""}`
+        : "No",
+    ],
+    ["Target weight", target],
+    ["Bonded with", bundle.bonds.length > 0 ? bundle.bonds.map((bond) => bond.name).join(", ") : "None"],
+  ];
+  if (isAdmin) {
+    rows.push([
+      "Carers",
+      bundle.carers.length > 0
+        ? bundle.carers.map((carer) => carer.displayName || carer.username).join(", ")
+        : "None",
+    ]);
+  }
+  return section(
+    "Profile",
+    h(
+      "dl",
+      { class: "detail-list" },
+      rows.flatMap(([label, value]) => [h("dt", null, label), h("dd", null, value)]),
+    ),
+    rabbit.feedingPlan ? h("h3", null, "Feeding plan") : null,
+    rabbit.feedingPlan ? h("p", { class: "report-prose" }, rabbit.feedingPlan) : null,
+    rabbit.notes ? h("h3", null, "Notes") : null,
+    rabbit.notes ? h("p", { class: "report-prose" }, rabbit.notes) : null,
+    rabbit.status === "deceased" && rabbit.deceasedReason
+      ? h("p", { class: "dim small", style: { marginBottom: 0 } }, `Cause: ${rabbit.deceasedReason}`)
+      : null,
+  );
+}
+
+function weightSection(
+  rabbit: RabbitDto,
+  checks: HealthCheckDto[],
+  range: ReportRange,
+  timezone: string | undefined,
+): HTMLElement {
+  const inRange = checks.filter((check) => isWithinRange(check.checkedAt, range));
+  const trend = weightTrend(inRange);
+  if (trend.latest === null) {
+    return section("Weight", empty("No weights recorded in this period."));
+  }
+  const min = rabbit.targetWeightMinGrams;
+  const max = rabbit.targetWeightMaxGrams;
+  const outside = (min != null && trend.latest < min) || (max != null && trend.latest > max);
+  const change = trend.changeFromFirst;
+  return section(
+    "Weight",
+    h(
+      "div",
+      { class: "stat-row report-stats" },
+      metric(formatWeight(trend.latest), "Latest"),
+      metric(change != null ? `${change > 0 ? "+" : ""}${formatWeight(change)}` : "—", "Change in period"),
+      metric(formatWeight(trend.min), "Lowest"),
+      metric(formatWeight(trend.max), "Highest"),
+      metric(formatWeight(trend.average), "Average"),
+    ),
+    renderWeightChart(inRange, timezone),
+    min != null || max != null
+      ? h(
+          "p",
+          { class: "dim small", style: { margin: "0.5rem 0 0" } },
+          `Target: ${min != null ? formatWeight(min) : "?"} – ${max != null ? formatWeight(max) : "?"}`,
+          outside ? h("span", { class: "badge watch", style: { marginLeft: "0.5rem" } }, "Outside target") : null,
+        )
+      : null,
+  );
+}
+
+function checksSection(
+  checks: HealthCheckDto[],
+  sections: ChecklistSectionDto[],
+  logTypes: CheckLogTypeDto[],
+  range: ReportRange,
+  includePhotos: boolean,
+  timezone: string | undefined,
+): HTMLElement {
+  const inRange = checks.filter((check) => isWithinRange(check.checkedAt, range));
+  if (inRange.length === 0) {
+    return section("Health checks", empty("No health checks in this period."));
+  }
+  const headers = ["Date", "Weight", "Findings", "Checklist", "Notes"];
+  if (includePhotos) headers.push("Photo");
+  const rows = inRange.map((check) => {
+    const cells: Child[] = [
+      h(
+        "div",
+        null,
+        fmtDate(check.checkedAt, timezone),
+        h("div", { class: "dim small" }, fmtTime(check.checkedAt, timezone)),
+      ),
+      h("span", { class: "mono" }, formatWeight(check.weightGrams)),
+      findingsText(check),
+      checklistText(check, sections, logTypes),
+      check.notes || "—",
+    ];
+    if (includePhotos) {
+      cells.push(
+        check.hasPhoto
+          ? reportPhotos([
+              { src: `/api/photos/check/${check.id}?size=thumb`, alt: "Check photo" },
+            ])
+          : "—",
+      );
+    }
+    return cells;
+  });
+  return section("Health checks", reportTable(headers, rows));
+}
+
+function dailyChecksSection(
+  logs: CheckLogDto[],
+  range: ReportRange,
+  includePhotos: boolean,
+  timezone: string | undefined,
+): HTMLElement {
+  const inRange = logs.filter((log) => isWithinRange(log.loggedAt, range));
+  if (inRange.length === 0) {
+    return section("Daily checks", empty("No daily checks in this period."));
+  }
+  const headers = ["Date", "Type", "Value", "Notes"];
+  if (includePhotos) headers.push("Photo");
+  const rows = inRange.map((log) => {
+    const cells: Child[] = [
+      h(
+        "div",
+        null,
+        fmtDate(log.loggedAt, timezone),
+        h("div", { class: "dim small" }, fmtTime(log.loggedAt, timezone)),
+      ),
+      log.typeLabel,
+      checkLogValueSummary(log) || "—",
+      log.notes || "—",
+    ];
+    if (includePhotos) {
+      cells.push(
+        log.photos.length > 0
+          ? reportPhotos(
+              log.photos.map((photo) => ({
+                src: `/api/photos/checklog/${photo.id}?size=thumb`,
+                alt: photo.caption || "Daily check photo",
+              })),
+            )
+          : "—",
+      );
+    }
+    return cells;
+  });
+  return section("Daily checks", reportTable(headers, rows));
+}
+
+function bowlsSection(
+  bowls: BowlDto[],
+  range: ReportRange,
+  timezone: string | undefined,
+): HTMLElement {
+  if (bowls.length === 0) {
+    return section("Food & water", empty("No bowls tracked."));
+  }
+  return section(
+    "Food & water",
+    h(
+      "div",
+      { class: "stack" },
+      bowls.map((bowl) => {
+        const parts = [
+          bowl.periodStartAt ? `Since ${fmtDate(bowl.periodStartAt, timezone)}` : null,
+          bowl.currentWeightGrams != null ? `${bowl.currentWeightGrams} g now` : null,
+          `${bowl.periodConsumptionGrams} g consumed`,
+          bowl.periodRefillGrams > 0 ? `${bowl.periodRefillGrams} g refilled` : null,
+        ].filter(Boolean);
+        const readings = bowl.readings.filter((reading) => isWithinRange(reading.readAt, range));
+        return h(
+          "div",
+          { class: "stack", style: { gap: "0.4rem" } },
+          h(
+            "div",
+            null,
+            h("strong", null, bowl.label),
+            h("div", { class: "dim small" }, parts.join(" · ")),
+          ),
+          readings.length > 0
+            ? reportTable(
+                ["Date", "Reading", "Weight", "Change", "Notes"],
+                readings.map((reading) => [
+                  h(
+                    "div",
+                    null,
+                    fmtDate(reading.readAt, timezone),
+                    h("div", { class: "dim small" }, fmtTime(reading.readAt, timezone)),
+                  ),
+                  bowlReadingKindLabel(reading.kind),
+                  `${reading.weightGrams} g`,
+                  reading.consumptionGrams > 0
+                    ? `-${reading.consumptionGrams} g`
+                    : reading.refillGrams > 0
+                      ? `+${reading.refillGrams} g`
+                      : "—",
+                  reading.notes || "—",
+                ]),
+              )
+            : empty("No readings in this period."),
+        );
+      }),
+    ),
+  );
+}
+
+function tasksSection(
+  tasks: TaskDto[],
+  completions: TaskCompletionDto[],
+  range: ReportRange,
+  now: Date,
+  timezone: string | undefined,
+): HTMLElement {
+  const inRange = completions.filter((completion) => isWithinRange(completion.completedAt, range));
+  if (tasks.length === 0 && inRange.length === 0) {
+    return section("Daily routine", empty("No routine tasks."));
+  }
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const sorted = [...tasks].sort(
+    (a, b) => TASK_SLOTS.indexOf(a.slot) - TASK_SLOTS.indexOf(b.slot) || a.id - b.id,
+  );
+  const rows = sorted.map((task) => {
+    const dueOn = taskNextDueOn(task.lastCompletedAt, task.intervalDays);
+    const due = taskDueStatus(task.lastCompletedAt, task.intervalDays, now) === "due";
+    return [
+      h(
+        "div",
+        null,
+        h("strong", null, task.label),
+        task.notes ? h("div", { class: "dim small" }, task.notes) : null,
+      ),
+      TASK_SLOT_LABELS[task.slot],
+      task.intervalDays === 1 ? "Every day" : `Every ${task.intervalDays} days`,
+      task.lastCompletedAt ? fmtDate(task.lastCompletedAt, timezone) : "Never",
+      dueOn ? fmtCalendarDate(dueOn) : "—",
+      task.active
+        ? h("span", { class: `badge ${due ? "watch" : "ok"}` }, due ? "Due" : "Upcoming")
+        : h("span", { class: "badge" }, "Inactive"),
+    ];
+  });
+  const children: Child[] = [
+    reportTable(["Task", "Slot", "Repeat", "Last done", "Next due", "Status"], rows),
+  ];
+  if (inRange.length > 0) {
+    children.push(
+      h("h3", null, "Completions in period"),
+      reportTable(
+        ["Date", "Task", "Notes"],
+        inRange.map((completion) => [
+          h(
+            "div",
+            null,
+            fmtDate(completion.completedAt, timezone),
+            h("div", { class: "dim small" }, fmtTime(completion.completedAt, timezone)),
+          ),
+          taskById.get(completion.taskId)?.label ?? "Task",
+          completion.notes || "—",
+        ]),
+      ),
+    );
+  }
+  return section("Daily routine", ...children);
+}
+
+function medicationSection(
+  logs: MedicationLogDto[],
+  drugs: DrugDto[],
+  range: ReportRange,
+  timezone: string | undefined,
+): HTMLElement {
+  const inRange = logs.filter((log) => isWithinRange(log.givenAt, range));
+  if (inRange.length === 0) {
+    return section("Medication log", empty("No doses logged in this period."));
+  }
+  const rows = inRange.map((log) => {
+    const drug = drugs.find((item) => item.id === log.drugId);
+    return [
+      h(
+        "div",
+        null,
+        fmtDate(log.givenAt, timezone),
+        h("div", { class: "dim small" }, fmtTime(log.givenAt, timezone)),
+      ),
+      drug?.name ?? "Medication",
+      log.amountMilliUnits != null ? formatDrugAmount(log.amountMilliUnits, drug?.unit ?? "dose") : "—",
+      log.notes || "—",
+    ];
+  });
+  return section("Medication log", reportTable(["Date", "Medication", "Amount", "Notes"], rows));
+}
+
+function treatmentsSection(treatments: TreatmentDto[], range: ReportRange, now: Date): HTMLElement {
+  const inRange = treatments.filter((treatment) =>
+    dateRangesOverlap(treatment.startDate, treatment.endDate, range, now),
+  );
+  if (inRange.length === 0) {
+    return section("Treatments", empty("No treatments in this period."));
+  }
+  const rows = inRange.map((treatment) => [
+    h(
+      "div",
+      null,
+      h("strong", null, treatment.medication),
+      treatment.notes ? h("div", { class: "dim small" }, treatment.notes) : null,
+    ),
+    [treatment.dose, treatment.route].filter(Boolean).join(" · ") || "—",
+    treatment.frequency || "—",
+    treatment.reason || "—",
+    `${fmtCalendarDate(treatment.startDate)} → ${
+      treatment.endDate ? fmtCalendarDate(treatment.endDate) : "ongoing"
+    }`,
+    h(
+      "span",
+      { class: `badge ${treatment.status === "active" ? "accent" : ""}` },
+      treatment.status,
+    ),
+  ]);
+  return section(
+    "Treatments",
+    reportTable(["Medication", "Dose", "Frequency", "Reason", "Dates", "Status"], rows),
+  );
+}
+
+function vaccinationsSection(
+  vaccinations: VaccinationDto[],
+  range: ReportRange,
+  now: Date,
+): HTMLElement {
+  const inRange = vaccinations.filter(
+    (vaccination) =>
+      isDateWithinRange(vaccination.givenAt, range) || isDateWithinRange(vaccination.nextDueAt, range),
+  );
+  if (inRange.length === 0) {
+    return section("Vaccinations", empty("No vaccinations in this period."));
+  }
+  const rows = inRange.map((vaccination) => [
+    vaccination.vaccine,
+    fmtCalendarDate(vaccination.givenAt),
+    vaccination.nextDueAt ? fmtCalendarDate(vaccination.nextDueAt) : "—",
+    vaccination.vet || "—",
+    vaccination.batch || "—",
+    dueBadge(dueStatus(vaccination.nextDueAt, now, 30)) ?? "—",
+  ]);
+  return section(
+    "Vaccinations",
+    reportTable(["Vaccine", "Given", "Next due", "Vet", "Batch", "Status"], rows),
+  );
+}
+
+function careSection(
+  schedules: CareScheduleDto[],
+  records: CareRecordDto[],
+  careTypes: LookupDto[],
+  range: ReportRange,
+  now: Date,
+): HTMLElement {
+  if (careTypes.length === 0) {
+    return section("Routine care", empty("No care types configured."));
+  }
+  const rows = careTypes.map((careType) => {
+    const kind = careType.value;
+    const schedule = schedules.find((item) => item.kind === kind);
+    const done = records
+      .filter((record) => record.kind === kind)
+      .sort((a, b) => b.doneAt.localeCompare(a.doneAt));
+    const last = done[0];
+    const intervalDays = schedule?.intervalDays ?? 0;
+    const due = last ? nextDueDate(last.doneAt, intervalDays) : null;
+    const inRange = done.filter((record) => isDateWithinRange(record.doneAt, range));
+    return [
+      careType.label,
+      schedule ? `Every ${schedule.intervalDays} days` : "No schedule",
+      last ? fmtCalendarDate(last.doneAt) : "Never",
+      due ? fmtCalendarDate(due) : "—",
+      dueBadge(careDueStatus(last?.doneAt ?? null, intervalDays, now, 7)) ?? "—",
+      inRange.length > 0 ? inRange.map((record) => fmtCalendarDate(record.doneAt)).join(", ") : "—",
+    ];
+  });
+  return section(
+    "Routine care",
+    reportTable(["Type", "Schedule", "Last done", "Next due", "Status", "Done in period"], rows),
+  );
+}
+
+function appointmentsSection(
+  appointments: AppointmentDto[],
+  range: ReportRange,
+  showCost: boolean,
+  timezone: string | undefined,
+): HTMLElement {
+  const inRange = appointments
+    .filter((appointment) => isWithinRange(appointment.scheduledAt, range))
+    .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+  if (inRange.length === 0) {
+    return section("Appointments", empty("No appointments in this period."));
+  }
+  const headers = ["Date", "Title", "Clinic / vet", "Status"];
+  if (showCost) headers.push("Cost");
+  const rows = inRange.map((appointment) => {
+    const cells: Child[] = [
+      h(
+        "div",
+        null,
+        fmtDate(appointment.scheduledAt, timezone),
+        h("div", { class: "dim small" }, fmtTime(appointment.scheduledAt, timezone)),
+      ),
+      appointment.title,
+      [appointment.clinic, appointment.vet].filter(Boolean).join(" · ") || "—",
+      h(
+        "span",
+        { class: `badge ${appointment.status === "scheduled" ? "accent" : ""}` },
+        appointment.status,
+      ),
+    ];
+    if (showCost) {
+      cells.push(appointment.costCents != null ? `$${(appointment.costCents / 100).toFixed(2)}` : "—");
+    }
+    return cells;
+  });
+  return section("Appointments", reportTable(headers, rows));
+}
+
+function journalSection(
+  entries: JournalEntryDto[],
+  range: ReportRange,
+  includePhotos: boolean,
+  timezone: string | undefined,
+): HTMLElement {
+  const inRange = entries.filter((entry) => isWithinRange(entry.createdAt, range));
+  if (inRange.length === 0) {
+    return section("Notes & photos", empty("No journal entries in this period."));
+  }
+  return section(
+    "Notes & photos",
+    h(
+      "div",
+      { class: "journal-list" },
+      inRange.map((entry) =>
+        h(
+          "div",
+          { class: "journal-entry" },
+          h(
+            "div",
+            { class: "journal-head" },
+            h("strong", null, fmtDate(entry.createdAt, timezone)),
+            h("span", { class: "dim small" }, fmtTime(entry.createdAt, timezone)),
+          ),
+          entry.note ? h("p", { class: "journal-note" }, entry.note) : null,
+          includePhotos && entry.photos.length > 0
+            ? reportPhotos(
+                entry.photos.map((photo) => ({
+                  src: `/api/photos/journal/${photo.id}?size=thumb`,
+                  alt: photo.caption || "Journal photo",
+                })),
+              )
+            : null,
+        ),
+      ),
+    ),
+  );
+}
+
+function section(title: string, ...children: Child[]): HTMLElement {
+  return h("div", { class: "card report-section" }, h("h2", null, title), ...children);
+}
+
+function empty(text: string): HTMLElement {
+  return h("p", { class: "dim small", style: { margin: 0 } }, text);
+}
+
+function metric(value: string, label: string): HTMLElement {
+  return h(
+    "div",
+    { class: "metric" },
+    h("span", { class: "value" }, value),
+    h("span", { class: "label" }, label),
+  );
+}
+
+function reportTable(headers: string[], rows: Child[][]): HTMLElement {
+  return h(
+    "div",
+    { class: "tbl-wrap" },
+    h(
+      "table",
+      { class: "tbl" },
+      h(
+        "thead",
+        null,
+        h(
+          "tr",
+          null,
+          headers.map((header) => h("th", null, header)),
+        ),
+      ),
+      h(
+        "tbody",
+        null,
+        rows.map((cells) => h("tr", null, cells.map((cell) => h("td", null, cell)))),
+      ),
+    ),
+  );
+}
+
+function reportPhotos(photos: { src: string; alt: string }[]): HTMLElement {
+  return h(
+    "div",
+    { class: "report-photos" },
+    photos.map((photo) => h("img", { class: "report-photo", src: photo.src, alt: photo.alt })),
+  );
+}
+
+function findingsText(check: HealthCheckDto): string {
+  const parts: string[] = [];
+  if (check.appetite) parts.push(`Appetite ${check.appetite}`);
+  if (check.droppings) parts.push(`Droppings ${check.droppings}`);
+  if (check.energy) parts.push(`Energy ${check.energy}`);
+  if (check.bodyCondition) parts.push(`Condition ${check.bodyCondition}/5`);
+  if (check.temperatureTenthsC != null) parts.push(`${(check.temperatureTenthsC / 10).toFixed(1)}°C`);
+  if (check.painScore != null) parts.push(`Pain ${check.painScore}/10`);
+  return parts.join(" · ") || "—";
+}
+
+function checklistText(
+  check: HealthCheckDto,
+  sections: ChecklistSectionDto[],
+  logTypes: CheckLogTypeDto[],
+): string {
+  return checklistAnswerLines(check.checklist ?? {}, sections, logTypes).join(" · ") || "—";
+}
+
+function dueBadge(status: ReturnType<typeof dueStatus>): Node | null {
+  if (status === "overdue") return h("span", { class: "badge alert" }, "Overdue");
+  if (status === "due-soon") return h("span", { class: "badge watch" }, "Due soon");
+  if (status === "ok") return h("span", { class: "badge ok" }, "OK");
+  return null;
+}
+
+function nextDueDate(lastDoneAt: string | null, intervalDays: number): string | null {
+  if (!lastDoneAt || intervalDays <= 0) return null;
+  const date = new Date(`${lastDoneAt}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + intervalDays);
+  return date.toISOString().slice(0, 10);
+}

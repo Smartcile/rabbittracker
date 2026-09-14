@@ -1,0 +1,95 @@
+import { describe, expect, it } from "vitest";
+import { bowlReadingKindLabel, summarizeBowl } from "./bowls.ts";
+import type { BowlReadingInput } from "./bowls.ts";
+
+function reading(
+  id: number,
+  readAt: string,
+  kind: BowlReadingInput["kind"],
+  weightGrams: number,
+): BowlReadingInput {
+  return { id, readAt, kind, weightGrams };
+}
+
+describe("summarizeBowl", () => {
+  it("returns empty totals without readings", () => {
+    const summary = summarizeBowl([]);
+    expect(summary.currentWeightGrams).toBeNull();
+    expect(summary.periodStartAt).toBeNull();
+    expect(summary.periodConsumptionGrams).toBe(0);
+    expect(summary.totalConsumptionGrams).toBe(0);
+    expect(summary.readings).toEqual([]);
+  });
+
+  it("measures consumption between weigh-ins", () => {
+    const summary = summarizeBowl([
+      reading(1, "2026-09-01T08:00:00.000Z", "start", 900),
+      reading(2, "2026-09-02T08:00:00.000Z", "weigh", 760),
+      reading(3, "2026-09-03T08:00:00.000Z", "weigh", 620),
+    ]);
+    expect(summary.readings.map((item) => item.consumptionGrams)).toEqual([0, 140, 140]);
+    expect(summary.periodConsumptionGrams).toBe(280);
+    expect(summary.currentWeightGrams).toBe(620);
+    expect(summary.periodStartAt?.toISOString()).toBe("2026-09-01T08:00:00.000Z");
+  });
+
+  it("treats a weight increase as a refill", () => {
+    const summary = summarizeBowl([
+      reading(1, "2026-09-01T08:00:00.000Z", "start", 900),
+      reading(2, "2026-09-02T08:00:00.000Z", "weigh", 600),
+      reading(3, "2026-09-02T09:00:00.000Z", "refill", 850),
+      reading(4, "2026-09-03T08:00:00.000Z", "weigh", 700),
+    ]);
+    expect(summary.readings.map((item) => item.refillGrams)).toEqual([0, 0, 250, 0]);
+    expect(summary.readings.map((item) => item.consumptionGrams)).toEqual([0, 300, 0, 150]);
+    expect(summary.periodConsumptionGrams).toBe(450);
+    expect(summary.periodRefillGrams).toBe(250);
+    expect(summary.currentWeightGrams).toBe(700);
+  });
+
+  it("starts a new period on refresh and keeps overall totals", () => {
+    const summary = summarizeBowl([
+      reading(1, "2026-09-01T08:00:00.000Z", "start", 900),
+      reading(2, "2026-09-02T08:00:00.000Z", "weigh", 600),
+      reading(3, "2026-09-03T08:00:00.000Z", "refresh", 850),
+      reading(4, "2026-09-04T08:00:00.000Z", "weigh", 800),
+    ]);
+    expect(summary.readings[2]?.periodStart).toBe(true);
+    expect(summary.periodStartAt?.toISOString()).toBe("2026-09-03T08:00:00.000Z");
+    expect(summary.periodConsumptionGrams).toBe(50);
+    expect(summary.periodRefillGrams).toBe(0);
+    expect(summary.totalConsumptionGrams).toBe(350);
+    expect(summary.currentWeightGrams).toBe(800);
+  });
+
+  it("counts a final weigh-in recorded with the refresh", () => {
+    const summary = summarizeBowl([
+      reading(1, "2026-09-01T08:00:00.000Z", "start", 900),
+      reading(2, "2026-09-02T08:00:00.000Z", "weigh", 600),
+      reading(3, "2026-09-03T08:00:00.000Z", "weigh", 580),
+      reading(4, "2026-09-03T08:00:00.000Z", "refresh", 850),
+    ]);
+    expect(summary.readings[2]?.consumptionGrams).toBe(20);
+    expect(summary.totalConsumptionGrams).toBe(320);
+    expect(summary.currentWeightGrams).toBe(850);
+  });
+
+  it("sorts readings by time before rolling", () => {
+    const summary = summarizeBowl([
+      reading(3, "2026-09-03T08:00:00.000Z", "weigh", 700),
+      reading(1, "2026-09-01T08:00:00.000Z", "start", 900),
+      reading(2, "2026-09-02T08:00:00.000Z", "weigh", 800),
+    ]);
+    expect(summary.readings.map((item) => item.id)).toEqual([1, 2, 3]);
+    expect(summary.readings.map((item) => item.consumptionGrams)).toEqual([0, 100, 100]);
+  });
+});
+
+describe("bowlReadingKindLabel", () => {
+  it("labels each kind", () => {
+    expect(bowlReadingKindLabel("start")).toBe("Start");
+    expect(bowlReadingKindLabel("weigh")).toBe("Weigh-in");
+    expect(bowlReadingKindLabel("refill")).toBe("Refill");
+    expect(bowlReadingKindLabel("refresh")).toBe("Refresh");
+  });
+});

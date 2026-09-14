@@ -78,6 +78,7 @@ export const checkLogTypes = pgTable("check_log_types", {
   unit: text("unit").notNull().default(""),
   hasNumber: boolean("has_number").notNull().default(true),
   hasText: boolean("has_text").notNull().default(false),
+  multiple: boolean("multiple").notNull().default(false),
   options: text("options").array().notNull().default([]),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -94,7 +95,40 @@ export const checkLogs = pgTable("check_logs", {
     .references(() => checkLogTypes.id, { onDelete: "cascade" }),
   loggedAt: timestamp("logged_at", { withTimezone: true }).notNull(),
   valueMilli: integer("value_milli"),
+  valueLabels: text("value_labels").array().notNull().default([]),
   valueText: text("value_text").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const checkLogPhotos = pgTable("check_log_photos", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  logId: integer("log_id")
+    .notNull()
+    .references(() => checkLogs.id, { onDelete: "cascade" }),
+  caption: text("caption").notNull().default(""),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const bowls = pgTable("bowls", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  rabbitId: integer("rabbit_id")
+    .notNull()
+    .references(() => rabbits.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const bowlReadings = pgTable("bowl_readings", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  bowlId: integer("bowl_id")
+    .notNull()
+    .references(() => bowls.id, { onDelete: "cascade" }),
+  readAt: timestamp("read_at", { withTimezone: true }).notNull(),
+  kind: text("kind").notNull().default("weigh"),
+  weightGrams: integer("weight_grams").notNull(),
   notes: text("notes").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -270,6 +304,35 @@ export const careRecords = pgTable("care_records", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const rabbitTasks = pgTable("rabbit_tasks", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  rabbitId: integer("rabbit_id")
+    .notNull()
+    .references(() => rabbits.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  slot: text("slot").notNull().default("anytime"),
+  intervalDays: integer("interval_days").notNull().default(1),
+  treatmentId: integer("treatment_id").references(() => treatments.id, { onDelete: "set null" }),
+  notes: text("notes").notNull().default(""),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const taskCompletions = pgTable("task_completions", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  taskId: integer("task_id")
+    .notNull()
+    .references(() => rabbitTasks.id, { onDelete: "cascade" }),
+  completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+  completedBy: integer("completed_by").references(() => users.id, { onDelete: "set null" }),
+  medicationLogId: integer("medication_log_id").references(() => medicationLogs.id, {
+    onDelete: "set null",
+  }),
+  notes: text("notes").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const appointments = pgTable("appointments", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   rabbitId: integer("rabbit_id")
@@ -435,6 +498,8 @@ export type TreatmentRow = typeof treatments.$inferSelect;
 export type VaccinationRow = typeof vaccinations.$inferSelect;
 export type CareScheduleRow = typeof careSchedules.$inferSelect;
 export type CareRecordRow = typeof careRecords.$inferSelect;
+export type RabbitTaskRow = typeof rabbitTasks.$inferSelect;
+export type TaskCompletionRow = typeof taskCompletions.$inferSelect;
 export type AppointmentRow = typeof appointments.$inferSelect;
 export type CalendarSubscriptionRow = typeof calendarSubscriptions.$inferSelect;
 export type CalendarEventRow = typeof calendarEvents.$inferSelect;
@@ -444,6 +509,9 @@ export type VetRow = typeof vets.$inferSelect;
 export type LookupRow = typeof lookups.$inferSelect;
 export type CheckLogTypeRow = typeof checkLogTypes.$inferSelect;
 export type CheckLogRow = typeof checkLogs.$inferSelect;
+export type CheckLogPhotoRow = typeof checkLogPhotos.$inferSelect;
+export type BowlRow = typeof bowls.$inferSelect;
+export type BowlReadingRow = typeof bowlReadings.$inferSelect;
 export type MedicationLogRow = typeof medicationLogs.$inferSelect;
 export type CalendarEntryRow = typeof calendarEntries.$inferSelect;
 export type JournalEntryRow = typeof journalEntries.$inferSelect;

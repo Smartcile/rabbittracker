@@ -14,8 +14,3 @@ export async function loadCheckLogTypes(force = false): Promise<CheckLogTypeDto[
 export function invalidateCheckLogTypes(): void {
   cache = null;
 }
-
-export function formatLogNumber(valueMilli: number, unit: string): string {
-  const value = Number((valueMilli / 1000).toFixed(3));
-  return unit ? `${value} ${unit}` : String(value);
-}

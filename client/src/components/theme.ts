@@ -9,15 +9,29 @@ export function currentTheme(): "dark" | "light" {
   return document.documentElement.dataset.theme === "light" ? "light" : "dark";
 }
 
-export function setTheme(theme: "dark" | "light"): void {
+function paintTheme(theme: "dark" | "light"): void {
   document.documentElement.dataset.theme = theme;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", theme === "light" ? "#f5eee3" : "#0b0f19");
+}
+
+export function setTheme(theme: "dark" | "light"): void {
+  paintTheme(theme);
   try {
     localStorage.setItem("rt-theme", theme);
   } catch {
     // storage may be unavailable
   }
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", theme === "light" ? "#f5eee3" : "#0b0f19");
+}
+
+export function applyStoredTheme(): void {
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem("rt-theme");
+  } catch {
+    stored = null;
+  }
+  paintTheme(stored === "light" ? "light" : "dark");
 }
 
 export function themeToggle(): HTMLButtonElement {

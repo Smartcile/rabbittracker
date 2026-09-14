@@ -7,6 +7,9 @@ import {
 import {
   appointmentCreateSchema,
   appointmentUpdateSchema,
+  bowlCreateSchema,
+  bowlReadingCreateSchema,
+  bowlUpdateSchema,
   calendarEntryCreateSchema,
   calendarSubscriptionSchema,
   calendarSubscriptionUpdateSchema,
@@ -36,6 +39,9 @@ import {
   rabbitCreateSchema,
   rabbitUpdateSchema,
   setupSchema,
+  taskCompleteSchema,
+  taskCreateSchema,
+  taskUpdateSchema,
   treatmentCreateSchema,
   userCreateSchema,
   userUpdateSchema,
@@ -501,10 +507,20 @@ describe("daily check validation", () => {
       typeId: 2,
       loggedAt: "2026-09-01T08:00:00.000Z",
       valueMilli: 250500,
+      valueLabels: ["Binkies", "Exploring"],
       valueText: "",
       notes: "",
     });
     expect(result.success).toBe(true);
+  });
+
+  it("defaults labels to an empty list", () => {
+    const result = checkLogCreateSchema.parse({
+      rabbitId: 1,
+      typeId: 2,
+      loggedAt: "2026-09-01T08:00:00.000Z",
+    });
+    expect(result.valueLabels).toEqual([]);
   });
 
   it("requires the rabbit, type and time", () => {
@@ -519,10 +535,116 @@ describe("daily check validation", () => {
       label: "Poo",
       options: ["Normal", "Soft"],
       hasNumber: false,
+      multiple: true,
     });
     expect(result.hasNumber).toBe(false);
     expect(result.hasText).toBe(false);
+    expect(result.multiple).toBe(true);
     expect(result.options).toEqual(["Normal", "Soft"]);
+  });
+
+  it("defaults check types to single-select", () => {
+    const result = checkLogTypeCreateSchema.parse({ label: "Water" });
+    expect(result.multiple).toBe(false);
+  });
+});
+
+describe("bowl validation", () => {
+  it("accepts a bowl with a start weight", () => {
+    const result = bowlCreateSchema.safeParse({
+      rabbitId: 1,
+      label: "Water bowl",
+      startWeightGrams: 850,
+      startedAt: "2026-09-01T08:00:00.000Z",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("requires a name and start weight", () => {
+    expect(bowlCreateSchema.safeParse({ rabbitId: 1, startedAt: "2026-09-01T08:00:00.000Z" }).success).toBe(
+      false,
+    );
+    expect(
+      bowlCreateSchema.safeParse({
+        rabbitId: 1,
+        label: "Water bowl",
+        startWeightGrams: -1,
+        startedAt: "2026-09-01T08:00:00.000Z",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires a weight for weigh and refresh readings", () => {
+    expect(
+      bowlReadingCreateSchema.safeParse({
+        kind: "weigh",
+        readAt: "2026-09-02T08:00:00.000Z",
+      }).success,
+    ).toBe(false);
+    expect(
+      bowlReadingCreateSchema.safeParse({
+        kind: "refresh",
+        readAt: "2026-09-02T08:00:00.000Z",
+        weightGrams: 900,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("requires an amount for a refill", () => {
+    expect(
+      bowlReadingCreateSchema.safeParse({
+        kind: "refill",
+        readAt: "2026-09-02T08:00:00.000Z",
+      }).success,
+    ).toBe(false);
+    expect(
+      bowlReadingCreateSchema.safeParse({
+        kind: "refill",
+        readAt: "2026-09-02T08:00:00.000Z",
+        refillGrams: 250,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("requires a label when renaming", () => {
+    expect(bowlUpdateSchema.safeParse({ label: "  " }).success).toBe(false);
+    expect(bowlUpdateSchema.safeParse({ label: "Food bowl" }).success).toBe(true);
+  });
+});
+
+describe("task validation", () => {
+  it("accepts a daily task with defaults", () => {
+    const result = taskCreateSchema.parse({ rabbitId: 1, label: "Morning meds" });
+    expect(result.slot).toBe("anytime");
+    expect(result.intervalDays).toBe(1);
+    expect(result.active).toBe(true);
+    expect(result.treatmentId).toBeUndefined();
+  });
+
+  it("accepts a slot and treatment link", () => {
+    const result = taskCreateSchema.safeParse({
+      rabbitId: 1,
+      label: "Evening meds",
+      slot: "evening",
+      intervalDays: 2,
+      treatmentId: 5,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an unknown slot or a bad interval", () => {
+    expect(taskCreateSchema.safeParse({ rabbitId: 1, label: "X", slot: "night" }).success).toBe(false);
+    expect(taskCreateSchema.safeParse({ rabbitId: 1, label: "X", intervalDays: 0 }).success).toBe(false);
+  });
+
+  it("requires changes on update", () => {
+    expect(taskUpdateSchema.safeParse({}).success).toBe(false);
+    expect(taskUpdateSchema.safeParse({ active: false }).success).toBe(true);
+  });
+
+  it("requires a completion time", () => {
+    expect(taskCompleteSchema.safeParse({ completedAt: "not a date" }).success).toBe(false);
+    expect(taskCompleteSchema.safeParse({ completedAt: "2026-09-15T08:00:00.000Z" }).success).toBe(true);
   });
 });
 
@@ -669,6 +791,80 @@ describe("validateChecklistAnswers", () => {
     expect(
       validateChecklistAnswers({ eyes: { values: ["watery", "crusty"], other: "" } }, sections),
     ).toBeNull();
+  });
+
+  it("accepts daily check answers keyed by prefix", () => {
+    const dailyTypes = [
+      { key: "poo", label: "Poo", multiple: false, hasNumber: false, hasText: false, options: ["Normal", "Soft"] },
+      { key: "water", label: "Water", multiple: false, hasNumber: true, hasText: false, options: [] },
+      {
+        key: "behaviour",
+        label: "Behaviour",
+        multiple: true,
+        hasNumber: false,
+        hasText: false,
+        options: ["Binkies", "Exploring"],
+      },
+    ];
+    expect(
+      validateChecklistAnswers(
+        {
+          "daily:poo": { values: ["Normal"], other: "" },
+          "daily:water": { values: [], other: "", numberMilli: 250000 },
+          "daily:behaviour": { values: ["Binkies", "Exploring"], other: "" },
+        },
+        sections,
+        dailyTypes,
+      ),
+    ).toBeNull();
+  });
+
+  it("rejects unknown daily types and mismatched values", () => {
+    const dailyTypes = [
+      { key: "poo", label: "Poo", multiple: false, hasNumber: false, hasText: false, options: ["Normal"] },
+      { key: "water", label: "Water", multiple: false, hasNumber: true, hasText: false, options: [] },
+    ];
+    expect(
+      validateChecklistAnswers({ "daily:food": { values: ["Hay"], other: "" } }, sections, dailyTypes),
+    ).toContain("Unknown daily check");
+    expect(
+      validateChecklistAnswers({ "daily:poo": { values: ["Soft"], other: "" } }, sections, dailyTypes),
+    ).toContain("Unknown option");
+    expect(
+      validateChecklistAnswers({ "daily:poo": { values: [], other: "", numberMilli: 5 } }, sections, dailyTypes),
+    ).toContain("does not take an amount");
+    expect(
+      validateChecklistAnswers({ "daily:water": { values: [], other: "", text: "lots" } }, sections, dailyTypes),
+    ).toContain("does not take text");
+    expect(
+      validateChecklistAnswers({ "daily:water": { values: ["500"], other: "" } }, sections, dailyTypes),
+    ).toContain("does not take options");
+    expect(
+      validateChecklistAnswers(
+        { "daily:poo": { values: ["Normal", "Normal"], other: "" } },
+        sections,
+        dailyTypes,
+      ),
+    ).toContain("only one answer");
+  });
+
+  it("rejects amount and text fields on plain checklist sections", () => {
+    expect(
+      validateChecklistAnswers({ posture: { values: [], other: "", numberMilli: 5 } }, sections),
+    ).toContain("Unexpected value");
+    expect(
+      validateChecklistAnswers({ posture: { values: [], other: "", text: "fine" } }, sections),
+    ).toContain("Unexpected value");
+  });
+});
+
+describe("checklistSchema daily answers", () => {
+  it("accepts amounts and text", () => {
+    const result = checklistSchema.safeParse({
+      "daily:water": { values: [], other: "", numberMilli: 250000 },
+      "daily:food": { values: [], other: "", text: "Ate well" },
+    });
+    expect(result.success).toBe(true);
   });
 });
 

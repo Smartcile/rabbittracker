@@ -5,7 +5,7 @@ import type { Metadata } from "sharp";
 import { config } from "../config.ts";
 import { HttpError } from "../lib/http.ts";
 
-export type PhotoKind = "check" | "rabbit" | "checklist" | "journal";
+export type PhotoKind = "check" | "rabbit" | "checklist" | "journal" | "checklog";
 export type PhotoSize = "thumb" | "full" | "orig";
 
 export type UploadedPhoto = {

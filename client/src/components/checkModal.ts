@@ -1,15 +1,21 @@
-import { emptyChecklist } from "../../../shared/checklist.ts";
+import { dailyCheckAnswerKey, emptyChecklist } from "../../../shared/checklist.ts";
 import type { ChecklistAnswerDto } from "../../../shared/checklist.ts";
-import type { ChecklistSectionDto, HealthCheckDto, RabbitDto } from "../../../shared/types.ts";
+import type {
+  CheckLogTypeDto,
+  ChecklistSectionDto,
+  HealthCheckDto,
+  RabbitDto,
+} from "../../../shared/types.ts";
 import { parseWeightInput, weightInputValue } from "../../../shared/health.ts";
 import { api } from "../api.ts";
 import { loadChecklist } from "../checklist.ts";
+import { loadCheckLogTypes } from "../dailyLogs.ts";
 import { h } from "../dom.ts";
 import { renderChecklistPhotos } from "./checklistPhotos.ts";
 import { openModal } from "./modal.ts";
 import { photoPicker } from "./photoPicker.ts";
 import { toast } from "./toast.ts";
-import { optionButtons } from "./toggle.ts";
+import { optionButtons, toggleButton } from "./toggle.ts";
 
 export function openCheckModal(options: {
   rabbits: RabbitDto[];
@@ -18,10 +24,10 @@ export function openCheckModal(options: {
   previousWeightGrams?: number | null;
   onSaved: (check: HealthCheckDto) => void;
 }): void {
-  void loadChecklist()
-    .then((sections) => buildModal(options, sections))
+  void Promise.all([loadChecklist(), loadCheckLogTypes()])
+    .then(([sections, types]) => buildModal(options, sections, types))
     .catch((err) => {
-      toast(err instanceof Error ? err.message : "Could not load the checklist", "error");
+      toast(err instanceof Error ? err.message : "Could not load the check form", "error");
     });
 }
 
@@ -34,6 +40,7 @@ function buildModal(
     onSaved: (check: HealthCheckDto) => void;
   },
   sections: ChecklistSectionDto[],
+  types: CheckLogTypeDto[],
 ): void {
   const editing = options.check;
   const rabbitSelect = h(
@@ -83,6 +90,40 @@ function buildModal(
     field: checklistField(section, editing?.checklist?.[section.key]),
   }));
 
+  const dailyFields = new Map<string, { root: HTMLElement; read: () => ChecklistAnswerDto }>();
+  const dailyHost = h("div", { class: "stack", style: { gap: "0.6rem" } });
+  const dailyToggles = h("div", { class: "row wrap" });
+  const includedDaily = new Set<string>();
+  const renderDaily = () => {
+    dailyHost.replaceChildren(
+      ...[...includedDaily]
+        .map((key) => dailyFields.get(key)?.root)
+        .filter((root): root is HTMLElement => root !== undefined),
+    );
+  };
+  for (const type of types) {
+    const existing = editing?.checklist?.[dailyCheckAnswerKey(type.key)];
+    const filled =
+      existing != null &&
+      (existing.values.length > 0 ||
+        existing.numberMilli != null ||
+        (existing.text ?? "").trim().length > 0);
+    if (filled) includedDaily.add(type.key);
+    dailyFields.set(type.key, dailyCheckField(type, existing));
+    dailyToggles.append(
+      toggleButton({
+        label: type.label,
+        checked: filled,
+        onChange: (checked) => {
+          if (checked) includedDaily.add(type.key);
+          else includedDaily.delete(type.key);
+          renderDaily();
+        },
+      }).root,
+    );
+  }
+  renderDaily();
+
   const error = h("p", { class: "form-error" });
   error.style.display = "none";
   const save = h("button", { class: "btn primary", type: "submit" }, editing ? "Save check" : "Log check");
@@ -126,6 +167,19 @@ function buildModal(
         const checklist = emptyChecklist();
         for (const { section, field } of checklistFields) {
           checklist[section.key] = field.read();
+        }
+        for (const type of types) {
+          if (!includedDaily.has(type.key)) continue;
+          const answer = dailyFields.get(type.key)?.read();
+          if (!answer) continue;
+          if (
+            answer.values.length === 0 &&
+            answer.numberMilli == null &&
+            !(answer.text ?? "").trim()
+          ) {
+            continue;
+          }
+          checklist[dailyCheckAnswerKey(type.key)] = answer;
         }
         const payload = {
           checkedAt: checkedAt.toISOString(),
@@ -200,6 +254,20 @@ function buildModal(
       ),
       checklistFields.map(({ field }) => field.root),
     ),
+    types.length > 0
+      ? h(
+          "div",
+          { class: "checklist" },
+          h("h3", null, "Daily checks"),
+          h(
+            "p",
+            { class: "dim small" },
+            "Optional — switch on the daily checks you want to record with this health check.",
+          ),
+          dailyToggles,
+          dailyHost,
+        )
+      : null,
     h("div", { class: "field" }, h("label", null, "Vet notes / other concerns"), notes),
     h("div", { class: "field" }, h("label", null, "Photo"), picker.root),
     warningRow,
@@ -284,6 +352,66 @@ function checklistField(
   });
 
   return { root, read };
+}
+
+function dailyCheckField(
+  type: CheckLogTypeDto,
+  initial: ChecklistAnswerDto | undefined,
+): { root: HTMLElement; read: () => ChecklistAnswerDto } {
+  let readValues: () => string[] = () => [];
+  let readText: () => string = () => "";
+  let readNumber: () => number | null = () => null;
+  const parts: Node[] = [];
+  if (type.options.length > 0) {
+    const group = optionButtons(
+      type.options.map((label) => ({ value: label, label })),
+      initial?.values ?? [],
+      type.multiple,
+    );
+    readValues = () => group.read();
+    parts.push(group.root);
+  } else if (type.hasText) {
+    const input = h("input", {
+      type: "text",
+      placeholder: "Type / description",
+      value: initial?.text ?? "",
+    });
+    readText = () => input.value.trim();
+    parts.push(input);
+  }
+  if (type.hasNumber) {
+    const input = h("input", {
+      inputmode: "decimal",
+      placeholder: "e.g. 250",
+      value:
+        initial?.numberMilli != null
+          ? String(Number((initial.numberMilli / 1000).toFixed(3)))
+          : "",
+    });
+    readNumber = () => {
+      const text = input.value.trim();
+      if (!text) return null;
+      const value = Math.round(Number(text) * 1000);
+      return Number.isFinite(value) && value >= 0 ? value : null;
+    };
+    parts.push(
+      h(
+        "div",
+        { class: "field" },
+        h("label", null, `Amount${type.unit ? ` (${type.unit})` : ""}`),
+        input,
+      ),
+    );
+  }
+  return {
+    root: h(
+      "div",
+      { class: "checklist-section" },
+      h("div", { class: "checklist-head" }, h("strong", null, type.label)),
+      ...parts,
+    ),
+    read: () => ({ values: readValues(), other: "", numberMilli: readNumber(), text: readText() }),
+  };
 }
 
 function selectFrom(values: string[], selected: string): HTMLSelectElement {
