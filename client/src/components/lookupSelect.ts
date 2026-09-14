@@ -32,8 +32,9 @@ export function lookupSelect(
     select.replaceChildren(...parts);
     if (current) {
       select.value = String(current.id);
-    } else if (selectedLabel && selectedLabel === initialLabel) {
-      select.value = `label:${selectedLabel}`;
+    } else if (selectedLabel) {
+      const match = items.find((item) => item.label === selectedLabel);
+      select.value = match ? String(match.id) : `label:${selectedLabel}`;
     } else {
       select.value = "";
     }

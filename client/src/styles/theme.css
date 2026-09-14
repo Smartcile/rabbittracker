@@ -1566,6 +1566,18 @@ input.switch:focus-visible {
   background: var(--ok-soft);
 }
 
+.cal-chip.event {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.cal-chip.log {
+  border-color: var(--border-strong);
+  background: var(--surface-3);
+  color: var(--text-dim);
+}
+
 @media (max-width: 899px) {
   input,
   select,

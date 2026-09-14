@@ -114,6 +114,40 @@ export const DRUG_SEED: SeedDrug[] = [
     reorderLevelMilliUnits: 10000,
   },
   {
+    name: "Doxy 100 paste (100 mg/ml)",
+    activeIngredient: "doxycycline",
+    form: "paste",
+    unit: "ml",
+    concentrationMicrogramsPerUnit: 100000,
+    doseMicrogramsPerKg: null,
+    dosesPerDay: 2,
+    route: "oral",
+    frequency: "every 12 hours",
+    durationDays: null,
+    howToUse:
+      "Doxy 100 paste in a 2.5 g tube — the prescribed dose is a fixed 0.02 ml per dose. Measure with a small syringe and give directly into the mouth.",
+    warnings:
+      "100 mg/ml (10x the 10 mg/ml suspension). Fixed 0.02 ml dose as prescribed; no weight-based dose is set, so add one only if your vet gives mg/kg. Typical rabbit range 2.5–5 mg/kg twice daily — confirm with your vet.",
+    reorderLevelMilliUnits: 0,
+  },
+  {
+    name: "Trimethoprim Sulfa (48 mg/ml)",
+    activeIngredient: "trimethoprim + sulfamethoxazole",
+    form: "liquid",
+    unit: "ml",
+    concentrationMicrogramsPerUnit: 48000,
+    doseMicrogramsPerKg: 24000,
+    dosesPerDay: 2,
+    route: "oral",
+    frequency: "every 12 hours",
+    durationDays: null,
+    howToUse:
+      "Give directly into the mouth with a syringe. Give with food and keep fresh water available.",
+    warnings:
+      "Common 48 mg/ml suspension (trimethoprim 8 mg/ml + sulfamethoxazole 40 mg/ml) — 0.5 ml per kg twice daily. Typical range 15–30 mg/kg twice daily; confirm dose and course length with your vet.",
+    reorderLevelMilliUnits: 10000,
+  },
+  {
     name: "Ivermectin 1% injection",
     activeIngredient: "ivermectin",
     form: "injection",

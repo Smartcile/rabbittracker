@@ -13,7 +13,12 @@
 - [x] **M6 — FAQ + export + polish.**
 - [x] **M7 — Drug cabinet.** Editable reference of common rabbit medicines (seeded once), stock
       batches with expiry and reorder levels, weight-based dose calculation, treatment linking
-      with automatic stock deduction, and active treatments shown on the calendar.
+      with per-dose medication logging and automatic stock deduction, and active treatments shown
+      on the calendar.
+- [x] **Daily checks, medication log + calendar events.** Configurable daily check types (poo,
+      water, food, …) logged per bunny, medication dose logs linked to treatments/drugs (doses
+      deduct from stock FEFO), and user calendar events with types and simple recurrence, with
+      daily checks and active medication courses shown on the calendar.
 - [x] **M8 — Admins and workers.** Per-user PIN sign-in, admin user management, per-worker
       permissions, bunny assignment via `rabbit_carers`, worker-scoped data and hidden costs,
       admin carer assignment UI.

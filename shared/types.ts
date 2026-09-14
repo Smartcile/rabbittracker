@@ -241,6 +241,58 @@ export type FaqGroupDto = {
   entries: FaqEntryDto[];
 };
 
+export type CheckLogTypeDto = {
+  id: number;
+  key: string;
+  label: string;
+  unit: string;
+  hasNumber: boolean;
+  hasText: boolean;
+  options: string[];
+  sortOrder: number;
+};
+
+export type CheckLogDto = {
+  id: number;
+  rabbitId: number;
+  typeId: number;
+  typeLabel: string;
+  typeUnit: string;
+  loggedAt: string;
+  valueMilli: number | null;
+  valueText: string;
+  notes: string;
+  createdAt: string;
+};
+
+export type MedicationLogDto = {
+  id: number;
+  rabbitId: number;
+  treatmentId: number | null;
+  drugId: number | null;
+  givenAt: string;
+  amountMilliUnits: number | null;
+  notes: string;
+  createdAt: string;
+};
+
+export type CalendarRepeat = "none" | "daily" | "weekly" | "monthly";
+
+export type CalendarEntryDto = {
+  id: number;
+  title: string;
+  type: string;
+  startAt: string;
+  allDay: boolean;
+  location: string;
+  notes: string;
+  rabbitId: number | null;
+  repeat: CalendarRepeat;
+  repeatUntil: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type VetDto = {
   id: number;
   name: string;

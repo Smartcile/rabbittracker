@@ -2,8 +2,12 @@ import type {
   Appetite,
   AppointmentDto,
   AppointmentStatus,
+  CalendarEntryDto,
   CalendarEventDto,
+  CalendarRepeat,
   CalendarSubscriptionDto,
+  CheckLogDto,
+  CheckLogTypeDto,
   CareKind,
   CareRecordDto,
   CareScheduleDto,
@@ -13,6 +17,7 @@ import type {
   DrugBatchDto,
   DrugDto,
   LookupDto,
+  MedicationLogDto,
   Energy,
   FaqEntryDto,
   FaqGroupDto,
@@ -33,16 +38,20 @@ import type { DrugForm } from "../../../shared/drugs.ts";
 import { emptyChecklist } from "../../../shared/checklist.ts";
 import type {
   AppointmentRow,
+  CalendarEntryRow,
   CalendarEventRow,
   CalendarSubscriptionRow,
   CareRecordRow,
   CareScheduleRow,
+  CheckLogRow,
+  CheckLogTypeRow,
   ChecklistOptionRow,
   ChecklistPhotoRow,
   ChecklistSectionRow,
   ClinicRow,
   DrugBatchRow,
   DrugRow,
+  MedicationLogRow,
   FaqEntryRow,
   HealthCheckRow,
   JournalEntryRow,
@@ -269,6 +278,64 @@ export function faqEntryToDto(row: FaqEntryRow): FaqEntryDto {
     question: row.question,
     answer: row.answer,
     sortOrder: row.sortOrder,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+export function checkLogTypeToDto(row: CheckLogTypeRow): CheckLogTypeDto {
+  return {
+    id: row.id,
+    key: row.key,
+    label: row.label,
+    unit: row.unit,
+    hasNumber: row.hasNumber,
+    hasText: row.hasText,
+    options: row.options,
+    sortOrder: row.sortOrder,
+  };
+}
+
+export function checkLogToDto(row: CheckLogRow, type?: CheckLogTypeRow): CheckLogDto {
+  return {
+    id: row.id,
+    rabbitId: row.rabbitId,
+    typeId: row.typeId,
+    typeLabel: type?.label ?? "Check",
+    typeUnit: type?.unit ?? "",
+    loggedAt: row.loggedAt.toISOString(),
+    valueMilli: row.valueMilli,
+    valueText: row.valueText,
+    notes: row.notes,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export function medicationLogToDto(row: MedicationLogRow): MedicationLogDto {
+  return {
+    id: row.id,
+    rabbitId: row.rabbitId,
+    treatmentId: row.treatmentId,
+    drugId: row.drugId,
+    givenAt: row.givenAt.toISOString(),
+    amountMilliUnits: row.amountMilliUnits,
+    notes: row.notes,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export function calendarEntryToDto(row: CalendarEntryRow): CalendarEntryDto {
+  return {
+    id: row.id,
+    title: row.title,
+    type: row.type,
+    startAt: row.startAt.toISOString(),
+    allDay: row.allDay,
+    location: row.location,
+    notes: row.notes,
+    rabbitId: row.rabbitId,
+    repeat: row.repeat as CalendarRepeat,
+    repeatUntil: row.repeatUntil,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

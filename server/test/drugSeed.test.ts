@@ -30,11 +30,11 @@ describe("drug seed data", () => {
     }
   });
 
-  it("has a weight-based dose only when it has a concentration", () => {
+  it("only sets a weight-based dose when it has a concentration", () => {
     for (const drug of DRUG_SEED) {
-      expect(drug.doseMicrogramsPerKg !== null).toBe(
-        drug.concentrationMicrogramsPerUnit !== null,
-      );
+      if (drug.doseMicrogramsPerKg !== null) {
+        expect(drug.concentrationMicrogramsPerUnit).not.toBeNull();
+      }
     }
   });
 

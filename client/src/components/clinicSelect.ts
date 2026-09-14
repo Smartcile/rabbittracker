@@ -9,6 +9,8 @@ export function clinicSelect(options: {
 } = {}): { root: HTMLElement; value: () => number | null; name: () => string } {
   let clinics: ClinicDto[] = [];
   let current: ClinicDto | null = null;
+  let touched = false;
+  const initialId = options.initialId ?? null;
   const select = h("select");
   select.disabled = true;
   const status = h("span", { class: "dim small" });
@@ -30,6 +32,7 @@ export function clinicSelect(options: {
         onSaved: (clinic) => {
           clinics = [...clinics, clinic].sort((a, b) => a.name.localeCompare(b.name));
           current = clinic;
+          touched = true;
           render();
           options.onChange?.(clinic);
         },
@@ -39,6 +42,7 @@ export function clinicSelect(options: {
       });
       return;
     }
+    touched = true;
     current = clinics.find((clinic) => String(clinic.id) === value) ?? null;
     options.onChange?.(current);
   });
@@ -60,7 +64,7 @@ export function clinicSelect(options: {
   render();
   return {
     root: h("div", { class: "stack", style: { gap: "0.3rem" } }, select, status),
-    value: () => current?.id ?? null,
+    value: () => (touched ? current?.id ?? null : initialId),
     name: () => current?.name ?? "",
   };
 }

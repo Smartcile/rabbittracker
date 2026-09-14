@@ -34,8 +34,9 @@ export function vetSelect(options: {
     select.replaceChildren(...parts);
     if (current) {
       select.value = String(current.id);
-    } else if (selectedName && selectedName === options.initialName) {
-      select.value = `name:${selectedName}`;
+    } else if (selectedName) {
+      const match = vets.find((vet) => vet.name === selectedName);
+      select.value = match ? String(match.id) : `name:${selectedName}`;
     } else {
       select.value = "";
     }

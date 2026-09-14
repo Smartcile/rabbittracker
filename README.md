@@ -40,6 +40,10 @@ Desktop:
   photos. The checklist itself is editable in Settings.
 - Quick log — tick any checklist item from the bunny page and save it as a health check without
   the full form.
+- **Daily checks** — define your own types in Settings (Poo, Water intake, Food, …) with option
+  buttons, a number with a unit and free text, then log them against any bunny in seconds.
+- **Medication log** — record every dose given (linked to a treatment and drug). Logged doses
+  deduct from drug stock earliest-expiry-first and deleting a log puts it back.
 - Manual weigh-ins with a one-tap "Log weight" action.
 - Weight trend chart with loss alerts and target-range checks.
 - Timestamped notes & photos journal per bunny.
@@ -51,6 +55,10 @@ Desktop:
 - Routine care schedules (nails, teeth, grooming, or your own care types) with dated records and
   due/overdue badges.
 - Vet appointments with status, cost, follow-up date and optional ICS/webcal calendar sync.
+- **Calendar events** — add your own events (hay collection, volunteer runs, fundraisers, cleaning)
+  with a type list, all-day option, location, optional bunny link and simple repeating schedules
+  (daily, weekly, monthly). The calendar also shows logged daily checks and active medication
+  courses.
 - Vets and clinics directory, with inline "add new" popups in the appointment and vaccination
   forms so you never leave the form.
 - Managed lists for breeds, colours, visit types, locations, vaccine types, treatment

@@ -8,6 +8,7 @@ import { renderAuthPage } from "./pages/auth.ts";
 import { renderBunniesPage } from "./pages/bunnies.ts";
 import { renderCalendarPage } from "./pages/calendar.ts";
 import { renderChecklistPage } from "./pages/checklist.ts";
+import { renderDailyChecksPage } from "./pages/dailyChecks.ts";
 import { renderDrugsPage } from "./pages/drugs.ts";
 import { renderFaqPage } from "./pages/faq.ts";
 import { renderHistoryPage } from "./pages/history.ts";
@@ -153,6 +154,9 @@ function render(): void {
       break;
     case "lookups":
       page = me.user.isAdmin ? renderLookupsPage(ctx) : renderHomePage(ctx);
+      break;
+    case "dailychecks":
+      page = me.user.isAdmin ? renderDailyChecksPage(ctx) : renderHomePage(ctx);
       break;
     case "bunnies":
       page = renderBunniesPage(ctx);

@@ -1,13 +1,18 @@
 import type {
   AppointmentDto,
+  CheckLogTypeDto,
+  DrugDto,
   HealthCheckDto,
   RabbitSummaryDto,
   TreatmentDto,
 } from "../../../shared/types.ts";
 import { ageLabel, upcomingAppointments } from "../../../shared/health.ts";
 import { api } from "../api.ts";
+import { loadCheckLogTypes } from "../dailyLogs.ts";
 import { rabbitAvatar } from "../components/avatar.ts";
+import { openCheckLogModal } from "../components/checkLogModal.ts";
 import { openCheckModal } from "../components/checkModal.ts";
+import { openMedicationLogModal } from "../components/medicationLogModal.ts";
 import { openRabbitModal } from "../components/rabbitModal.ts";
 import { toast } from "../components/toast.ts";
 import { weightAlertBadge, weightSummaryLine } from "../components/weightChip.ts";
@@ -38,6 +43,8 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
     "Add bunny",
   );
   const stats = h("div", { class: "stat-row" });
+  const today = h("div", { class: "card" });
+  today.style.display = "none";
   const container = h(
     "section",
     { class: "stack" },
@@ -49,6 +56,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
       h("div", { class: "row" }, canRecord ? quickLog : null, canCreate ? add : null),
       stats,
     ),
+    today,
     attention,
     upcoming,
     h("div", { class: "card-title" }, h("h2", null, "Your bunnies")),
@@ -57,15 +65,18 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
   );
 
   async function load(): Promise<void> {
-    const [{ rabbits }, { appointments }, { treatments }] = await Promise.all([
+    const [{ rabbits }, { appointments }, { treatments }, { drugs }, logTypes] = await Promise.all([
       api.get<{ rabbits: RabbitSummaryDto[] }>("/api/rabbits"),
       api.get<{ appointments: AppointmentDto[] }>("/api/appointments"),
       api.get<{ treatments: TreatmentDto[] }>("/api/treatments"),
+      api.get<{ drugs: DrugDto[] }>("/api/drugs"),
+      loadCheckLogTypes(),
     ]);
     const hasActive = rabbits.some((rabbit) => rabbit.status === "active");
     quickLog.disabled = !hasActive;
     fab.disabled = !hasActive;
     renderStats(rabbits, appointments, treatments);
+    renderToday(rabbits, appointments, treatments, drugs, logTypes);
     renderAttention(rabbits);
     renderUpcoming(appointments, rabbits);
     if (rabbits.length === 0) {
@@ -105,6 +116,127 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
       metric(upcoming, "Appointments (14 days)"),
       metric(meds, "Active treatments"),
       ...(quarantine > 0 ? [metric(quarantine, "In quarantine")] : []),
+    );
+  }
+
+  function renderToday(
+    rabbits: RabbitSummaryDto[],
+    appointments: AppointmentDto[],
+    treatments: TreatmentDto[],
+    drugs: DrugDto[],
+    logTypes: CheckLogTypeDto[],
+  ): void {
+    const activeRabbits = rabbits.filter((rabbit) => rabbit.status === "active");
+    const byId = new Map(activeRabbits.map((rabbit) => [rabbit.id, rabbit]));
+    const todayKey = localDayKey(new Date());
+    const rows: HTMLElement[] = [];
+
+    const todaysAppointments = appointments
+      .filter(
+        (appointment) =>
+          appointment.status === "scheduled" &&
+          localDayKey(new Date(appointment.scheduledAt)) === todayKey,
+      )
+      .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+    for (const appointment of todaysAppointments) {
+      rows.push(
+        h(
+          "div",
+          { class: "list-row" },
+          h("a", { href: `#/rabbit/${appointment.rabbitId}` }, byId.get(appointment.rabbitId)?.name ?? "Bunny"),
+          h("span", { class: "dim small" }, appointment.title),
+          h("span", { class: "spacer" }),
+          h("span", { class: "mono small" }, fmtTime(appointment.scheduledAt)),
+        ),
+      );
+    }
+
+    const activeTreatments = treatments.filter(
+      (treatment) =>
+        treatment.status === "active" &&
+        byId.has(treatment.rabbitId) &&
+        treatment.startDate <= todayKey &&
+        (treatment.endDate ?? treatment.startDate) >= todayKey,
+    );
+    for (const treatment of activeTreatments) {
+      const rabbit = byId.get(treatment.rabbitId)!;
+      rows.push(
+        h(
+          "div",
+          { class: "list-row" },
+          h("span", { class: "badge accent" }, "Med"),
+          h(
+            "div",
+            { class: "stack", style: { gap: "0" } },
+            h("strong", null, treatment.medication),
+            h("span", { class: "dim small" }, `${rabbit.name}${treatment.dose ? ` · ${treatment.dose}` : ""}`),
+          ),
+          h("span", { class: "spacer" }),
+          canRecord
+            ? h(
+                "button",
+                {
+                  class: "btn primary small",
+                  type: "button",
+                  onClick: () =>
+                    openMedicationLogModal({
+                      rabbit,
+                      treatments,
+                      drugs,
+                      treatmentId: treatment.id,
+                      onSaved: () => void load(),
+                    }),
+                },
+                "Log dose",
+              )
+            : null,
+        ),
+      );
+    }
+
+    if (canRecord && logTypes.length > 0) {
+      for (const rabbit of activeRabbits) {
+        rows.push(
+          h(
+            "div",
+            { class: "list-row" },
+            h("span", { class: "badge" }, "Check"),
+            h(
+              "div",
+              { class: "stack", style: { gap: "0" } },
+              h("strong", null, "Daily check"),
+              h("span", { class: "dim small" }, rabbit.name),
+            ),
+            h("span", { class: "spacer" }),
+            h(
+              "button",
+              {
+                class: "btn outline small",
+                type: "button",
+                onClick: () => openCheckLogModal({ rabbit, types: logTypes, onSaved: () => void load() }),
+              },
+              "Log",
+            ),
+          ),
+        );
+      }
+    }
+
+    if (rows.length === 0) {
+      today.style.display = "none";
+      return;
+    }
+    today.style.display = "";
+    today.replaceChildren(
+      h("h2", null, "Today"),
+      h(
+        "p",
+        { class: "dim small" },
+        new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long" }).format(
+          new Date(),
+        ),
+      ),
+      h("div", null, rows),
     );
   }
 
@@ -208,4 +340,9 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
 
   void load();
   return container;
+}
+
+function localDayKey(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }

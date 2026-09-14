@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CALENDAR_REPEATS } from "../../../shared/calendar.ts";
 import type { HealthChecklistDto } from "../../../shared/checklist.ts";
 import { LOOKUP_KINDS } from "../../../shared/lookups.ts";
 
@@ -273,6 +274,83 @@ export const lookupUpdateSchema = z
     message: "No changes provided",
   });
 
+export const checkLogTypeCreateSchema = z.object({
+  label: z.string().trim().min(1, "Name is required").max(100),
+  unit: z.string().trim().max(30).default(""),
+  hasNumber: z.boolean().default(true),
+  hasText: z.boolean().default(false),
+  options: z.array(z.string().trim().min(1).max(100)).max(20).default([]),
+});
+
+export const checkLogTypeUpdateSchema = z
+  .object({
+    label: z.string().trim().min(1, "Name is required").max(100).optional(),
+    unit: z.string().trim().max(30).optional(),
+    hasNumber: z.boolean().optional(),
+    hasText: z.boolean().optional(),
+    options: z.array(z.string().trim().min(1).max(100)).max(20).optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: "No changes provided",
+  });
+
+export const checkLogCreateSchema = z.object({
+  rabbitId: z.number().int().positive(),
+  typeId: z.number().int().positive(),
+  loggedAt: z.coerce.date(),
+  valueMilli: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
+  valueText: z.string().trim().max(500).default(""),
+  notes: z.string().trim().max(2000).default(""),
+});
+
+export const checkLogUpdateSchema = z
+  .object({
+    loggedAt: z.coerce.date().optional(),
+    valueMilli: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
+    valueText: z.string().trim().max(500).optional(),
+    notes: z.string().trim().max(2000).optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: "No changes provided",
+  });
+
+export const medicationLogCreateSchema = z.object({
+  rabbitId: z.number().int().positive(),
+  treatmentId: z.number().int().positive().nullable().optional(),
+  drugId: z.number().int().positive().nullable().optional(),
+  givenAt: z.coerce.date(),
+  amountMilliUnits: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
+  notes: z.string().trim().max(2000).default(""),
+});
+
+export const calendarEntryCreateSchema = z.object({
+  title: z.string().trim().min(1, "Title is required").max(200),
+  type: z.string().trim().max(60).default("other"),
+  startAt: z.coerce.date(),
+  allDay: z.boolean().default(false),
+  location: z.string().trim().max(300).default(""),
+  notes: z.string().trim().max(2000).default(""),
+  rabbitId: z.number().int().positive().nullable().optional(),
+  repeat: z.enum(CALENDAR_REPEATS).default("none"),
+  repeatUntil: optionalDate,
+});
+
+export const calendarEntryUpdateSchema = z
+  .object({
+    title: z.string().trim().min(1, "Title is required").max(200).optional(),
+    type: z.string().trim().max(60).optional(),
+    startAt: z.coerce.date().optional(),
+    allDay: z.boolean().optional(),
+    location: z.string().trim().max(300).optional(),
+    notes: z.string().trim().max(2000).optional(),
+    rabbitId: z.number().int().positive().nullable().optional(),
+    repeat: z.enum(CALENDAR_REPEATS).optional(),
+    repeatUntil: optionalDate,
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: "No changes provided",
+  });
+
 export const journalEntryCreateSchema = z.object({
   rabbitId: z.number().int().positive(),
   note: z.string().trim().max(2000).default(""),
@@ -497,9 +575,11 @@ export const careRecordCreateSchema = z.object({
 export const appointmentStatusSchema = z.enum(["scheduled", "completed", "cancelled"]);
 
 const optionalTimestamp = z
-  .union([z.coerce.date(), z.literal(""), z.null()])
+  .union([z.literal(""), z.null(), z.coerce.date()])
   .optional()
-  .transform((value) => (value === undefined ? undefined : value === "" ? null : value));
+  .transform((value) =>
+    value === undefined ? undefined : value === "" || value === null ? null : value,
+  );
 
 export const appointmentCreateSchema = z.object({
   rabbitId: z.number().int().positive(),

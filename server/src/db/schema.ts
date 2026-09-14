@@ -71,6 +71,63 @@ export const rabbits = pgTable("rabbits", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const checkLogTypes = pgTable("check_log_types", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  key: text("key").notNull().unique(),
+  label: text("label").notNull(),
+  unit: text("unit").notNull().default(""),
+  hasNumber: boolean("has_number").notNull().default(true),
+  hasText: boolean("has_text").notNull().default(false),
+  options: text("options").array().notNull().default([]),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const checkLogs = pgTable("check_logs", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  rabbitId: integer("rabbit_id")
+    .notNull()
+    .references(() => rabbits.id, { onDelete: "cascade" }),
+  typeId: integer("type_id")
+    .notNull()
+    .references(() => checkLogTypes.id, { onDelete: "cascade" }),
+  loggedAt: timestamp("logged_at", { withTimezone: true }).notNull(),
+  valueMilli: integer("value_milli"),
+  valueText: text("value_text").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const medicationLogs = pgTable("medication_logs", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  rabbitId: integer("rabbit_id")
+    .notNull()
+    .references(() => rabbits.id, { onDelete: "cascade" }),
+  treatmentId: integer("treatment_id").references(() => treatments.id, { onDelete: "set null" }),
+  drugId: integer("drug_id").references(() => drugs.id, { onDelete: "set null" }),
+  givenAt: timestamp("given_at", { withTimezone: true }).notNull(),
+  amountMilliUnits: integer("amount_milli_units"),
+  stockDeductedMilliUnits: integer("stock_deducted_milli_units").notNull().default(0),
+  notes: text("notes").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const calendarEntries = pgTable("calendar_entries", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  title: text("title").notNull(),
+  type: text("type").notNull().default("other"),
+  startAt: timestamp("start_at", { withTimezone: true }).notNull(),
+  allDay: boolean("all_day").notNull().default(false),
+  location: text("location").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  rabbitId: integer("rabbit_id").references(() => rabbits.id, { onDelete: "set null" }),
+  repeat: text("repeat").notNull().default("none"),
+  repeatUntil: date("repeat_until"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const rabbitBonds = pgTable(
   "rabbit_bonds",
   {
@@ -385,6 +442,10 @@ export type FaqEntryRow = typeof faqEntries.$inferSelect;
 export type ClinicRow = typeof clinics.$inferSelect;
 export type VetRow = typeof vets.$inferSelect;
 export type LookupRow = typeof lookups.$inferSelect;
+export type CheckLogTypeRow = typeof checkLogTypes.$inferSelect;
+export type CheckLogRow = typeof checkLogs.$inferSelect;
+export type MedicationLogRow = typeof medicationLogs.$inferSelect;
+export type CalendarEntryRow = typeof calendarEntries.$inferSelect;
 export type JournalEntryRow = typeof journalEntries.$inferSelect;
 export type JournalPhotoRow = typeof journalPhotos.$inferSelect;
 export type ChecklistSectionRow = typeof checklistSections.$inferSelect;

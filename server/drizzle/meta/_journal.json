@@ -127,6 +127,13 @@
       "when": 1789370829288,
       "tag": "0017_groovy_sue_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789380368498,
+      "tag": "0018_lame_blue_marvel",
+      "breakpoints": true
     }
   ]
 }

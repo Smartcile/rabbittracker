@@ -4,11 +4,14 @@ import type {
   CareKind,
   CareRecordDto,
   CareScheduleDto,
+  CheckLogDto,
+  CheckLogTypeDto,
   ChecklistSectionDto,
   DrugDto,
   HealthCheckDto,
   JournalEntryDto,
   LookupDto,
+  MedicationLogDto,
   RabbitDto,
   TreatmentDto,
   UserDto,
@@ -18,8 +21,11 @@ import { formatDrugAmount, stockLevel, stockTotalMilliUnits } from "../../../sha
 import { ageLabel, careDueStatus, dueStatus, formatWeight, weightTrend } from "../../../shared/health.ts";
 import { api } from "../api.ts";
 import { loadChecklist } from "../checklist.ts";
+import { formatLogNumber, loadCheckLogTypes } from "../dailyLogs.ts";
 import { loadLookups } from "../lookups.ts";
 import { openAppointmentModal } from "../components/appointmentModal.ts";
+import { openCheckLogModal } from "../components/checkLogModal.ts";
+import { openMedicationLogModal } from "../components/medicationLogModal.ts";
 import { rabbitAvatar } from "../components/avatar.ts";
 import { renderChecksTable } from "../components/checksTable.ts";
 import { openCheckModal } from "../components/checkModal.ts";
@@ -60,23 +66,29 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
 
   async function load(): Promise<void> {
     try {
-      const [bundle, drugResponse, checklistSections, lookups] = await Promise.all([
-        api.get<RabbitBundle>(`/api/rabbits/${id}`),
-        api.get<{ drugs: DrugDto[] }>("/api/drugs"),
-        loadChecklist(),
-        loadLookups(),
-      ]);
+      const [bundle, drugResponse, checklistSections, lookups, logTypes, checkLogResponse, medLogResponse] =
+        await Promise.all([
+          api.get<RabbitBundle>(`/api/rabbits/${id}`),
+          api.get<{ drugs: DrugDto[] }>("/api/drugs"),
+          loadChecklist(),
+          loadLookups(),
+          loadCheckLogTypes(),
+          api.get<{ logs: CheckLogDto[] }>(`/api/check-logs?rabbitId=${id}`),
+          api.get<{ logs: MedicationLogDto[] }>(`/api/medication-logs?rabbitId=${id}`),
+        ]);
       const careTypes = lookups.filter((lookup) => lookup.kind === "care_type");
       const sections: (HTMLElement | null)[] = [
         header(bundle.rabbit, bundle.checks, load, canEdit),
         weightCard(bundle.rabbit, bundle.checks, load, canRecord),
         quickLogCard(bundle.rabbit, checklistSections, load, canRecord),
         checksCard(bundle.rabbit, bundle.checks, checklistSections, load, canRecord),
+        dailyChecksCard(bundle.rabbit, logTypes, checkLogResponse.logs, load, canRecord),
         journalCard(bundle.rabbit, bundle.journal, load, canRecord),
         galleryCard(bundle.checks, bundle.journal),
         feedingCard(bundle.rabbit, canEdit, load),
         bondsCard(bundle.rabbit, bundle.bonds, load, canEdit),
         treatmentsCard(bundle.rabbit, bundle.treatments, drugResponse.drugs, load, canRecord),
+        medicationCard(bundle.rabbit, bundle.treatments, medLogResponse.logs, drugResponse.drugs, load, canRecord),
         vaccinationsCard(bundle.rabbit, bundle.vaccinations, load, canRecord),
         careCard(bundle.rabbit, bundle.careSchedules, bundle.careRecords, careTypes, load, canRecord),
         appointmentsCard(bundle.rabbit, bundle.appointments, load, canRecord, showCost),
@@ -440,6 +452,168 @@ function galleryCard(checks: HealthCheckDto[], journal: JournalEntryDto[]): HTML
       }),
     ),
   );
+}
+
+function dailyChecksCard(
+  rabbit: RabbitDto,
+  types: CheckLogTypeDto[],
+  logs: CheckLogDto[],
+  reload: () => Promise<void>,
+  canRecord: boolean,
+): HTMLElement {
+  const list = h("div", { class: "stack", style: { gap: "0" } });
+  const recent = logs.slice(0, 10);
+  if (recent.length === 0) {
+    list.append(h("p", { class: "dim small", style: { margin: 0 } }, "No daily checks logged yet."));
+  }
+  for (const entry of recent) {
+    const value = [
+      entry.valueText,
+      entry.valueMilli != null ? formatLogNumber(entry.valueMilli, entry.typeUnit) : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    list.append(
+      h(
+        "div",
+        { class: "list-row" },
+        h(
+          "div",
+          { class: "stack", style: { gap: "0.15rem" } },
+          h("strong", null, entry.typeLabel),
+          value ? h("span", { class: "dim small" }, value) : null,
+          entry.notes ? h("span", { class: "dim small" }, entry.notes) : null,
+        ),
+        h("span", { class: "spacer" }),
+        h("span", { class: "dim small" }, `${fmtDate(entry.loggedAt)} ${fmtTime(entry.loggedAt)}`),
+        canRecord
+          ? h(
+              "button",
+              { class: "btn ghost small", type: "button", onClick: () => void removeCheckLog(entry, reload) },
+              "Delete",
+            )
+          : null,
+      ),
+    );
+  }
+  const log = h(
+    "button",
+    {
+      class: "btn primary small",
+      type: "button",
+      onClick: () => openCheckLogModal({ rabbit, types, onSaved: () => void reload() }),
+    },
+    "Log",
+  );
+  return h(
+    "div",
+    { class: "card" },
+    h(
+      "div",
+      { class: "card-title" },
+      h("h2", null, "Daily checks"),
+      h("span", { class: "spacer" }),
+      canRecord && types.length > 0 ? log : null,
+    ),
+    h("p", { class: "dim small" }, "Poo, water, food and anything else worth tracking each day."),
+    list,
+  );
+}
+
+async function removeCheckLog(entry: CheckLogDto, reload: () => Promise<void>): Promise<void> {
+  const confirmed = await confirmDialog({
+    title: `Delete ${entry.typeLabel} log?`,
+    message: "This removes the entry.",
+    confirmLabel: "Delete",
+    danger: true,
+  });
+  if (!confirmed) return;
+  await api.del(`/api/check-logs/${entry.id}`);
+  toast("Log deleted");
+  await reload();
+}
+
+function medicationCard(
+  rabbit: RabbitDto,
+  treatments: TreatmentDto[],
+  logs: MedicationLogDto[],
+  drugs: DrugDto[],
+  reload: () => Promise<void>,
+  canRecord: boolean,
+): HTMLElement {
+  const list = h("div", { class: "stack", style: { gap: "0" } });
+  const recent = logs.slice(0, 10);
+  if (recent.length === 0) {
+    list.append(h("p", { class: "dim small", style: { margin: 0 } }, "No doses logged yet."));
+  }
+  for (const entry of recent) {
+    const drug = drugs.find((item) => item.id === entry.drugId);
+    const amount =
+      entry.amountMilliUnits != null
+        ? formatDrugAmount(entry.amountMilliUnits, drug?.unit ?? "dose")
+        : "";
+    list.append(
+      h(
+        "div",
+        { class: "list-row" },
+        h(
+          "div",
+          { class: "stack", style: { gap: "0.15rem" } },
+          h("strong", null, drug?.name ?? "Medication"),
+          amount ? h("span", { class: "dim small" }, amount) : null,
+          entry.notes ? h("span", { class: "dim small" }, entry.notes) : null,
+        ),
+        h("span", { class: "spacer" }),
+        h("span", { class: "dim small" }, `${fmtDate(entry.givenAt)} ${fmtTime(entry.givenAt)}`),
+        canRecord
+          ? h(
+              "button",
+              { class: "btn ghost small", type: "button", onClick: () => void removeMedicationLog(entry, reload) },
+              "Delete",
+            )
+          : null,
+      ),
+    );
+  }
+  const log = h(
+    "button",
+    {
+      class: "btn primary small",
+      type: "button",
+      onClick: () => openMedicationLogModal({ rabbit, treatments, drugs, onSaved: () => void reload() }),
+    },
+    "Log a dose",
+  );
+  return h(
+    "div",
+    { class: "card" },
+    h(
+      "div",
+      { class: "card-title" },
+      h("h2", null, "Medication log"),
+      h("span", { class: "spacer" }),
+      canRecord ? log : null,
+    ),
+    h(
+      "p",
+      { class: "dim small" },
+      "Every dose given, especially anything issued by the vet. Logged doses deduct from drug stock.",
+    ),
+    list,
+  );
+}
+
+async function removeMedicationLog(entry: MedicationLogDto, reload: () => Promise<void>): Promise<void> {
+  const confirmed = await confirmDialog({
+    title: "Delete dose log?",
+    message: "The logged amount is returned to drug stock.",
+    confirmLabel: "Delete",
+    danger: true,
+  });
+  if (!confirmed) return;
+  await api.del(`/api/medication-logs/${entry.id}`);
+  toast("Dose log deleted");
+  await reload();
 }
 
 function quickLogCard(
@@ -875,13 +1049,6 @@ function treatmentRow(
               { class: `badge ${level === "ok" ? "ok" : level === "low" ? "watch" : "danger"}` },
               level === "ok" ? "In stock" : level === "low" ? "Low stock" : "Out of stock",
             ),
-            treatment.stockDeductedMilliUnits > 0
-              ? h(
-                  "span",
-                  { class: "chip" },
-                  `${formatDrugAmount(treatment.stockDeductedMilliUnits, drug.unit)} used`,
-                )
-              : null,
             canRecord
               ? h(
                   "button",

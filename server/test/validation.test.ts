@@ -7,8 +7,12 @@ import {
 import {
   appointmentCreateSchema,
   appointmentUpdateSchema,
+  calendarEntryCreateSchema,
   calendarSubscriptionSchema,
   calendarSubscriptionUpdateSchema,
+  checkLogCreateSchema,
+  checkLogTypeCreateSchema,
+  medicationLogCreateSchema,
   careRecordCreateSchema,
   careSchedulePutSchema,
   checkCreateSchema,
@@ -490,6 +494,84 @@ describe("vet validation", () => {
   });
 });
 
+describe("daily check validation", () => {
+  it("accepts a check log", () => {
+    const result = checkLogCreateSchema.safeParse({
+      rabbitId: 1,
+      typeId: 2,
+      loggedAt: "2026-09-01T08:00:00.000Z",
+      valueMilli: 250500,
+      valueText: "",
+      notes: "",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("requires the rabbit, type and time", () => {
+    expect(checkLogCreateSchema.safeParse({ rabbitId: 1 }).success).toBe(false);
+    expect(
+      checkLogCreateSchema.safeParse({ rabbitId: 1, typeId: 2, loggedAt: "not a date" }).success,
+    ).toBe(false);
+  });
+
+  it("validates check types and their fields", () => {
+    const result = checkLogTypeCreateSchema.parse({
+      label: "Poo",
+      options: ["Normal", "Soft"],
+      hasNumber: false,
+    });
+    expect(result.hasNumber).toBe(false);
+    expect(result.hasText).toBe(false);
+    expect(result.options).toEqual(["Normal", "Soft"]);
+  });
+});
+
+describe("medication log validation", () => {
+  it("accepts a dose", () => {
+    const result = medicationLogCreateSchema.safeParse({
+      rabbitId: 1,
+      givenAt: "2026-09-01T08:00:00.000Z",
+      amountMilliUnits: 300,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("requires a time", () => {
+    expect(medicationLogCreateSchema.safeParse({ rabbitId: 1 }).success).toBe(false);
+  });
+});
+
+describe("calendar entry validation", () => {
+  it("accepts a repeating event", () => {
+    const result = calendarEntryCreateSchema.parse({
+      title: "Collect hay",
+      type: "Hay collection",
+      startAt: "2026-09-05T09:00:00.000Z",
+      repeat: "weekly",
+      repeatUntil: "2026-10-01",
+    });
+    expect(result.repeat).toBe("weekly");
+    expect(result.repeatUntil).toBe("2026-10-01");
+    expect(result.allDay).toBe(false);
+  });
+
+  it("rejects an unknown repeat", () => {
+    expect(
+      calendarEntryCreateSchema.safeParse({
+        title: "x",
+        startAt: "2026-09-05T09:00:00.000Z",
+        repeat: "yearly",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires a title", () => {
+    expect(
+      calendarEntryCreateSchema.safeParse({ title: "  ", startAt: "2026-09-05T09:00:00.000Z" }).success,
+    ).toBe(false);
+  });
+});
+
 describe("lookup validation", () => {
   it("requires a known kind and a name", () => {
     expect(lookupCreateSchema.safeParse({ kind: "breed", label: "Rex" }).success).toBe(true);
@@ -760,6 +842,18 @@ describe("appointment validation", () => {
       followUpAt: "",
     });
     expect(result.followUpAt).toBeNull();
+  });
+
+  it("clears a follow-up with null instead of the epoch", () => {
+    const created = appointmentCreateSchema.parse({
+      rabbitId: 1,
+      title: "Check",
+      scheduledAt: "2026-07-01T02:00:00.000Z",
+      followUpAt: null,
+    });
+    expect(created.followUpAt).toBeNull();
+    const updated = appointmentUpdateSchema.parse({ followUpAt: null });
+    expect(updated.followUpAt).toBeNull();
   });
 
   it("rejects an empty update patch", () => {

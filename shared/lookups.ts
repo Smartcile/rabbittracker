@@ -10,6 +10,7 @@ export const LOOKUP_KINDS = [
   "care_type",
   "faq_category",
   "supplier",
+  "event_type",
 ] as const;
 
 export type LookupKind = (typeof LOOKUP_KINDS)[number];
@@ -26,6 +27,7 @@ export const LOOKUP_KIND_LABELS: Record<LookupKind, string> = {
   care_type: "Care types",
   faq_category: "FAQ categories",
   supplier: "Suppliers",
+  event_type: "Calendar event types",
 };
 
 export type LookupDefault = {
@@ -116,6 +118,14 @@ export const DEFAULT_LOOKUPS: Record<LookupKind, LookupDefault[]> = {
     { value: "emergencies", label: "Emergencies" },
   ],
   supplier: [],
+  event_type: [
+    { value: "vet_visit", label: "Vet visit" },
+    { value: "hay_collection", label: "Hay collection" },
+    { value: "volunteer_run", label: "Volunteer run" },
+    { value: "fundraiser", label: "Fundraiser" },
+    { value: "cleaning", label: "Cleaning" },
+    { value: "other", label: "Other" },
+  ],
 };
 
 export function lookupKindHasInterval(kind: LookupKind): boolean {

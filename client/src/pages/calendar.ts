@@ -1,14 +1,19 @@
+import { expandEntryStart } from "../../../shared/calendar.ts";
 import type {
   AppointmentDto,
+  CalendarEntryDto,
   CalendarEventDto,
   CalendarSubscriptionDto,
   CalendarSyncResultDto,
+  CheckLogDto,
   RabbitDto,
   SettingsDto,
   TreatmentDto,
 } from "../../../shared/types.ts";
 import { api } from "../api.ts";
+import { formatLogNumber } from "../dailyLogs.ts";
 import { openAppointmentModal } from "../components/appointmentModal.ts";
+import { openCalendarEntryModal } from "../components/calendarEntryModal.ts";
 import { toast } from "../components/toast.ts";
 import { openTreatmentModal } from "../components/treatmentModal.ts";
 import type { PageContext } from "../context.ts";
@@ -37,6 +42,14 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
       onClick: () => openAppointmentModal({ rabbits, showCost, onSaved: () => void refresh() }),
     },
     "+ New appointment",
+  );
+  const newEvent = h(
+    "button",
+    {
+      class: "btn outline small",
+      onClick: () => openCalendarEntryModal({ rabbits, onSaved: () => void refresh() }),
+    },
+    "+ New event",
   );
 
   async function runSync(): Promise<void> {
@@ -90,7 +103,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
     const from = new Date(view.getFullYear(), view.getMonth(), 1);
     const to = new Date(view.getFullYear(), view.getMonth() + 1, 0, 23, 59, 59, 999);
     title.textContent = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(view);
-    const [eventsRes, appointmentsRes, treatmentsRes] = await Promise.all([
+    const [eventsRes, appointmentsRes, treatmentsRes, entriesRes, logsRes] = await Promise.all([
       api.get<{ events: CalendarEventDto[] }>(
         `/api/calendar/events?from=${from.toISOString()}&to=${to.toISOString()}`,
       ),
@@ -98,6 +111,12 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         `/api/appointments?from=${from.toISOString()}&to=${to.toISOString()}`,
       ),
       api.get<{ treatments: TreatmentDto[] }>("/api/treatments"),
+      api.get<{ entries: CalendarEntryDto[] }>(
+        `/api/calendar-entries?from=${from.toISOString()}&to=${to.toISOString()}`,
+      ),
+      api.get<{ logs: CheckLogDto[] }>(
+        `/api/check-logs?from=${from.toISOString()}&to=${to.toISOString()}`,
+      ),
     ]);
     const monthStart = dayKey(from);
     const monthEnd = dayKey(to);
@@ -107,16 +126,29 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         treatment.startDate <= monthEnd &&
         (treatment.endDate ?? treatment.startDate) >= monthStart,
     );
-    renderGrid(eventsRes.events, appointmentsRes.appointments, monthTreatments);
+    const occurrences = entriesRes.entries.flatMap((entry) =>
+      expandEntryStart(entry, from, to).map((at) => ({ entry, at })),
+    );
+    renderGrid(
+      eventsRes.events,
+      appointmentsRes.appointments,
+      monthTreatments,
+      occurrences,
+      logsRes.logs,
+    );
   }
 
   function renderGrid(
     events: CalendarEventDto[],
     appointments: AppointmentDto[],
     treatments: TreatmentDto[],
+    occurrences: { entry: CalendarEntryDto; at: Date }[],
+    logs: CheckLogDto[],
   ): void {
     const eventsByDay = groupByDay(events, (event) => event.startAt);
     const appointmentsByDay = groupByDay(appointments, (appointment) => appointment.scheduledAt);
+    const entriesByDay = groupByDay(occurrences, (item) => item.at.toISOString());
+    const logsByDay = groupByDay(logs, (log) => log.loggedAt);
     const rabbitNames = new Map(rabbits.map((rabbit) => [rabbit.id, rabbit.name]));
     grid.replaceChildren();
     for (const label of WEEKDAYS) grid.append(h("div", { class: "cal-head" }, label));
@@ -165,6 +197,38 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
             treatmentChip(`■ ${rabbitName}: ${treatment.medication} ends`, open, canRecord),
           );
         }
+      }
+      for (const { entry } of entriesByDay.get(key) ?? []) {
+        const label = entry.allDay ? entry.title : `${fmtTime(entry.startAt, timezone)} ${entry.title}`;
+        cell.append(
+          canManage
+            ? h(
+                "button",
+                {
+                  class: "cal-chip event",
+                  type: "button",
+                  onClick: () =>
+                    openCalendarEntryModal({ rabbits, entry, onSaved: () => void refresh() }),
+                },
+                label,
+              )
+            : h("span", { class: "cal-chip event" }, label),
+        );
+      }
+      for (const log of logsByDay.get(key) ?? []) {
+        const value = [
+          log.valueText,
+          log.valueMilli != null ? formatLogNumber(log.valueMilli, log.typeUnit) : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        cell.append(
+          h(
+            "a",
+            { class: "cal-chip log", href: `#/rabbit/${log.rabbitId}` },
+            `${log.typeLabel}${value ? `: ${value}` : ""}`,
+          ),
+        );
       }
       for (const event of eventsByDay.get(key) ?? []) {
         cell.append(
@@ -232,6 +296,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         h("span", { class: "spacer" }),
         canManage ? sync : null,
         canManage ? h("a", { class: "btn ghost small", href: "#/settings" }, "Subscribe") : null,
+        canManage ? newEvent : null,
         canRecord ? newAppointment : null,
       ),
       info,

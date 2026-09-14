@@ -2,6 +2,7 @@ import { createApp } from "./app.ts";
 import { config } from "./config.ts";
 import { runMigrations } from "./db/migrate.ts";
 import { ensureChecklistSeed } from "./lib/checklistSeed.ts";
+import { ensureCheckLogSeed } from "./lib/checkLogSeed.ts";
 import { ensureDrugSeed } from "./lib/drugSeed.ts";
 import { ensureFaqSeed } from "./lib/faqSeed.ts";
 import { ensureLookupSeed } from "./lib/lookupSeed.ts";
@@ -13,6 +14,7 @@ async function main(): Promise<void> {
   await ensureFaqSeed();
   await ensureDrugSeed();
   await ensureChecklistSeed();
+  await ensureCheckLogSeed();
   await ensureLookupSeed();
   const app = createApp();
   app.listen(config.port, () => {

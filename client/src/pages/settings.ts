@@ -21,6 +21,7 @@ export function renderSettingsPage(ctx: PageContext): HTMLElement {
     renderVetsCard(),
     renderListsCard(),
     renderChecklistCard(),
+    renderDailyChecksCard(),
     renderSubscribeCard(),
     renderSubscriptionsCard(),
     renderExportCard(),
@@ -41,6 +42,20 @@ function renderVetsCard(): HTMLElement {
       "Keep a list of vets and clinics to pick from when logging appointments and vaccinations.",
     ),
     h("div", { class: "row" }, h("a", { class: "btn outline small", href: "#/vets" }, "Manage vets")),
+  );
+}
+
+function renderDailyChecksCard(): HTMLElement {
+  return h(
+    "div",
+    { class: "card" },
+    h("h2", null, "Daily checks"),
+    h(
+      "p",
+      { class: "dim small" },
+      "Define the daily checks you log for each bunny — poo, water, food and anything else.",
+    ),
+    h("div", { class: "row" }, h("a", { class: "btn outline small", href: "#/dailychecks" }, "Edit check types")),
   );
 }
 
