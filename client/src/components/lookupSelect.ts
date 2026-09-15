@@ -22,7 +22,7 @@ export function lookupSelect(
 
   const render = () => {
     const parts: Node[] = [h("option", { value: "" }, emptyLabel)];
-    if (initialLabel && !items.some((item) => item.label === initialLabel)) {
+    if (initialLabel && !items.some((item) => sameLabel(item.label, initialLabel))) {
       parts.push(h("option", { value: `label:${initialLabel}` }, `${initialLabel} (not in list)`));
     }
     for (const item of items) {
@@ -30,11 +30,17 @@ export function lookupSelect(
     }
     parts.push(h("option", { value: "__add__" }, "＋ Add new…"));
     select.replaceChildren(...parts);
+    if (!current && selectedLabel) {
+      const match = items.find((item) => sameLabel(item.label, selectedLabel));
+      if (match) {
+        current = match;
+        selectedLabel = match.label;
+      }
+    }
     if (current) {
       select.value = String(current.id);
     } else if (selectedLabel) {
-      const match = items.find((item) => item.label === selectedLabel);
-      select.value = match ? String(match.id) : `label:${selectedLabel}`;
+      select.value = `label:${selectedLabel}`;
     } else {
       select.value = "";
     }
@@ -86,8 +92,13 @@ export function lookupSelect(
     setLabel: (label: string) => {
       initialLabel = label;
       selectedLabel = label;
-      current = items.find((item) => item.label === label) ?? null;
+      current = items.find((item) => sameLabel(item.label, label)) ?? null;
+      if (current) selectedLabel = current.label;
       render();
     },
   };
+}
+
+function sameLabel(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
 }

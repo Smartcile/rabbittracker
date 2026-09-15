@@ -11,20 +11,46 @@ import { invalidateLookups, loadLookups } from "../lookups.ts";
 
 export function renderLookupsPage(_ctx: PageContext): HTMLElement {
   const list = h("div", { class: "stack" });
+  const addDefaults = h(
+    "button",
+    {
+      class: "btn outline small",
+      type: "button",
+      onClick: async () => {
+        addDefaults.disabled = true;
+        try {
+          const { added } = await api.post<{ added: string[] }>("/api/lookups/defaults");
+          if (added.length === 0) {
+            toast("All default list values are already set up");
+          } else {
+            invalidateLookups();
+            toast(`Added ${added.join(", ")}`);
+            await reload();
+          }
+        } catch (err) {
+          toast(err instanceof Error ? err.message : "Something went wrong", "error");
+        } finally {
+          addDefaults.disabled = false;
+        }
+      },
+    },
+    "Add defaults",
+  );
   const container = h(
     "section",
     { class: "stack" },
     h(
       "div",
-      { class: "card-title" },
+      { class: "card-title", style: { flexWrap: "wrap" } },
       h("h1", null, "Lists"),
       h("span", { class: "spacer" }),
       h("a", { class: "btn outline small", href: "#/settings" }, "Back to settings"),
+      addDefaults,
     ),
     h(
       "p",
       { class: "dim small" },
-      "Reusable options for the dropdowns across the app. Add a value here or straight from any dropdown.",
+      "Reusable options for the dropdowns across the app. Add a value here or straight from any dropdown. Add defaults brings in any missing starter values without touching your edits.",
     ),
     list,
   );

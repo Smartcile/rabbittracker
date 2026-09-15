@@ -1,11 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { DRUG_FORMS } from "../../shared/drugs.ts";
+import { DEFAULT_LOOKUPS } from "../../shared/lookups.ts";
 import { DRUG_SEED, drugSeedKey } from "../src/lib/drugSeedData.ts";
 
 describe("drug seed data", () => {
   it("has unique names", () => {
     const names = DRUG_SEED.map((drug) => drug.name);
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("uses route and frequency labels that exist in the default lookups", () => {
+    const routeLabels = new Set(DEFAULT_LOOKUPS.route.map((item) => item.label.toLowerCase()));
+    const frequencyLabels = new Set(
+      DEFAULT_LOOKUPS.frequency.map((item) => item.label.toLowerCase()),
+    );
+    for (const drug of DRUG_SEED) {
+      if (drug.route) expect(routeLabels.has(drug.route.toLowerCase())).toBe(true);
+      if (drug.frequency) expect(frequencyLabels.has(drug.frequency.toLowerCase())).toBe(true);
+    }
   });
 
   it("has unique seed keys", () => {

@@ -6,6 +6,7 @@ import { lookups } from "../db/schema.ts";
 import { requirePermission } from "../lib/access.ts";
 import { requireAdmin, requireAuth } from "../lib/auth.ts";
 import { findLookup, uniqueLookupValue } from "../lib/lookupStore.ts";
+import { addMissingDefaultLookups } from "../lib/lookupSeed.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
 import { lookupCreateSchema, lookupUpdateSchema } from "../lib/validation.ts";
 
@@ -17,6 +18,10 @@ lookupsRouter.get("/", requireAuth, async (_req, res) => {
     .from(lookups)
     .orderBy(asc(lookups.kind), asc(lookups.sortOrder), asc(lookups.id));
   res.json({ lookups: rows.map(lookupToDto) });
+});
+
+lookupsRouter.post("/defaults", requireAuth, requirePermission("canRecordHealth"), async (_req, res) => {
+  res.json({ added: await addMissingDefaultLookups() });
 });
 
 lookupsRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {

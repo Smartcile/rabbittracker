@@ -87,7 +87,8 @@ Desktop:
 - Vets and clinics directory, with inline "add new" popups in the appointment and vaccination
   forms so you never leave the form.
 - Managed lists for breeds, colours, visit types, locations, vaccine types, treatment
-  routes/frequencies/reasons, care types, FAQ categories and suppliers.
+  routes/frequencies/reasons, care types, FAQ categories and suppliers. An **Add defaults**
+  button pulls in any missing starter values (dropdowns match labels case-insensitively).
 
 **Household & admin**
 - Admins sign in with username and password; workers sign in with a personal PIN and only see the
