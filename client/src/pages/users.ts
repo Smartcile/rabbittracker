@@ -202,7 +202,8 @@ function openUserModal(options: { user?: UserDto; onSaved: () => void }): void {
   });
   renderRoleFields();
 
-  const modal = openModal({
+    const modal = openModal({
+      guardUnsaved: true,
     title: editing ? `Edit ${editing.displayName || editing.username}` : "Add user",
     body: h(
       "form",

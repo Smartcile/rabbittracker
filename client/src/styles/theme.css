@@ -972,48 +972,29 @@ input.switch:focus-visible {
   font-size: 0.72rem;
 }
 
-.profile-group {
-  margin-bottom: 1.25rem;
-}
-
-.profile-group > summary {
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
+.slot-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-dim);
   cursor: pointer;
-  list-style: none;
-  padding: 0.35rem 0.15rem;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 0.85rem;
 }
 
-.profile-group > summary::-webkit-details-marker {
-  display: none;
+.slot-chip.done {
+  border-color: var(--ok-border);
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-weight: 650;
 }
 
-.profile-group > summary h2 {
-  margin: 0;
-  font-size: 1.05rem;
-}
-
-.profile-group > summary::after {
-  content: "";
-  width: 0.45rem;
-  height: 0.45rem;
-  margin-left: auto;
-  align-self: center;
-  border-right: 2px solid var(--text-dim);
-  border-bottom: 2px solid var(--text-dim);
-  transform: rotate(45deg);
-  transition: transform 0.15s ease;
-}
-
-.profile-group[open] > summary::after {
-  transform: rotate(-135deg);
-}
-
-.profile-group-body > .card:last-child {
-  margin-bottom: 0;
+span.slot-chip {
+  cursor: default;
 }
 
 .modal-warning-row {
@@ -1634,6 +1615,17 @@ input.switch:focus-visible {
 }
 
 .cal-chip.med.done {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.cal-chip.bowl {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  white-space: normal;
+}
+
+.cal-chip.bowl.done {
   border-color: var(--ok);
   color: var(--ok);
 }

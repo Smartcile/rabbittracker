@@ -33,7 +33,6 @@ import type {
   TaskDto,
   TaskSlot,
   TreatmentDto,
-  TreatmentSlot,
   TreatmentStatus,
   UserDto,
   Vaccine,
@@ -43,7 +42,8 @@ import type {
 import type { DrugForm } from "../../../shared/drugs.ts";
 import { summarizeBowl } from "../../../shared/bowls.ts";
 import { emptyChecklist } from "../../../shared/checklist.ts";
-import { TREATMENT_SLOTS } from "../../../shared/treatments.ts";
+import type { DaySlot } from "../../../shared/slots.ts";
+import { DAY_SLOTS } from "../../../shared/slots.ts";
 import type {
   AppointmentRow,
   BowlReadingRow,
@@ -167,7 +167,7 @@ export function treatmentToDto(row: TreatmentRow): TreatmentDto {
     dose: row.dose,
     route: row.route,
     frequency: row.frequency,
-    slots: treatmentSlots(row.slots),
+    slots: daySlots(row.slots),
     reason: row.reason,
     startDate: row.startDate,
     endDate: row.endDate,
@@ -344,6 +344,7 @@ export function bowlToDto(row: BowlRow, readings: BowlReadingRow[]): BowlDto {
     id: row.id,
     rabbitId: row.rabbitId,
     label: row.label,
+    slots: daySlots(row.slots),
     currentWeightGrams: summary.currentWeightGrams,
     periodStartAt: summary.periodStartAt ? summary.periodStartAt.toISOString() : null,
     periodConsumptionGrams: summary.periodConsumptionGrams,
@@ -359,6 +360,7 @@ export function bowlToDto(row: BowlRow, readings: BowlReadingRow[]): BowlDto {
           bowlId: reading.bowlId,
           readAt: reading.readAt.toISOString(),
           kind: bowlReadingKind(reading.kind),
+          slot: daySlot(reading.slot),
           weightGrams: reading.weightGrams,
           consumptionGrams: computed?.consumptionGrams ?? 0,
           refillGrams: computed?.refillGrams ?? 0,
@@ -407,14 +409,14 @@ function taskSlot(value: string): TaskSlot {
   return value === "morning" || value === "afternoon" || value === "evening" ? value : "anytime";
 }
 
-function treatmentSlot(value: string | null): TreatmentSlot | null {
-  return (TREATMENT_SLOTS as readonly string[]).includes(value ?? "")
-    ? (value as TreatmentSlot)
+function daySlot(value: string | null): DaySlot | null {
+  return (DAY_SLOTS as readonly string[]).includes(value ?? "")
+    ? (value as DaySlot)
     : null;
 }
 
-function treatmentSlots(values: string[]): TreatmentSlot[] {
-  return values.filter((value): value is TreatmentSlot => treatmentSlot(value) !== null);
+function daySlots(values: string[]): DaySlot[] {
+  return values.filter((value): value is DaySlot => daySlot(value) !== null);
 }
 
 export function medicationLogToDto(row: MedicationLogRow): MedicationLogDto {
@@ -424,7 +426,7 @@ export function medicationLogToDto(row: MedicationLogRow): MedicationLogDto {
     treatmentId: row.treatmentId,
     drugId: row.drugId,
     givenAt: row.givenAt.toISOString(),
-    slot: treatmentSlot(row.slot),
+    slot: daySlot(row.slot),
     amountMilliUnits: row.amountMilliUnits,
     notes: row.notes,
     createdAt: row.createdAt.toISOString(),

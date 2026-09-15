@@ -21,6 +21,7 @@ export function openClinicModal(options: {
   let saved = false;
 
   const modal = openModal({
+    guardUnsaved: true,
     title: editing ? `Edit ${editing.name}` : "Add a clinic",
     onClose: () => {
       if (!saved) options.onCancel?.();

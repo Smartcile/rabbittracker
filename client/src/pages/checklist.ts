@@ -47,6 +47,7 @@ export function renderChecklistPage(_ctx: PageContext): HTMLElement {
     error.style.display = "none";
     const save = h("button", { class: "btn primary", type: "submit" }, "Add section");
     const modal = openModal({
+      guardUnsaved: true,
       title: "Add checklist section",
       body: h(
         "form",

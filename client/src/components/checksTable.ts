@@ -61,9 +61,13 @@ export function renderChecksTable(options: ChecksTableOptions): HTMLElement {
       h("td", null, statusSummary(check)),
       h(
         "td",
-        { class: "row wrap", style: { gap: "0.3rem" } },
-        checklistFilled(check) ? h("span", { class: "badge" }, "Checklist") : null,
-        check.hasPhoto ? h("span", { class: "badge accent" }, "Photo") : null,
+        null,
+        h(
+          "div",
+          { class: "row wrap", style: { gap: "0.3rem" } },
+          checklistFilled(check) ? h("span", { class: "badge" }, "Checklist") : null,
+          check.hasPhoto ? h("span", { class: "badge accent" }, "Photo") : null,
+        ),
       ),
     );
 

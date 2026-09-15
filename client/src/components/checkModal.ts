@@ -280,6 +280,7 @@ function buildModal(
   );
 
   const modal = openModal({
+    guardUnsaved: true,
     title: editing ? "Edit health check" : "Log a health check",
     body: form,
     beforeClose: () => {

@@ -65,8 +65,6 @@ describe("demo mode integration", () => {
     );
     expect(logs.length).toBeGreaterThanOrEqual(4);
     expect(logs.some((log) => log.valueLabels.length >= 2)).toBe(true);
-    expect(logs.some((log) => log.valueMilli !== null)).toBe(true);
-    expect(logs.some((log) => log.valueText.length > 0)).toBe(true);
 
     const { logs: doses } = await api<{ logs: MedicationLogDto[] }>(
       ctx,

@@ -575,6 +575,48 @@ describe("bowl validation", () => {
     ).toBe(false);
   });
 
+  it("accepts bowl times of day and reading slots", () => {
+    expect(
+      bowlCreateSchema.safeParse({
+        rabbitId: 1,
+        label: "Water bowl",
+        startWeightGrams: 850,
+        startedAt: "2026-09-01T08:00:00.000Z",
+        slots: ["morning", "evening"],
+      }).success,
+    ).toBe(true);
+    expect(
+      bowlCreateSchema.safeParse({
+        rabbitId: 1,
+        label: "Water bowl",
+        startWeightGrams: 850,
+        startedAt: "2026-09-01T08:00:00.000Z",
+        slots: ["dawn"],
+      }).success,
+    ).toBe(false);
+    expect(
+      bowlReadingCreateSchema.safeParse({
+        kind: "weigh",
+        readAt: "2026-09-02T08:00:00.000Z",
+        weightGrams: 900,
+        slot: "evening",
+      }).success,
+    ).toBe(true);
+    expect(
+      bowlReadingCreateSchema.safeParse({
+        kind: "weigh",
+        readAt: "2026-09-02T08:00:00.000Z",
+        weightGrams: 900,
+        slot: "dawn",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires changes on a bowl update", () => {
+    expect(bowlUpdateSchema.safeParse({}).success).toBe(false);
+    expect(bowlUpdateSchema.safeParse({ slots: ["morning"] }).success).toBe(true);
+  });
+
   it("requires a weight for weigh and refresh readings", () => {
     expect(
       bowlReadingCreateSchema.safeParse({

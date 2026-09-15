@@ -76,6 +76,7 @@ export function openRabbitModal(options: {
   const save = h("button", { class: "btn primary", type: "submit" }, editing ? "Save changes" : "Add bunny");
 
   const modal = openModal({
+    guardUnsaved: true,
     title: editing ? `Edit ${editing.name}` : "Add a bunny",
     body: h(
       "form",

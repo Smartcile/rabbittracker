@@ -87,6 +87,7 @@ export function openAppointmentModal(options: {
   );
 
   const modal = openModal({
+    guardUnsaved: true,
     title: editing ? `Edit ${editing.title}` : "Add appointment",
     body: h(
       "form",

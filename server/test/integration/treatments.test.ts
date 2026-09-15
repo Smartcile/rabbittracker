@@ -87,15 +87,18 @@ describe("treatment slots integration", () => {
     expect(treatments[0]?.slots).toEqual(["early_morning", "evening"]);
   });
 
-  it("logs a dose for a treatment slot and rejects an unknown slot", async () => {
+  it("logs a dose for a treatment slot, including a one-off time outside the schedule", async () => {
     const rabbit = await createRabbit();
     const treatment = await createTreatment(rabbit.id, { slots: ["morning", "evening"] });
     const log = await logDose({ rabbitId: rabbit.id, treatmentId: treatment.id, slot: "morning" });
     expect(log.slot).toBe("morning");
 
-    await expect(
-      logDose({ rabbitId: rabbit.id, treatmentId: treatment.id, slot: "night" }),
-    ).rejects.toThrow("That time of day is not part of this treatment");
+    const override = await logDose({
+      rabbitId: rabbit.id,
+      treatmentId: treatment.id,
+      slot: "night",
+    });
+    expect(override.slot).toBe("night");
   });
 
   it("assigns the only slot when a dose omits it", async () => {
@@ -152,16 +155,16 @@ describe("treatment slots integration", () => {
     expect(await stockFor(drug.id)).toBe(9000);
   });
 
-  it("rejects moving a dose to a slot the treatment does not use", async () => {
+  it("moves a dose to a one-off slot outside the schedule", async () => {
     const rabbit = await createRabbit();
     const treatment = await createTreatment(rabbit.id, { slots: ["morning"] });
     const log = await logDose({ rabbitId: rabbit.id, treatmentId: treatment.id, slot: "morning" });
 
-    await expect(
-      api(ctx, `/api/medication-logs/${log.id}`, {
-        method: "PATCH",
-        body: { slot: "evening" },
-      }),
-    ).rejects.toThrow("That time of day is not part of this treatment");
+    const { log: updated } = await api<{ log: MedicationLogDto }>(
+      ctx,
+      `/api/medication-logs/${log.id}`,
+      { method: "PATCH", body: { slot: "evening" } },
+    );
+    expect(updated.slot).toBe("evening");
   });
 });

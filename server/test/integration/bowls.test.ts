@@ -26,12 +26,17 @@ describe("bowl integration", () => {
     return rabbit;
   }
 
-  async function createBowl(rabbitId: number, startWeightGrams = 900): Promise<BowlDto> {
+  async function createBowl(
+    rabbitId: number,
+    startWeightGrams = 900,
+    slots: string[] = [],
+  ): Promise<BowlDto> {
     const { bowl } = await api<{ bowl: BowlDto }>(ctx, "/api/bowls", {
       method: "POST",
       body: {
         rabbitId,
         label: "Water bowl",
+        slots,
         startWeightGrams,
         startedAt: "2026-09-01T08:00:00.000Z",
       },
@@ -144,15 +149,77 @@ describe("bowl integration", () => {
     expect(after.currentWeightGrams).toBe(600);
   });
 
+  it("schedules a bowl and links readings to a time of day", async () => {
+    const rabbit = await createRabbit();
+    const bowl = await createBowl(rabbit.id, 900, ["morning", "evening"]);
+    expect(bowl.slots).toEqual(["morning", "evening"]);
+
+    const updated = await addReading(bowl.id, {
+      kind: "refill",
+      readAt: "2026-09-02T08:00:00.000Z",
+      refillGrams: 250,
+      slot: "morning",
+    });
+    expect(updated.readings.some((reading) => reading.slot === "morning")).toBe(true);
+
+    const { bowls } = await api<{ bowls: BowlDto[] }>(
+      ctx,
+      "/api/bowls/schedule?from=2026-09-01T00:00:00.000Z&to=2026-09-30T23:59:59.999Z",
+    );
+    expect(bowls).toHaveLength(1);
+    expect(bowls[0]?.slots).toEqual(["morning", "evening"]);
+    expect(bowls[0]?.readings.some((reading) => reading.slot === "morning")).toBe(true);
+  });
+
+  it("keeps unscheduled bowls off the schedule and filters readings by range", async () => {
+    const rabbit = await createRabbit();
+    await createBowl(rabbit.id);
+    const scheduled = await createBowl(rabbit.id, 900, ["night"]);
+    await addReading(scheduled.id, {
+      kind: "weigh",
+      readAt: "2026-09-02T08:00:00.000Z",
+      weightGrams: 800,
+      slot: "night",
+    });
+    await addReading(scheduled.id, {
+      kind: "weigh",
+      readAt: "2026-10-02T08:00:00.000Z",
+      weightGrams: 700,
+      slot: "night",
+    });
+
+    const { bowls } = await api<{ bowls: BowlDto[] }>(
+      ctx,
+      "/api/bowls/schedule?from=2026-09-01T00:00:00.000Z&to=2026-09-30T23:59:59.999Z",
+    );
+    expect(bowls).toHaveLength(1);
+    expect(bowls[0]?.readings).toHaveLength(2);
+    expect(bowls[0]?.readings.some((reading) => reading.readAt.startsWith("2026-10-02"))).toBe(
+      false,
+    );
+  });
+
+  it("assigns the only scheduled time when a reading omits it", async () => {
+    const rabbit = await createRabbit();
+    const bowl = await createBowl(rabbit.id, 900, ["morning"]);
+    const updated = await addReading(bowl.id, {
+      kind: "weigh",
+      readAt: "2026-09-02T08:00:00.000Z",
+      weightGrams: 800,
+    });
+    expect(updated.readings.find((reading) => reading.weightGrams === 800)?.slot).toBe("morning");
+  });
+
   it("renames and deletes a bowl", async () => {
     const rabbit = await createRabbit();
     const bowl = await createBowl(rabbit.id);
 
     const { bowl: renamed } = await api<{ bowl: BowlDto }>(ctx, `/api/bowls/${bowl.id}`, {
       method: "PATCH",
-      body: { label: "Pellets bowl" },
+      body: { label: "Pellets bowl", slots: ["morning"] },
     });
     expect(renamed.label).toBe("Pellets bowl");
+    expect(renamed.slots).toEqual(["morning"]);
 
     await api(ctx, `/api/bowls/${bowl.id}`, { method: "DELETE" });
     const { bowls } = await api<{ bowls: BowlDto[] }>(ctx, `/api/bowls?rabbitId=${rabbit.id}`);

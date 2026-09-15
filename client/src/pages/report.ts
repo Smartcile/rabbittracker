@@ -21,7 +21,7 @@ import {
   type ReportRange,
 } from "../../../shared/report.ts";
 import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
-import { TREATMENT_SLOT_LABELS } from "../../../shared/treatments.ts";
+import { DAY_SLOT_LABELS } from "../../../shared/slots.ts";
 import type {
   AppointmentDto,
   BowlDto,
@@ -578,7 +578,7 @@ function medicationSection(
         h("div", { class: "dim small" }, fmtTime(log.givenAt, timezone)),
       ),
       drug?.name ?? "Medication",
-      log.slot ? TREATMENT_SLOT_LABELS[log.slot] : "—",
+      log.slot ? DAY_SLOT_LABELS[log.slot] : "—",
       log.amountMilliUnits != null ? formatDrugAmount(log.amountMilliUnits, drug?.unit ?? "dose") : "—",
       log.notes || "—",
     ];
@@ -605,7 +605,7 @@ function treatmentsSection(treatments: TreatmentDto[], range: ReportRange, now: 
     ),
     [treatment.dose, treatment.route].filter(Boolean).join(" · ") || "—",
     treatment.frequency || "—",
-    treatment.slots.map((slot) => TREATMENT_SLOT_LABELS[slot]).join(", ") || "—",
+    treatment.slots.map((slot) => DAY_SLOT_LABELS[slot]).join(", ") || "—",
     treatment.reason || "—",
     `${fmtCalendarDate(treatment.startDate)} → ${
       treatment.endDate ? fmtCalendarDate(treatment.endDate) : "ongoing"

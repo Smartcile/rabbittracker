@@ -118,6 +118,7 @@ export const bowls = pgTable("bowls", {
     .notNull()
     .references(() => rabbits.id, { onDelete: "cascade" }),
   label: text("label").notNull(),
+  slots: text("slots").array().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -129,6 +130,7 @@ export const bowlReadings = pgTable("bowl_readings", {
     .references(() => bowls.id, { onDelete: "cascade" }),
   readAt: timestamp("read_at", { withTimezone: true }).notNull(),
   kind: text("kind").notNull().default("weigh"),
+  slot: text("slot"),
   weightGrams: integer("weight_grams").notNull(),
   notes: text("notes").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

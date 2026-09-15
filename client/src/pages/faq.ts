@@ -201,7 +201,8 @@ function openFaqModal(categories: string[], onSaved: () => void): void {
   error.style.display = "none";
   const save = h("button", { class: "btn primary", type: "submit" }, "Add entry");
 
-  const modal = openModal({
+    const modal = openModal({
+      guardUnsaved: true,
     title: "Add FAQ entry",
     body: h(
       "form",

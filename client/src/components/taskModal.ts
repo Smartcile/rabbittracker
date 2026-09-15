@@ -39,6 +39,7 @@ export function openTaskModal(options: {
   const save = h("button", { class: "btn primary", type: "submit" }, editing ? "Save" : "Add task");
 
   const modal = openModal({
+    guardUnsaved: true,
     title: editing ? `Edit ${editing.label}` : `Add task — ${options.rabbit.name}`,
     body: h(
       "form",

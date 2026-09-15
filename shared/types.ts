@@ -1,5 +1,6 @@
 import type { DrugForm } from "./drugs.ts";
 import type { HealthChecklistDto } from "./checklist.ts";
+import type { DaySlot } from "./slots.ts";
 
 export type UserDto = {
   id: number;
@@ -95,7 +96,6 @@ export type RabbitSummaryDto = RabbitDto & {
 };
 
 export type TreatmentStatus = "active" | "completed" | "stopped";
-export type TreatmentSlot = "early_morning" | "morning" | "afternoon" | "evening" | "night";
 
 export type TreatmentDto = {
   id: number;
@@ -104,7 +104,7 @@ export type TreatmentDto = {
   dose: string;
   route: string;
   frequency: string;
-  slots: TreatmentSlot[];
+  slots: DaySlot[];
   reason: string;
   startDate: string;
   endDate: string | null;
@@ -284,6 +284,7 @@ export type BowlReadingDto = {
   bowlId: number;
   readAt: string;
   kind: BowlReadingKind;
+  slot: DaySlot | null;
   weightGrams: number;
   consumptionGrams: number;
   refillGrams: number;
@@ -296,6 +297,7 @@ export type BowlDto = {
   id: number;
   rabbitId: number;
   label: string;
+  slots: DaySlot[];
   currentWeightGrams: number | null;
   periodStartAt: string | null;
   periodConsumptionGrams: number;
@@ -306,6 +308,8 @@ export type BowlDto = {
   createdAt: string;
   updatedAt: string;
 };
+
+
 
 export type TaskSlot = "morning" | "afternoon" | "evening" | "anytime";
 
@@ -338,7 +342,7 @@ export type MedicationLogDto = {
   treatmentId: number | null;
   drugId: number | null;
   givenAt: string;
-  slot: TreatmentSlot | null;
+  slot: DaySlot | null;
   amountMilliUnits: number | null;
   notes: string;
   createdAt: string;

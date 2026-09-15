@@ -10,7 +10,7 @@ import type {
 } from "../../../shared/types.ts";
 import { ageLabel, taskDueStatus, upcomingAppointments } from "../../../shared/health.ts";
 import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
-import { TREATMENT_SLOT_LABELS } from "../../../shared/treatments.ts";
+import { DAY_SLOT_LABELS } from "../../../shared/slots.ts";
 import { api } from "../api.ts";
 import { loadCheckLogTypes } from "../dailyLogs.ts";
 import { rabbitAvatar } from "../components/avatar.ts";
@@ -18,6 +18,7 @@ import { openCheckLogModal } from "../components/checkLogModal.ts";
 import { openCheckModal } from "../components/checkModal.ts";
 import { openMedicationLogModal } from "../components/medicationLogModal.ts";
 import { openRabbitModal } from "../components/rabbitModal.ts";
+import { slotChips } from "../components/slotChips.ts";
 import { toast } from "../components/toast.ts";
 import { weightAlertBadge, weightSummaryLine } from "../components/weightChip.ts";
 import type { PageContext } from "../context.ts";
@@ -216,10 +217,30 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
     );
     for (const treatment of activeTreatments) {
       const rabbit = byId.get(treatment.rabbitId)!;
-      const slots = treatment.slots.map((slot) => TREATMENT_SLOT_LABELS[slot]).join(", ");
-      const detail = [treatment.dose, treatment.frequency, slots, treatment.reason]
+      const detail = [treatment.dose, treatment.frequency, treatment.reason]
         .filter(Boolean)
         .join(" · ");
+      const todayLogs = medLogs.filter(
+        (log) =>
+          log.treatmentId === treatment.id &&
+          localDayKey(new Date(log.givenAt)) === todayKey,
+      );
+      const chips = slotChips({
+        slots: treatment.slots,
+        logs: todayLogs,
+        canRecord,
+        onLog: (slot) =>
+          openMedicationLogModal({
+            rabbit,
+            treatments,
+            drugs,
+            logs: medLogs,
+            treatmentId: treatment.id,
+            slot,
+            date: new Date(),
+            onSaved: () => void load(),
+          }),
+      });
       rows.push(
         h(
           "div",
@@ -227,12 +248,13 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
           h("span", { class: "badge accent" }, "Med"),
           h(
             "div",
-            { class: "stack", style: { gap: "0" } },
+            { class: "stack", style: { gap: "0.25rem" } },
             h("strong", null, treatment.medication),
             h("span", { class: "dim small" }, `${rabbit.name}${detail ? ` · ${detail}` : ""}`),
+            chips,
           ),
           h("span", { class: "spacer" }),
-          canRecord
+          canRecord && treatment.slots.length === 0
             ? h(
                 "button",
                 {
@@ -245,6 +267,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
                       drugs,
                       logs: medLogs,
                       treatmentId: treatment.id,
+                      date: new Date(),
                       onSaved: () => void load(),
                     }),
                 },

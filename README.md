@@ -31,8 +31,8 @@ Desktop:
 - Quarantine flag with a release date, target weight range and a feeding plan.
 - Bonded-bunny links (symmetric) shown on each profile.
 - Photo gallery per bunny, combining check photos and journal photos.
-- Collapsible profile groups — Observations, Health checks, Treatments & medication, Notes &
-  photos, Appointments and Bunny details — with the open/closed state remembered per browser.
+- A flat, grouped profile — Observations, Daily routine, Health checks, Treatments & medication,
+  Notes & photos, Appointments and Bunny details — with every card visible.
 
 **Health**
 - Health checks with weight, appetite, droppings, energy, body condition (1–5), temperature,
@@ -40,26 +40,29 @@ Desktop:
 - The RRR weekly health checklist (posture, demeanour, eyes, breathing, coat & skin, behaviour,
   bum, ears, nails, genitals, hocks) with tick-button answers, per-section notes and example
   photos. The checklist itself is editable in Settings. The full check form can also switch on any
-  of your daily check types (Poo, Water, Food, Behaviour, …) so the Sunday check captures them too.
+  of your daily check types (Poo, Behaviour, …) so the Sunday check captures them too.
 - Quick log — tick any checklist item from the bunny page and save it as a health check without
   the full form.
-- **Daily checks** — define your own types in Settings (Poo, Water intake, Food, Behaviour, …) with
-  option buttons (single or multi-select), a number with a unit and free text, plus photos on any
-  log. A one-tap bar on the bunny profile logs a type in seconds. An **Add defaults** button in the
-  editor pulls in any missing starter types (including multi-select Behaviour) on upgraded installs.
+- **Daily checks** — define your own types in Settings (Poo, Behaviour, …) with option buttons
+  (single or multi-select), a number with a unit and free text, plus photos on any log. A one-tap
+  bar on the bunny profile logs a type in seconds. An **Add defaults** button in the editor pulls in
+  any missing starter types (including multi-select Behaviour) on upgraded installs.
 - **Food & water bowl tracking** — set a starting weight for a bowl, then log scale readings as you
   go: consumption is calculated since the last reading and the baseline rolls forward. Top up by
   entering the amount added or the bowl's new total, and refresh starts a new period with an
-  optional final weight. Plain ml/g daily checks still work alongside.
+  optional final weight. Bowls can be scheduled with times of day; the calendar shows a chip per
+  bowl per time and tapping it logs a weigh-in or top-up for that slot.
 - **Daily routine tasks** — repeating chores per bunny with morning, afternoon, evening or anytime
   slots and an every-N-days repeat. Tick them off from the bunny page or the home Today list.
 - **Treatments & medication** — courses with dose, route and frequency plus the times of day each
   dose is given (early morning, morning, afternoon, evening, night). The calendar shows the doses
-  due each day with ticks per time; tap a treatment to log the dose (slot preselected) and it ticks
-  off. Linked doses are grouped under the treatment on the bunny page, one-off doses stay in the
-  medication log, and either can be edited later. Logged doses deduct from drug stock
-  earliest-expiry-first; editing or deleting a log reconciles it. Overriding the amount when logging
-  can update the treatment's dose from that day on.
+  due each day with ticks per time; tap a treatment to see what is logged, log another dose or pick
+  a different time for that day (tick **Change going forward** to add it to the schedule). Multiple
+  doses can be logged per day, linked doses are grouped under the treatment on the bunny page,
+  one-off doses stay in the medication log, and either can be edited later. Logged doses deduct from
+  drug stock earliest-expiry-first; editing or deleting a log reconciles it. Overriding the amount
+  when logging can update the treatment's dose from that day on. Pop-out forms warn before closing
+  with unsaved changes.
 - Manual weigh-ins with a one-tap "Log weight" action.
 - Weight trend chart with loss alerts and target-range checks.
 - Timestamped notes & photos journal per bunny.

@@ -183,6 +183,7 @@ export function openDrugModal(options: {
   }
 
   const modal = openModal({
+    guardUnsaved: true,
     title: editing ? `Edit ${editing.name}` : "Add drug",
     body: h(
       "form",

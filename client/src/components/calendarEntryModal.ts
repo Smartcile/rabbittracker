@@ -60,6 +60,7 @@ export function openCalendarEntryModal(options: {
   syncFields();
 
   const modal = openModal({
+    guardUnsaved: true,
     title: editing ? `Edit ${editing.title}` : "Add calendar event",
     body: h(
       "form",

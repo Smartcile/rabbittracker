@@ -23,6 +23,7 @@ export function openVetModal(options: {
   let saved = false;
 
   const modal = openModal({
+    guardUnsaved: true,
     title: editing ? `Edit ${editing.name}` : "Add a vet",
     onClose: () => {
       if (!saved) options.onCancel?.();

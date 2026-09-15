@@ -131,6 +131,7 @@ export function openCheckLogModal(options: {
   const save = h("button", { class: "btn primary", type: "submit" }, editing ? "Save log" : "Save");
 
   const modal = openModal({
+    guardUnsaved: true,
     title: editing ? "Edit daily check" : `Log daily check — ${options.rabbit.name}`,
     body: h(
       "form",

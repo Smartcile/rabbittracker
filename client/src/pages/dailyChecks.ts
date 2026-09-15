@@ -54,12 +54,12 @@ export function renderDailyChecksPage(_ctx: PageContext): HTMLElement {
     h(
       "p",
       { class: "dim small" },
-      "Define the daily checks you want to log, e.g. Poo, Water intake or Food. Each type can have option buttons, a number with a unit, free text and notes.",
+      "Define the daily checks you want to log, e.g. Poo, Behaviour or Weight. Each type can have option buttons, a number with a unit, free text and notes. Food and water consumption is tracked in the Food & water bowls card instead.",
     ),
     h(
       "p",
       { class: "dim small" },
-      "Add defaults brings in any missing starter types (Poo, Water intake, Food, Behaviour) without touching the ones you already have.",
+      "Add defaults brings in any missing starter types (Poo, Behaviour) without touching the ones you already have.",
     ),
     list,
   );
@@ -143,6 +143,7 @@ function openTypeModal(type: CheckLogTypeDto | undefined, reload: () => Promise<
   error.style.display = "none";
   const save = h("button", { class: "btn primary", type: "submit" }, type ? "Save" : "Add");
   const modal = openModal({
+    guardUnsaved: true,
     title: type ? `Edit ${type.label}` : "Add check type",
     body: h(
       "form",

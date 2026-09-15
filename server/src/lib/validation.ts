@@ -3,7 +3,7 @@ import { CALENDAR_REPEATS } from "../../../shared/calendar.ts";
 import type { HealthChecklistDto } from "../../../shared/checklist.ts";
 import { LOOKUP_KINDS } from "../../../shared/lookups.ts";
 import { TASK_SLOTS } from "../../../shared/tasks.ts";
-import { TREATMENT_SLOTS } from "../../../shared/treatments.ts";
+import { DAY_SLOTS } from "../../../shared/slots.ts";
 
 export const usernameSchema = z.preprocess(
   (value) => (typeof value === "string" ? value.trim().toLowerCase() : value),
@@ -325,19 +325,26 @@ export const checkLogUpdateSchema = z
 export const bowlCreateSchema = z.object({
   rabbitId: z.number().int().positive(),
   label: z.string().trim().min(1, "Name is required").max(100),
+  slots: z.array(z.enum(DAY_SLOTS)).max(DAY_SLOTS.length).default([]),
   startWeightGrams: z.number().int().min(0).max(1_000_000),
   startedAt: z.coerce.date(),
   notes: z.string().trim().max(2000).default(""),
 });
 
-export const bowlUpdateSchema = z.object({
-  label: z.string().trim().min(1, "Name is required").max(100),
-});
+export const bowlUpdateSchema = z
+  .object({
+    label: z.string().trim().min(1, "Name is required").max(100).optional(),
+    slots: z.array(z.enum(DAY_SLOTS)).max(DAY_SLOTS.length).optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: "No changes provided",
+  });
 
 export const bowlReadingCreateSchema = z
   .object({
     kind: z.enum(["weigh", "refill", "refresh"]),
     readAt: z.coerce.date(),
+    slot: z.enum(DAY_SLOTS).nullable().optional(),
     weightGrams: z.number().int().min(0).max(1_000_000).optional(),
     refillGrams: z.number().int().min(1).max(1_000_000).optional(),
     finalWeightGrams: z.number().int().min(0).max(1_000_000).optional(),
@@ -379,7 +386,7 @@ export const medicationLogCreateSchema = z.object({
   treatmentId: z.number().int().positive().nullable().optional(),
   drugId: z.number().int().positive().nullable().optional(),
   givenAt: z.coerce.date(),
-  slot: z.enum(TREATMENT_SLOTS).nullable().optional(),
+  slot: z.enum(DAY_SLOTS).nullable().optional(),
   amountMilliUnits: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
   notes: z.string().trim().max(2000).default(""),
 });
@@ -389,7 +396,7 @@ export const medicationLogUpdateSchema = z
     treatmentId: z.number().int().positive().nullable().optional(),
     drugId: z.number().int().positive().nullable().optional(),
     givenAt: z.coerce.date().optional(),
-    slot: z.enum(TREATMENT_SLOTS).nullable().optional(),
+    slot: z.enum(DAY_SLOTS).nullable().optional(),
     amountMilliUnits: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
     notes: z.string().trim().max(2000).optional(),
   })
@@ -520,7 +527,7 @@ export const treatmentCreateSchema = z.object({
   dose: z.string().trim().max(100).default(""),
   route: z.string().trim().max(100).default(""),
   frequency: z.string().trim().max(100).default(""),
-  slots: z.array(z.enum(TREATMENT_SLOTS)).max(TREATMENT_SLOTS.length).default([]),
+  slots: z.array(z.enum(DAY_SLOTS)).max(DAY_SLOTS.length).default([]),
   reason: z.string().trim().max(300).default(""),
   startDate: dateOnlySchema,
   endDate: optionalDate,
@@ -536,7 +543,7 @@ export const treatmentUpdateSchema = z
     dose: z.string().trim().max(100).optional(),
     route: z.string().trim().max(100).optional(),
     frequency: z.string().trim().max(100).optional(),
-    slots: z.array(z.enum(TREATMENT_SLOTS)).max(TREATMENT_SLOTS.length).optional(),
+    slots: z.array(z.enum(DAY_SLOTS)).max(DAY_SLOTS.length).optional(),
     reason: z.string().trim().max(300).optional(),
     startDate: dateOnlySchema.optional(),
     endDate: optionalDate,

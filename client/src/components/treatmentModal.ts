@@ -1,10 +1,4 @@
-import type {
-  DrugDto,
-  HealthCheckDto,
-  RabbitDto,
-  TreatmentDto,
-  TreatmentSlot,
-} from "../../../shared/types.ts";
+import type { DrugDto, HealthCheckDto, RabbitDto, TreatmentDto } from "../../../shared/types.ts";
 import {
   courseTotalMilliUnits,
   doseMilliUnitsForWeight,
@@ -13,7 +7,8 @@ import {
   stockTotalMilliUnits,
 } from "../../../shared/drugs.ts";
 import { parseWeightInput, weightInputValue } from "../../../shared/health.ts";
-import { TREATMENT_SLOT_LABELS, TREATMENT_SLOTS } from "../../../shared/treatments.ts";
+import type { DaySlot } from "../../../shared/slots.ts";
+import { DAY_SLOT_LABELS, DAY_SLOTS } from "../../../shared/slots.ts";
 import { api } from "../api.ts";
 import { h } from "../dom.ts";
 import { lookupSelect } from "./lookupSelect.ts";
@@ -50,13 +45,13 @@ export function openTreatmentModal(options: {
   const dose = h("input", { name: "dose", value: editing?.dose ?? "" });
   const route = lookupSelect("route", { initialLabel: editing?.route ?? "" });
   const frequency = lookupSelect("frequency", { initialLabel: editing?.frequency ?? "" });
-  let slots: TreatmentSlot[] = [...(editing?.slots ?? [])];
+  let slots: DaySlot[] = [...(editing?.slots ?? [])];
   const slotGroup = optionButtons(
-    TREATMENT_SLOTS.map((value) => ({ value, label: TREATMENT_SLOT_LABELS[value] })),
+    DAY_SLOTS.map((value) => ({ value, label: DAY_SLOT_LABELS[value] })),
     slots,
     true,
     (values) => {
-      slots = values as TreatmentSlot[];
+      slots = values as DaySlot[];
     },
   );
   const reason = lookupSelect("reason", { initialLabel: editing?.reason ?? "" });
@@ -258,6 +253,7 @@ export function openTreatmentModal(options: {
   rabbitSelect.addEventListener("change", () => void loadWeight());
 
   const modal = openModal({
+    guardUnsaved: true,
     title: editing ? `Edit ${editing.medication}` : "Add treatment",
     body: h(
       "form",

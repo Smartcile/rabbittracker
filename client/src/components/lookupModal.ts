@@ -56,6 +56,7 @@ export function openLookupModal(options: {
   }
 
   const modal = openModal({
+    guardUnsaved: true,
     title: `${editing ? "Edit" : "Add to"} ${LOOKUP_KIND_LABELS[options.kind]}`,
     onClose: () => {
       if (!saved) options.onCancel?.();

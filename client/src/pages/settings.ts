@@ -516,6 +516,7 @@ function renderSubscriptionsCard(): HTMLElement {
     editError.style.display = "none";
     const save = h("button", { class: "btn primary", type: "submit" }, "Save");
     const modal = openModal({
+      guardUnsaved: true,
       title: "Edit subscription",
       body: h(
         "form",

@@ -1,12 +1,9 @@
 import { expandEntryStart } from "../../../shared/calendar.ts";
 import { checkLogValueSummary } from "../../../shared/checkLogs.ts";
-import {
-  TREATMENT_SLOT_SHORT_LABELS,
-  treatmentDayDone,
-  treatmentSlotStatus,
-} from "../../../shared/treatments.ts";
+import { DAY_SLOT_SHORT_LABELS, allSlotsDone, slotStatus } from "../../../shared/slots.ts";
 import type {
   AppointmentDto,
+  BowlDto,
   CalendarEntryDto,
   CalendarEventDto,
   CalendarSubscriptionDto,
@@ -20,6 +17,7 @@ import type {
 } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { openAppointmentModal } from "../components/appointmentModal.ts";
+import { openBowlReadingModal } from "../components/bowlModal.ts";
 import { openCalendarEntryModal } from "../components/calendarEntryModal.ts";
 import { openMedicationLogModal } from "../components/medicationLogModal.ts";
 import { toast } from "../components/toast.ts";
@@ -111,26 +109,37 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
     const from = new Date(view.getFullYear(), view.getMonth(), 1);
     const to = new Date(view.getFullYear(), view.getMonth() + 1, 0, 23, 59, 59, 999);
     title.textContent = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(view);
-    const [eventsRes, appointmentsRes, treatmentsRes, entriesRes, logsRes, medLogsRes, drugsRes] =
-      await Promise.all([
-        api.get<{ events: CalendarEventDto[] }>(
-          `/api/calendar/events?from=${from.toISOString()}&to=${to.toISOString()}`,
-        ),
-        api.get<{ appointments: AppointmentDto[] }>(
-          `/api/appointments?from=${from.toISOString()}&to=${to.toISOString()}`,
-        ),
-        api.get<{ treatments: TreatmentDto[] }>("/api/treatments"),
-        api.get<{ entries: CalendarEntryDto[] }>(
-          `/api/calendar-entries?from=${from.toISOString()}&to=${to.toISOString()}`,
-        ),
-        api.get<{ logs: CheckLogDto[] }>(
-          `/api/check-logs?from=${from.toISOString()}&to=${to.toISOString()}`,
-        ),
-        api.get<{ logs: MedicationLogDto[] }>(
-          `/api/medication-logs?from=${from.toISOString()}&to=${to.toISOString()}`,
-        ),
-        api.get<{ drugs: DrugDto[] }>("/api/drugs"),
-      ]);
+    const [
+      eventsRes,
+      appointmentsRes,
+      treatmentsRes,
+      entriesRes,
+      logsRes,
+      medLogsRes,
+      drugsRes,
+      bowlScheduleRes,
+    ] = await Promise.all([
+      api.get<{ events: CalendarEventDto[] }>(
+        `/api/calendar/events?from=${from.toISOString()}&to=${to.toISOString()}`,
+      ),
+      api.get<{ appointments: AppointmentDto[] }>(
+        `/api/appointments?from=${from.toISOString()}&to=${to.toISOString()}`,
+      ),
+      api.get<{ treatments: TreatmentDto[] }>("/api/treatments"),
+      api.get<{ entries: CalendarEntryDto[] }>(
+        `/api/calendar-entries?from=${from.toISOString()}&to=${to.toISOString()}`,
+      ),
+      api.get<{ logs: CheckLogDto[] }>(
+        `/api/check-logs?from=${from.toISOString()}&to=${to.toISOString()}`,
+      ),
+      api.get<{ logs: MedicationLogDto[] }>(
+        `/api/medication-logs?from=${from.toISOString()}&to=${to.toISOString()}`,
+      ),
+      api.get<{ drugs: DrugDto[] }>("/api/drugs"),
+      api.get<{ bowls: BowlDto[] }>(
+        `/api/bowls/schedule?from=${from.toISOString()}&to=${to.toISOString()}`,
+      ),
+    ]);
     drugs = drugsRes.drugs;
     const monthStart = dayKey(from);
     const monthEnd = dayKey(to);
@@ -150,6 +159,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
       occurrences,
       logsRes.logs,
       medLogsRes.logs,
+      bowlScheduleRes.bowls,
     );
   }
 
@@ -160,12 +170,24 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
     occurrences: { entry: CalendarEntryDto; at: Date }[],
     logs: CheckLogDto[],
     medLogs: MedicationLogDto[],
+    bowls: BowlDto[],
   ): void {
     const eventsByDay = groupByDay(events, (event) => event.startAt);
     const appointmentsByDay = groupByDay(appointments, (appointment) => appointment.scheduledAt);
     const entriesByDay = groupByDay(occurrences, (item) => item.at.toISOString());
     const logsByDay = groupByDay(logs, (log) => log.loggedAt);
     const medLogsByDay = groupByDay(medLogs, (log) => log.givenAt);
+    const bowlReadingsByDay = new Map<string, Map<number, BowlDto["readings"]>>();
+    for (const bowl of bowls) {
+      for (const reading of bowl.readings) {
+        const key = dayKey(new Date(reading.readAt));
+        const byBowl = bowlReadingsByDay.get(key) ?? new Map();
+        const list = byBowl.get(bowl.id) ?? [];
+        list.push(reading);
+        byBowl.set(bowl.id, list);
+        bowlReadingsByDay.set(key, byBowl);
+      }
+    }
     const rabbitNames = new Map(rabbits.map((rabbit) => [rabbit.id, rabbit.name]));
     const rabbitById = new Map(rabbits.map((rabbit) => [rabbit.id, rabbit]));
     grid.replaceChildren();
@@ -214,8 +236,8 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
           (log) => log.treatmentId === treatment.id,
         );
         const statuses =
-          treatment.slots.length > 0 ? treatmentSlotStatus(treatment.slots, dayLogs) : [];
-        const done = treatmentDayDone(treatment.slots, dayLogs);
+          treatment.slots.length > 0 ? slotStatus(treatment.slots, dayLogs) : [];
+        const done = allSlotsDone(treatment.slots, dayLogs);
         const parts: (HTMLElement | string)[] = [];
         if (startsToday) parts.push("▶ ");
         else if (showsEnd) parts.push("■ ");
@@ -231,7 +253,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
                 h(
                   "span",
                   { class: `cal-slot${entry.done ? " done" : ""}` },
-                  `${TREATMENT_SLOT_SHORT_LABELS[entry.slot]}${entry.done ? " ✓" : ""}`,
+                  `${DAY_SLOT_SHORT_LABELS[entry.slot]}${entry.done ? " ✓" : ""}`,
                 ),
               ),
             ),
@@ -252,7 +274,43 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
                   onSaved: () => void refresh(),
                 })
             : null;
-        cell.append(treatmentChip(parts, open, done));
+        cell.append(calendarChip(parts, open, done, "med"));
+      }
+      for (const bowl of bowls) {
+        const rabbit = rabbitById.get(bowl.rabbitId);
+        const rabbitName = rabbitNames.get(bowl.rabbitId) ?? "Bunny";
+        const dayReadings = bowlReadingsByDay.get(key)?.get(bowl.id) ?? [];
+        const statuses = slotStatus(bowl.slots, dayReadings);
+        const done = allSlotsDone(bowl.slots, dayReadings);
+        const parts: (HTMLElement | string)[] = [`${rabbitName}: ${bowl.label}`];
+        if (statuses.length > 0) {
+          parts.push(
+            h(
+              "span",
+              { class: "cal-slots" },
+              statuses.map((entry) =>
+                h(
+                  "span",
+                  { class: `cal-slot${entry.done ? " done" : ""}` },
+                  `${DAY_SLOT_SHORT_LABELS[entry.slot]}${entry.done ? " ✓" : ""}`,
+                ),
+              ),
+            ),
+          );
+        } else if (done) {
+          parts.push(h("span", { class: "cal-slot done" }, "✓"));
+        }
+        const open =
+          canRecord && rabbit
+            ? () =>
+                openBowlReadingModal({
+                  bowl,
+                  mode: "weigh",
+                  date: new Date(date),
+                  onSaved: () => void refresh(),
+                })
+            : null;
+        cell.append(calendarChip(parts, open, done, "bowl"));
       }
       for (const { entry } of entriesByDay.get(key) ?? []) {
         const label = entry.allDay ? entry.title : `${fmtTime(entry.startAt, timezone)} ${entry.title}`;
@@ -384,12 +442,13 @@ function dayKey(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-function treatmentChip(
+function calendarChip(
   parts: (HTMLElement | string)[],
   onClick: (() => void) | null,
   done: boolean,
+  kind: "med" | "bowl",
 ): HTMLElement {
-  const classes = `cal-chip med${done ? " done" : ""}`;
+  const classes = `cal-chip ${kind}${done ? " done" : ""}`;
   if (!onClick) return h("span", { class: classes }, ...parts);
   return h("button", { class: classes, type: "button", onClick }, ...parts);
 }

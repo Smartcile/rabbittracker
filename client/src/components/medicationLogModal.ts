@@ -1,18 +1,10 @@
-import type {
-  DrugDto,
-  MedicationLogDto,
-  RabbitDto,
-  TreatmentDto,
-  TreatmentSlot,
-} from "../../../shared/types.ts";
+import type { DrugDto, MedicationLogDto, RabbitDto, TreatmentDto } from "../../../shared/types.ts";
 import { formatDrugAmount } from "../../../shared/drugs.ts";
-import {
-  TREATMENT_SLOT_LABELS,
-  nextPendingTreatmentSlot,
-} from "../../../shared/treatments.ts";
+import type { DaySlot } from "../../../shared/slots.ts";
+import { DAY_SLOT_LABELS, DAY_SLOTS, nextPendingSlot } from "../../../shared/slots.ts";
 import { api } from "../api.ts";
-import { h } from "../dom.ts";
-import { openModal } from "./modal.ts";
+import { fmtTime, h } from "../dom.ts";
+import { confirmDialog, openModal } from "./modal.ts";
 import { toast } from "./toast.ts";
 import { optionButtons, toggleButton } from "./toggle.ts";
 import { openTreatmentModal } from "./treatmentModal.ts";
@@ -25,6 +17,7 @@ export function openMedicationLogModal(options: {
   treatmentId?: number;
   editing?: MedicationLogDto;
   date?: Date;
+  slot?: DaySlot;
   onSaved: () => void;
 }): void {
   const editing = options.editing;
@@ -48,6 +41,7 @@ export function openMedicationLogModal(options: {
   );
   treatmentSelect.value = String(linkedId ?? selectable[0]?.id ?? "");
 
+  const treatmentInfo = h("p", { class: "dim small", style: { margin: "0.35rem 0 0" } });
   const drugSelect = h(
     "select",
     null,
@@ -67,8 +61,22 @@ export function openMedicationLogModal(options: {
     editing ? "Save dose" : "Log dose",
   );
 
-  let slot: TreatmentSlot | null = editing?.slot ?? null;
+  let slot: DaySlot | null = options.slot ?? editing?.slot ?? null;
+  let overrideAll = false;
   const slotField = h("div", { class: "field" });
+  const changeForward = toggleButton({ label: "Change going forward", checked: false });
+  const forwardField = h(
+    "div",
+    { class: "field" },
+    h("label", null, "Schedule"),
+    h("div", { class: "row wrap" }, changeForward.root),
+    h(
+      "span",
+      { class: "dim small" },
+      "Adds this time to the treatment's schedule from today on. Leave off for a one-off.",
+    ),
+  );
+  forwardField.style.display = "none";
   const overrideToggle = toggleButton({ label: "Use this amount from now on", checked: true });
   const overrideField = h(
     "div",
@@ -82,6 +90,9 @@ export function openMedicationLogModal(options: {
     ),
   );
   overrideField.style.display = "none";
+
+  const dayList = h("div", { class: "stack", style: { gap: "0" } });
+  const dayListLabel = h("p", { class: "task-slot dim small" });
 
   const selectedTreatment = (): TreatmentDto | undefined =>
     selectable.find((treatment) => String(treatment.id) === treatmentSelect.value);
@@ -97,12 +108,7 @@ export function openMedicationLogModal(options: {
   };
 
   const dayLogs = (treatmentId: number): MedicationLogDto[] => {
-    const reference = when.value
-      ? new Date(when.value)
-      : editing
-        ? new Date(editing.givenAt)
-        : (options.date ?? new Date());
-    const day = localDayKey(reference);
+    const day = localDayKey(when.value ? new Date(when.value) : new Date());
     return (options.logs ?? []).filter(
       (log) =>
         log.treatmentId === treatmentId &&
@@ -111,49 +117,148 @@ export function openMedicationLogModal(options: {
     );
   };
 
-  const editTreatment = h(
-    "button",
-    {
-      class: "btn ghost small",
-      type: "button",
-      onClick: () => {
-        const treatment = selectedTreatment();
-        if (!treatment) return;
-        modal.close();
-        openTreatmentModal({
-          rabbits: [options.rabbit],
-          treatment,
-          onSaved: () => options.onSaved(),
-        });
-      },
-    },
-    "Edit treatment",
-  );
-  const editTreatmentField = h("div", { class: "field" }, editTreatment);
-  editTreatmentField.style.display = "none";
+  const renderTreatmentInfo = (): void => {
+    const treatment = selectedTreatment();
+    const parts = treatment
+      ? [treatment.dose, treatment.route, treatment.frequency].filter(Boolean)
+      : [];
+    treatmentInfo.textContent = parts.join(" · ");
+    treatmentInfo.style.display = parts.length > 0 ? "" : "none";
+  };
+
+  const renderForward = (): void => {
+    const treatment = selectedTreatment();
+    const needed = treatment !== undefined && slot !== null && !treatment.slots.includes(slot);
+    forwardField.style.display = needed ? "" : "none";
+    if (!needed) changeForward.setChecked(false);
+  };
 
   const renderSlotPicker = (): void => {
     const treatment = selectedTreatment();
-    editTreatmentField.style.display = treatment ? "" : "none";
-    const available = treatment?.slots ?? [];
-    if (available.length === 0) {
+    if (!treatment) {
       slot = null;
       slotField.style.display = "none";
+      forwardField.style.display = "none";
+      return;
+    }
+    if (slot !== null && !treatment.slots.includes(slot)) overrideAll = true;
+    const available = overrideAll ? [...DAY_SLOTS] : treatment.slots;
+    if (available.length === 0) {
+      slotField.style.display = "none";
+      forwardField.style.display = "none";
       return;
     }
     slotField.style.display = "";
-    const pending = nextPendingTreatmentSlot(available, dayLogs(treatment!.id));
+    const logged = dayLogs(treatment.id);
+    const pending = nextPendingSlot(treatment.slots, logged);
     const keep = slot !== null && available.includes(slot) ? slot : (pending ?? available[0]);
     slot = keep;
     const group = optionButtons(
-      available.map((value) => ({ value, label: TREATMENT_SLOT_LABELS[value] })),
+      available.map((value) => {
+        const done = logged.some((log) => log.slot === value);
+        return { value, label: `${DAY_SLOT_LABELS[value]}${done ? " ✓" : ""}` };
+      }),
       [keep],
       false,
       (values) => {
-        slot = (values[0] as TreatmentSlot | undefined) ?? null;
+        const next = values[0] as DaySlot | undefined;
+        if (!next) {
+          overrideAll = true;
+          renderSlotPicker();
+          return;
+        }
+        slot = next;
+        renderForward();
       },
     );
-    slotField.replaceChildren(h("label", null, "Time of day"), group.root);
+    const slotChildren: Node[] = [
+      h("label", null, overrideAll ? "Time of day (this day only)" : "Time of day"),
+      group.root,
+    ];
+    if (overrideAll) {
+      slotChildren.push(
+        h("span", { class: "dim small" }, "Showing every time of day — pick any for this dose."),
+      );
+    }
+    slotField.replaceChildren(...slotChildren);
+    renderForward();
+  };
+
+  const renderDayList = (): void => {
+    const treatment = selectedTreatment();
+    const list = treatment ? dayLogs(treatment.id) : [];
+    dayListLabel.textContent = `Logged on ${dayLabel(when.value)}`;
+    dayListLabel.style.display = list.length > 0 ? "" : "none";
+    dayList.replaceChildren(
+      ...list
+        .sort((a, b) => a.givenAt.localeCompare(b.givenAt))
+        .map((entry) =>
+          h(
+            "div",
+            { class: "list-row" },
+            h(
+              "div",
+              { class: "stack", style: { gap: "0.15rem" } },
+              h(
+                "span",
+                null,
+                entry.slot ? DAY_SLOT_LABELS[entry.slot] : "Dose",
+                h("span", { class: "dim small" }, ` · ${fmtTime(entry.givenAt)}`),
+              ),
+              entry.notes ? h("span", { class: "dim small" }, entry.notes) : null,
+            ),
+            h("span", { class: "spacer" }),
+            h("span", { class: "dim small" }, amountLabel(entry)),
+            h(
+              "button",
+              { class: "btn ghost small", type: "button", onClick: () => void editEntry(entry) },
+              "Edit",
+            ),
+            h(
+              "button",
+              { class: "btn ghost small", type: "button", onClick: () => void removeEntry(entry) },
+              "Delete",
+            ),
+          ),
+        ),
+    );
+  };
+
+  const amountLabel = (entry: MedicationLogDto): string => {
+    if (entry.amountMilliUnits === null) return "";
+    const drug = options.drugs.find((item) => item.id === entry.drugId);
+    return formatDrugAmount(entry.amountMilliUnits, drug?.unit ?? "dose");
+  };
+
+  const editEntry = (entry: MedicationLogDto): void => {
+    modal.close();
+    openMedicationLogModal({
+      rabbit: options.rabbit,
+      treatments: options.treatments,
+      drugs: options.drugs,
+      logs: options.logs,
+      editing: entry,
+      treatmentId: entry.treatmentId ?? undefined,
+      onSaved: options.onSaved,
+    });
+  };
+
+  const removeEntry = async (entry: MedicationLogDto): Promise<void> => {
+    const confirmed = await confirmDialog({
+      title: "Delete dose log?",
+      message: "The logged amount is returned to drug stock.",
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!confirmed) return;
+    try {
+      await api.del(`/api/medication-logs/${entry.id}`);
+      toast("Dose log deleted");
+      options.onSaved();
+      modal.close();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not delete the log", "error");
+    }
   };
 
   const overrideFor = (): { treatment: TreatmentDto; drug: DrugDto; amount: number } | null => {
@@ -188,27 +293,62 @@ export function openMedicationLogModal(options: {
     if (treatment?.doseMilliUnits != null) {
       amount.value = String(Number((treatment.doseMilliUnits / 1000).toFixed(3)));
     }
+    overrideAll = false;
+    renderTreatmentInfo();
     renderSlotPicker();
+    renderDayList();
     syncHint();
   };
+
+  const editTreatment = h(
+    "button",
+    {
+      class: "btn ghost small",
+      type: "button",
+      onClick: () => {
+        const treatment = selectedTreatment();
+        if (!treatment) return;
+        modal.close();
+        openTreatmentModal({
+          rabbits: [options.rabbit],
+          treatment,
+          onSaved: () => options.onSaved(),
+        });
+      },
+    },
+    "Edit treatment",
+  );
+  const editTreatmentField = h("div", { class: "field" }, editTreatment);
+  editTreatmentField.style.display = "none";
 
   treatmentSelect.addEventListener("change", syncFromTreatment);
   drugSelect.addEventListener("change", syncHint);
   amount.addEventListener("input", syncHint);
-  when.addEventListener("change", renderSlotPicker);
+  when.addEventListener("change", () => {
+    renderSlotPicker();
+    renderDayList();
+  });
+
   if (editing) {
     drugSelect.value = editing.drugId != null ? String(editing.drugId) : "";
     amount.value =
       editing.amountMilliUnits != null
         ? String(Number((editing.amountMilliUnits / 1000).toFixed(3)))
         : "";
+    renderTreatmentInfo();
     renderSlotPicker();
+    renderDayList();
     syncHint();
   } else {
     syncFromTreatment();
   }
+  editTreatmentField.style.display = selectedTreatment() ? "" : "none";
+  treatmentSelect.addEventListener("change", () => {
+    editTreatmentField.style.display = selectedTreatment() ? "" : "none";
+  });
 
   const modal = openModal({
+    guardUnsaved: true,
     title: `${editing ? "Edit dose" : "Log medication"} — ${options.rabbit.name}`,
     body: h(
       "form",
@@ -229,27 +369,50 @@ export function openMedicationLogModal(options: {
             error.style.display = "";
             return;
           }
+          const treatment = selectedTreatment();
+          const addSlotForward =
+            treatment !== undefined &&
+            changeForward.checked() &&
+            slot !== null &&
+            !treatment.slots.includes(slot);
           save.disabled = true;
           try {
-            const override = overrideFor();
-            if (override && overrideToggle.checked()) {
-              await api.patch(`/api/treatments/${override.treatment.id}`, {
-                doseMilliUnits: override.amount,
-                dose: formatDrugAmount(override.amount, override.drug.unit),
-              });
-            }
-            const payload = {
-              treatmentId: treatmentSelect.value ? Number(treatmentSelect.value) : null,
-              drugId: drugSelect.value ? Number(drugSelect.value) : null,
-              givenAt: givenAt.toISOString(),
-              slot,
-              amountMilliUnits,
-              notes: notes.value.trim(),
-            };
             if (editing) {
-              await api.patch(`/api/medication-logs/${editing.id}`, payload);
+              if (addSlotForward && treatment) {
+                await api.patch(`/api/treatments/${treatment.id}`, {
+                  slots: [...treatment.slots, slot],
+                });
+              }
+              await api.patch(`/api/medication-logs/${editing.id}`, {
+                treatmentId: treatmentSelect.value ? Number(treatmentSelect.value) : null,
+                drugId: drugSelect.value ? Number(drugSelect.value) : null,
+                givenAt: givenAt.toISOString(),
+                slot,
+                amountMilliUnits,
+                notes: notes.value.trim(),
+              });
             } else {
-              await api.post("/api/medication-logs", { ...payload, rabbitId: options.rabbit.id });
+              const override = overrideFor();
+              if (override && overrideToggle.checked()) {
+                await api.patch(`/api/treatments/${override.treatment.id}`, {
+                  doseMilliUnits: override.amount,
+                  dose: formatDrugAmount(override.amount, override.drug.unit),
+                });
+              }
+              if (addSlotForward && treatment) {
+                await api.patch(`/api/treatments/${treatment.id}`, {
+                  slots: [...treatment.slots, slot],
+                });
+              }
+              await api.post("/api/medication-logs", {
+                rabbitId: options.rabbit.id,
+                treatmentId: treatmentSelect.value ? Number(treatmentSelect.value) : null,
+                drugId: drugSelect.value ? Number(drugSelect.value) : null,
+                givenAt: givenAt.toISOString(),
+                slot,
+                amountMilliUnits,
+                notes: notes.value.trim(),
+              });
             }
             toast(editing ? "Dose updated" : "Dose logged");
             options.onSaved();
@@ -263,14 +426,17 @@ export function openMedicationLogModal(options: {
         },
       },
       error,
-      h("div", { class: "field" }, h("label", null, "Treatment"), treatmentSelect),
+      h("div", { class: "field" }, h("label", null, "Treatment"), treatmentSelect, treatmentInfo),
       editTreatmentField,
       h("div", { class: "field" }, h("label", null, "Drug"), drugSelect),
       slotField,
+      forwardField,
       h("div", { class: "field" }, h("label", null, "Amount given"), amount, amountHint),
       overrideField,
       h("div", { class: "field" }, h("label", null, "When"), when),
       h("div", { class: "field" }, h("label", null, "Notes"), notes),
+      dayListLabel,
+      dayList,
       h(
         "div",
         { class: "modal-actions" },
@@ -293,6 +459,11 @@ function initialWhen(editing: MedicationLogDto | undefined, date: Date | undefin
 function localDayKey(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function dayLabel(value: string): string {
+  const date = new Date(value);
+  return date.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
 function toLocalInputValue(date: Date): string {

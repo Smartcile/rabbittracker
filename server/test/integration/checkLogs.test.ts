@@ -161,7 +161,7 @@ describe("check log integration", () => {
     const { added } = await api<{ added: string[] }>(ctx, "/api/check-logs/types/defaults", {
       method: "POST",
     });
-    expect(added).toEqual(["Poo", "Water intake", "Food", "Behaviour"]);
+    expect(added).toEqual(["Poo", "Behaviour"]);
 
     const { types } = await api<{ types: CheckLogTypeDto[] }>(ctx, "/api/check-logs/types");
     const behaviour = types.find((type) => type.key === "behaviour");

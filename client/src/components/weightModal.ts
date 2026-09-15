@@ -30,6 +30,7 @@ export function openWeightModal(options: {
   const save = h("button", { class: "btn primary", type: "submit" }, "Save weight");
 
   const modal = openModal({
+    guardUnsaved: true,
     title: `Weigh ${options.rabbit.name}`,
     body: h(
       "form",

@@ -48,6 +48,7 @@ export function openVaccinationModal(options: {
   const save = h("button", { class: "btn primary", type: "submit" }, editing ? "Save vaccination" : "Add vaccination");
 
   const modal = openModal({
+    guardUnsaved: true,
     title: editing ? `Edit ${editing.vaccine}` : "Add vaccination",
     body: h(
       "form",

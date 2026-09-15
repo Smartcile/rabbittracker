@@ -61,7 +61,7 @@ describe("buildDemoDataset", () => {
     const dataset = buildDemoDataset(new Date(2026, 8, 14, 9, 0));
     expect(dataset.checkLogs.length).toBeGreaterThanOrEqual(10);
     expect(new Set(dataset.checkLogs.map((log) => log.typeKey))).toEqual(
-      new Set(["poo", "water", "food", "behaviour"]),
+      new Set(["poo", "behaviour"]),
     );
     for (const log of dataset.checkLogs) {
       expect(dataset.rabbits[log.rabbitIndex]).toBeDefined();
@@ -75,8 +75,6 @@ describe("buildDemoDataset", () => {
       ).toBe(true);
     }
     expect(dataset.checkLogs.some((log) => log.valueLabels.length >= 2)).toBe(true);
-    expect(dataset.checkLogs.some((log) => log.valueMilli !== null)).toBe(true);
-    expect(dataset.checkLogs.some((log) => log.valueText.length > 0)).toBe(true);
   });
 
   it("logs doses for the active treatment", () => {

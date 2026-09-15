@@ -45,13 +45,14 @@
       renders the read-only report screen without the app shell, auto-refreshes every minute, hides
       costs, and can be revoked by regenerating the token in Settings. Photos load with the same
       token, and the authenticated report and share page render from one shared bundle.
-- [x] **Profile groups + richer daily checks.** The bunny profile is grouped into collapsible
-      sections (Observations, Health checks, Treatments & medication, Notes & photos, Appointments,
-      Bunny details), daily check types can be multi-select, logs can carry photos, and a one-tap
-      type bar logs poo, water, food or behaviour without opening the full form.
+- [x] **Grouped profile + richer daily checks.** The bunny profile is a flat, ordered stack of
+      cards (Observations, Daily routine, Health checks, Treatments & medication, Notes & photos,
+      Appointments, Bunny details), daily check types can be multi-select, logs can carry photos,
+      and a one-tap type bar logs poo or behaviour without opening the full form.
 - [x] **Bowl scale tracking.** Per-bunny food/water bowls with a starting weight, rolling weigh-ins
       that calculate consumption since the last reading, top-ups recorded as the amount added or the
-      bowl's new total, and a refresh action that starts a new period with an optional final weight.
+      bowl's new total, a refresh action that starts a new period with an optional final weight, and
+      optional times of day that show on the calendar with tick-off and one-tap weigh/top-up.
 - [x] **Daily routine tasks.** Repeating chores per bunny with morning/afternoon/evening/anytime
       slots and an every-N-days repeat, and one-tap completion from the bunny profile or the home
       Today list.
@@ -65,7 +66,9 @@
       given (early morning, morning, afternoon, evening, night); the calendar shows per-slot ticks
       and logs a dose on tap; linked doses group under the treatment on the bunny page with edit
       and delete (stock reconciled), one-off doses stay in the medication log, and logging a
-      different amount can update the treatment's dose from that day on.
+      different amount can update the treatment's dose from that day on. The log form lists the
+      day's doses and lets you override the time for that day, optionally adding it to the schedule
+      going forward, and every edit pop-out warns before discarding unsaved changes.
 
 ## Planned features (agreed but not built)
 

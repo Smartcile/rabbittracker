@@ -2,7 +2,7 @@ import { emptyChecklist } from "../../../shared/checklist.ts";
 import { bowlReadingKindLabel } from "../../../shared/bowls.ts";
 import { checkLogValueParts } from "../../../shared/checkLogs.ts";
 import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
-import { TREATMENT_SLOT_LABELS } from "../../../shared/treatments.ts";
+import { DAY_SLOT_LABELS } from "../../../shared/slots.ts";
 import type {
   AppointmentDto,
   BowlDto,
@@ -53,6 +53,7 @@ import { openTaskModal } from "../components/taskModal.ts";
 import { toast } from "../components/toast.ts";
 import { optionButtons } from "../components/toggle.ts";
 import { openTreatmentModal } from "../components/treatmentModal.ts";
+import { slotChips } from "../components/slotChips.ts";
 import { openVaccinationModal } from "../components/vaccinationModal.ts";
 import { renderWeightChart } from "../components/weightChart.ts";
 import { openWeightModal } from "../components/weightModal.ts";
@@ -106,74 +107,36 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
       const careTypes = lookups.filter((lookup) => lookup.kind === "care_type");
       const sections: (HTMLElement | null)[] = [
         header(bundle.rabbit, bundle.checks, load, canEdit),
-        profileGroup(
-          { id: "observations", title: "Observations", hint: "Quick logging", open: true },
-          [
-            dailyChecksCard(bundle.rabbit, logTypes, checkLogResponse.logs, load, canRecord),
-            bowlsCard(bundle.rabbit, bowlResponse.bowls, load, canRecord),
-            quickLogCard(bundle.rabbit, checklistSections, load, canRecord),
-          ],
+        dailyChecksCard(bundle.rabbit, logTypes, checkLogResponse.logs, load, canRecord),
+        bowlsCard(bundle.rabbit, bowlResponse.bowls, load, canRecord),
+        quickLogCard(bundle.rabbit, checklistSections, load, canRecord),
+        tasksCard(bundle.rabbit, taskResponse.tasks, taskResponse.completions, load, canRecord),
+        weightCard(bundle.rabbit, bundle.checks, load, canRecord),
+        checksCard(bundle.rabbit, bundle.checks, checklistSections, logTypes, load, canRecord),
+        vaccinationsCard(bundle.rabbit, bundle.vaccinations, load, canRecord),
+        careCard(bundle.rabbit, bundle.careSchedules, bundle.careRecords, careTypes, load, canRecord),
+        treatmentsCard(
+          bundle.rabbit,
+          bundle.treatments,
+          drugResponse.drugs,
+          medLogResponse.logs,
+          load,
+          canRecord,
         ),
-        profileGroup(
-          { id: "routine", title: "Daily routine", hint: "Repeating chores and med rounds", open: true },
-          [
-            tasksCard(bundle.rabbit, taskResponse.tasks, taskResponse.completions, load, canRecord),
-          ],
+        medicationCard(
+          bundle.rabbit,
+          bundle.treatments,
+          medLogResponse.logs,
+          drugResponse.drugs,
+          load,
+          canRecord,
         ),
-        profileGroup(
-          {
-            id: "health",
-            title: "Health checks",
-            hint: "Weight, weekly checks, vaccines and routine care",
-            open: true,
-          },
-          [
-            weightCard(bundle.rabbit, bundle.checks, load, canRecord),
-            checksCard(bundle.rabbit, bundle.checks, checklistSections, logTypes, load, canRecord),
-            vaccinationsCard(bundle.rabbit, bundle.vaccinations, load, canRecord),
-            careCard(bundle.rabbit, bundle.careSchedules, bundle.careRecords, careTypes, load, canRecord),
-          ],
-        ),
-        profileGroup(
-          { id: "treatment", title: "Treatments & medication", hint: "Courses, doses and stock" },
-          [
-            treatmentsCard(
-              bundle.rabbit,
-              bundle.treatments,
-              drugResponse.drugs,
-              medLogResponse.logs,
-              load,
-              canRecord,
-            ),
-            medicationCard(
-              bundle.rabbit,
-              bundle.treatments,
-              medLogResponse.logs,
-              drugResponse.drugs,
-              load,
-              canRecord,
-            ),
-          ],
-        ),
-        profileGroup(
-          { id: "notes", title: "Notes & photos" },
-          [
-            journalCard(bundle.rabbit, bundle.journal, load, canRecord),
-            galleryCard(bundle.checks, bundle.journal, checkLogResponse.logs),
-          ],
-        ),
-        profileGroup(
-          { id: "schedule", title: "Appointments" },
-          [appointmentsCard(bundle.rabbit, bundle.appointments, load, canRecord, showCost)],
-        ),
-        profileGroup(
-          { id: "details", title: "Bunny details", hint: "Feeding plan, bonds and carers" },
-          [
-            feedingCard(bundle.rabbit, canEdit, load),
-            bondsCard(bundle.rabbit, bundle.bonds, load, canEdit),
-            ctx.user.isAdmin ? carersCard(bundle.rabbit, bundle.carers) : null,
-          ],
-        ),
+        journalCard(bundle.rabbit, bundle.journal, load, canRecord),
+        galleryCard(bundle.checks, bundle.journal, checkLogResponse.logs),
+        appointmentsCard(bundle.rabbit, bundle.appointments, load, canRecord, showCost),
+        feedingCard(bundle.rabbit, canEdit, load),
+        bondsCard(bundle.rabbit, bundle.bonds, load, canEdit),
+        ctx.user.isAdmin ? carersCard(bundle.rabbit, bundle.carers) : null,
       ];
       container.replaceChildren(...sections.filter((section): section is HTMLElement => section !== null));
     } catch (err) {
@@ -185,47 +148,6 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
 
   void load();
   return container;
-}
-
-const PROFILE_GROUP_STATE_KEY = "rt-profile-groups";
-
-function profileGroup(
-  options: { id: string; title: string; hint?: string; open?: boolean },
-  children: (HTMLElement | null)[],
-): HTMLElement | null {
-  const content = children.filter((child): child is HTMLElement => child !== null);
-  if (content.length === 0) return null;
-  const details = h("details", { class: "profile-group" });
-  details.open = readProfileGroups()[options.id] ?? options.open ?? false;
-  details.append(
-    h(
-      "summary",
-      null,
-      h("h2", null, options.title),
-      options.hint ? h("span", { class: "dim small" }, options.hint) : null,
-    ),
-    h("div", { class: "profile-group-body" }, content),
-  );
-  details.addEventListener("toggle", () => {
-    try {
-      const state = readProfileGroups();
-      state[options.id] = details.open;
-      localStorage.setItem(PROFILE_GROUP_STATE_KEY, JSON.stringify(state));
-    } catch {
-      // storage may be unavailable
-    }
-  });
-  return details;
-}
-
-function readProfileGroups(): Record<string, boolean> {
-  try {
-    const raw = localStorage.getItem(PROFILE_GROUP_STATE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, boolean>) : {};
-  } catch {
-    return {};
-  }
 }
 
 function header(
@@ -766,6 +688,16 @@ function bowlPanel(
     `${bowl.periodConsumptionGrams} g consumed`,
     bowl.periodRefillGrams > 0 ? `${bowl.periodRefillGrams} g topped up` : null,
   ].filter(Boolean);
+  const todayReadings = bowl.readings.filter(
+    (reading) => localDayKey(new Date(reading.readAt)) === localDayKey(new Date()),
+  );
+  const schedule = slotChips({
+    slots: bowl.slots,
+    logs: todayReadings,
+    canRecord,
+    onLog: (slot) =>
+      openBowlReadingModal({ bowl, mode: "weigh", date: new Date(), slot, onSaved: () => void reload() }),
+  });
   const actions = canRecord
     ? h(
         "div",
@@ -788,7 +720,7 @@ function bowlPanel(
         h(
           "button",
           { class: "btn ghost small", type: "button", onClick: () => openBowlModal({ rabbit, bowl, onSaved: () => void reload() }) },
-          "Rename",
+          "Edit",
         ),
         h(
           "button",
@@ -822,6 +754,7 @@ function bowlPanel(
       h("strong", null, bowl.label),
       h("span", { class: "dim small" }, parts.join(" · ")),
     ),
+    schedule,
     actions,
     bowl.readings.length > 0
       ? h("div", { class: "stack", style: { gap: "0.4rem" } }, readingsWrap, more)
@@ -851,6 +784,7 @@ function bowlReadingRow(
         "span",
         null,
         bowlReadingKindLabel(reading.kind),
+        reading.slot ? h("span", { class: "dim small" }, ` · ${DAY_SLOT_LABELS[reading.slot]}`) : null,
         delta ? h("span", { class: "dim small" }, ` ${delta}`) : null,
       ),
       reading.notes ? h("span", { class: "dim small" }, reading.notes) : null,
@@ -882,6 +816,11 @@ async function removeBowl(bowl: BowlDto, reload: () => Promise<void>): Promise<v
   await api.del(`/api/bowls/${bowl.id}`);
   toast("Bowl deleted");
   await reload();
+}
+
+function localDayKey(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 async function removeBowlReading(
@@ -1112,7 +1051,7 @@ function medicationLogRow(
     entry.amountMilliUnits != null
       ? formatDrugAmount(entry.amountMilliUnits, drug?.unit ?? "dose")
       : "";
-  const detail = [entry.slot ? TREATMENT_SLOT_LABELS[entry.slot] : null, amount]
+  const detail = [entry.slot ? DAY_SLOT_LABELS[entry.slot] : null, amount]
     .filter(Boolean)
     .join(" · ");
   return h(
@@ -1433,6 +1372,7 @@ function openJournalEdit(entry: JournalEntryDto, reload: () => Promise<void>): v
   error.style.display = "none";
   const save = h("button", { class: "btn primary", type: "submit" }, "Save");
   const modal = openModal({
+    guardUnsaved: true,
     title: "Edit journal entry",
     body: h(
       "form",
@@ -1584,7 +1524,31 @@ function treatmentRow(
     ? stockLevel(stockTotalMilliUnits(drug.batches), drug.reorderLevelMilliUnits)
     : null;
   const history = logs.filter((entry) => entry.treatmentId === treatment.id);
-  const slotLabels = treatment.slots.map((slot) => TREATMENT_SLOT_LABELS[slot]).join(", ");
+  const slotLabels = treatment.slots.map((slot) => DAY_SLOT_LABELS[slot]).join(", ");
+  const todayLogs = logs.filter(
+    (entry) =>
+      entry.treatmentId === treatment.id &&
+      localDayKey(new Date(entry.givenAt)) === localDayKey(new Date()),
+  );
+  const schedule =
+    treatment.status === "active"
+      ? slotChips({
+          slots: treatment.slots,
+          logs: todayLogs,
+          canRecord,
+          onLog: (slot) =>
+            openMedicationLogModal({
+              rabbit,
+              treatments,
+              drugs,
+              logs,
+              treatmentId: treatment.id,
+              slot,
+              date: new Date(),
+              onSaved: () => void reload(),
+            }),
+        })
+      : null;
   return h(
     "div",
     { class: "list-row" },
@@ -1604,6 +1568,7 @@ function treatmentRow(
         { class: "dim small" },
         `${fmtCalendarDate(treatment.startDate)} → ${treatment.endDate ? fmtCalendarDate(treatment.endDate) : "ongoing"}`,
       ),
+      schedule,
       drug
         ? h(
             "div",
@@ -1660,6 +1625,26 @@ function treatmentRow(
       { class: `badge ${treatment.status === "active" ? "accent" : ""}` },
       treatment.status,
     ),
+    canRecord && treatment.status === "active" && treatment.slots.length === 0
+      ? h(
+          "button",
+          {
+            class: "btn outline small",
+            type: "button",
+            onClick: () =>
+              openMedicationLogModal({
+                rabbit,
+                treatments,
+                drugs,
+                logs,
+                treatmentId: treatment.id,
+                date: new Date(),
+                onSaved: () => void reload(),
+              }),
+          },
+          "Log dose",
+        )
+      : null,
     canRecord
       ? h(
           "button",
@@ -1912,6 +1897,7 @@ function openIntervalModal(
   const save = h("button", { class: "btn primary", type: "submit" }, "Save interval");
 
   const modal = openModal({
+    guardUnsaved: true,
     title: `${label} schedule`,
     body: h(
       "form",

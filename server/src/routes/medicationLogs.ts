@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { Router } from "express";
-import type { TreatmentSlot } from "../../../shared/types.ts";
+import type { DaySlot } from "../../../shared/slots.ts";
 import { medicationLogToDto } from "../api/mappers.ts";
 import { db } from "../db/index.ts";
 import { medicationLogs, treatments } from "../db/schema.ts";
@@ -41,12 +41,12 @@ medicationLogsRouter.post("/", requireAuth, requirePermission("canRecordHealth")
 
   let drugId = input.drugId ?? null;
   let amountMilliUnits = input.amountMilliUnits ?? null;
-  let slot: TreatmentSlot | null = input.slot ?? null;
+  let slot: DaySlot | null = input.slot ?? null;
   if (input.treatmentId != null) {
     const treatment = await findTreatment(input.treatmentId, input.rabbitId);
     if (drugId === null) drugId = treatment.drugId;
     if (amountMilliUnits === null) amountMilliUnits = treatment.doseMilliUnits;
-    slot = resolveSlot(treatment, slot);
+    if (slot === null && treatment.slots.length === 1) slot = treatment.slots[0] as DaySlot;
   } else if (slot !== null) {
     throw new HttpError(400, "A time of day needs a linked treatment");
   }
@@ -96,11 +96,8 @@ medicationLogsRouter.patch("/:id", requireAuth, requirePermission("canRecordHeal
         ? (treatment?.doseMilliUnits ?? null)
         : existing.amountMilliUnits;
   const slot = input.slot !== undefined ? input.slot : treatmentChanged ? null : existing.slot;
-  if (slot !== null) {
-    if (treatment === null) throw new HttpError(400, "A time of day needs a linked treatment");
-    if (!treatment.slots.includes(slot)) {
-      throw new HttpError(400, "That time of day is not part of this treatment");
-    }
+  if (slot !== null && treatment === null) {
+    throw new HttpError(400, "A time of day needs a linked treatment");
   }
 
   const [row] = await db.transaction(async (tx) => {
@@ -140,16 +137,6 @@ medicationLogsRouter.delete("/:id", requireAuth, requirePermission("canRecordHea
   });
   res.json({ ok: true });
 });
-
-function resolveSlot(treatment: TreatmentRow, slot: TreatmentSlot | null): TreatmentSlot | null {
-  if (slot === null) {
-    return treatment.slots.length === 1 ? (treatment.slots[0] as TreatmentSlot) : null;
-  }
-  if (!treatment.slots.includes(slot)) {
-    throw new HttpError(400, "That time of day is not part of this treatment");
-  }
-  return slot;
-}
 
 async function findTreatment(id: number, rabbitId: number): Promise<TreatmentRow> {
   const rows = await db.select().from(treatments).where(eq(treatments.id, id)).limit(1);

@@ -1,6 +1,7 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
 import { Router } from "express";
 import { summarizeBowl } from "../../../shared/bowls.ts";
+import type { DaySlot } from "../../../shared/slots.ts";
 import { bowlToDto } from "../api/mappers.ts";
 import { db } from "../db/index.ts";
 import { bowlReadings, bowls } from "../db/schema.ts";
@@ -42,12 +43,54 @@ bowlsRouter.get("/", requireAuth, async (req, res) => {
   });
 });
 
+bowlsRouter.get("/schedule", requireAuth, async (req, res) => {
+  const conditions = [];
+  if (!req.user!.isAdmin) {
+    conditions.push(inArray(bowls.rabbitId, visibleRabbitIds(req.user!)));
+  }
+  const bowlRows = await db
+    .select()
+    .from(bowls)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(asc(bowls.id));
+  const scheduled = bowlRows.filter((row) => row.slots.length > 0);
+  const from = parseQueryDate(req.query.from);
+  const to = parseQueryDate(req.query.to);
+  const readingConditions = [];
+  if (from) readingConditions.push(gte(bowlReadings.readAt, from));
+  if (to) readingConditions.push(lte(bowlReadings.readAt, to));
+  const readings =
+    scheduled.length > 0
+      ? await db
+          .select()
+          .from(bowlReadings)
+          .where(
+            and(
+              inArray(
+                bowlReadings.bowlId,
+                scheduled.map((row) => row.id),
+              ),
+              ...readingConditions,
+            ),
+          )
+          .orderBy(asc(bowlReadings.readAt), asc(bowlReadings.id))
+      : [];
+  res.json({
+    bowls: scheduled.map((row) =>
+      bowlToDto(
+        row,
+        readings.filter((reading) => reading.bowlId === row.id),
+      ),
+    ),
+  });
+});
+
 bowlsRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {
   const input = parseInput(bowlCreateSchema, req.body);
   await findVisibleRabbit(req.user!, input.rabbitId);
   const [bowl] = await db
     .insert(bowls)
-    .values({ rabbitId: input.rabbitId, label: input.label })
+    .values({ rabbitId: input.rabbitId, label: input.label, slots: input.slots })
     .returning();
   const [reading] = await db
     .insert(bowlReadings)
@@ -68,7 +111,11 @@ bowlsRouter.patch("/:id", requireAuth, requirePermission("canRecordHealth"), asy
   const input = parseInput(bowlUpdateSchema, req.body);
   const [row] = await db
     .update(bowls)
-    .set({ label: input.label, updatedAt: new Date() })
+    .set({
+      label: input.label ?? bowl.label,
+      slots: input.slots ?? bowl.slots,
+      updatedAt: new Date(),
+    })
     .where(eq(bowls.id, bowl.id))
     .returning();
   res.json({ bowl: bowlToDto(row, await listReadings(bowl.id)) });
@@ -85,6 +132,8 @@ bowlsRouter.post("/:id/readings", requireAuth, requirePermission("canRecordHealt
   const bowl = await findBowl(parseId(String(req.params.id)));
   await findVisibleRabbit(req.user!, bowl.rabbitId);
   const input = parseInput(bowlReadingCreateSchema, req.body);
+  const slot: DaySlot | null =
+    input.slot ?? (bowl.slots.length === 1 ? (bowl.slots[0] as DaySlot) : null);
   const existing = await listReadings(bowl.id);
   const summary = summarizeBowl(existing);
   const added: BowlReadingRow[] = [];
@@ -108,6 +157,7 @@ bowlsRouter.post("/:id/readings", requireAuth, requirePermission("canRecordHealt
       bowlId: bowl.id,
       readAt: input.readAt,
       kind: input.kind,
+      slot,
       weightGrams,
       notes: input.notes,
     })
@@ -134,6 +184,12 @@ function parseId(value: string): number {
   const id = Number(value);
   if (!Number.isInteger(id) || id <= 0) throw new HttpError(404, "Bowl not found");
   return id;
+}
+
+function parseQueryDate(value: unknown): Date | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 async function findBowl(id: number): Promise<BowlRow> {
