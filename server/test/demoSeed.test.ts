@@ -130,9 +130,6 @@ describe("buildDemoDataset", () => {
       expect(dataset.rabbits[task.rabbitIndex]).toBeDefined();
       expect(slots.has(task.slot)).toBe(true);
       expect(task.intervalDays).toBeGreaterThan(0);
-      if (task.treatmentIndex !== null) {
-        expect(dataset.treatments[task.treatmentIndex]).toBeDefined();
-      }
       for (const hours of task.completionsHoursAgo) {
         expect(hours).toBeGreaterThan(0);
         expect(hours).toBeLessThan(7 * 24);
@@ -140,11 +137,7 @@ describe("buildDemoDataset", () => {
     }
     expect(dataset.tasks.some((task) => task.active)).toBe(true);
     expect(dataset.tasks.some((task) => !task.active)).toBe(true);
-    expect(
-      dataset.tasks.some(
-        (task) => task.treatmentIndex !== null && task.completionsHoursAgo.length > 0,
-      ),
-    ).toBe(true);
+    expect(dataset.tasks.some((task) => task.completionsHoursAgo.length > 0)).toBe(true);
   });
 
   it("gives the latest check of each bunny a temperature, pain score and checklist", () => {

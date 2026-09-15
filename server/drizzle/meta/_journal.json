@@ -162,6 +162,20 @@
       "when": 1789427316315,
       "tag": "0022_steady_banshee",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789440283232,
+      "tag": "0023_chief_black_crow",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789440860284,
+      "tag": "0024_eminent_longshot",
+      "breakpoints": true
     }
   ]
 }

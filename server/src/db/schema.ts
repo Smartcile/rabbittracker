@@ -142,6 +142,7 @@ export const medicationLogs = pgTable("medication_logs", {
   treatmentId: integer("treatment_id").references(() => treatments.id, { onDelete: "set null" }),
   drugId: integer("drug_id").references(() => drugs.id, { onDelete: "set null" }),
   givenAt: timestamp("given_at", { withTimezone: true }).notNull(),
+  slot: text("slot"),
   amountMilliUnits: integer("amount_milli_units"),
   stockDeductedMilliUnits: integer("stock_deducted_milli_units").notNull().default(0),
   notes: text("notes").notNull().default(""),
@@ -253,6 +254,7 @@ export const treatments = pgTable("treatments", {
   dose: text("dose").notNull().default(""),
   route: text("route").notNull().default(""),
   frequency: text("frequency").notNull().default(""),
+  slots: text("slots").array().notNull().default([]),
   reason: text("reason").notNull().default(""),
   startDate: date("start_date").notNull(),
   endDate: date("end_date"),
@@ -313,7 +315,6 @@ export const rabbitTasks = pgTable("rabbit_tasks", {
   label: text("label").notNull(),
   slot: text("slot").notNull().default("anytime"),
   intervalDays: integer("interval_days").notNull().default(1),
-  treatmentId: integer("treatment_id").references(() => treatments.id, { onDelete: "set null" }),
   notes: text("notes").notNull().default(""),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -327,9 +328,6 @@ export const taskCompletions = pgTable("task_completions", {
     .references(() => rabbitTasks.id, { onDelete: "cascade" }),
   completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
   completedBy: integer("completed_by").references(() => users.id, { onDelete: "set null" }),
-  medicationLogId: integer("medication_log_id").references(() => medicationLogs.id, {
-    onDelete: "set null",
-  }),
   notes: text("notes").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

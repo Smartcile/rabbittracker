@@ -7,6 +7,7 @@ import {
   formatMgFromMicrograms,
   formatUnitsFromMilliUnits,
   newestBatchId,
+  parseScaledAmount,
   planStockDeduction,
   planTreatmentStockChange,
   stockLevel,
@@ -73,6 +74,28 @@ describe("formatUnitsFromMilliUnits", () => {
     expect(formatUnitsFromMilliUnits(1500)).toBe("1.5");
     expect(formatUnitsFromMilliUnits(667)).toBe("0.667");
     expect(formatUnitsFromMilliUnits(null)).toBe("");
+  });
+});
+
+describe("parseScaledAmount", () => {
+  it("scales a positive decimal", () => {
+    expect(parseScaledAmount("1.5", 1000)).toBe(1500);
+    expect(parseScaledAmount("2", 1000)).toBe(2000);
+  });
+
+  it("treats blank as no value", () => {
+    expect(parseScaledAmount("  ", 1000)).toBeNull();
+  });
+
+  it("rejects zero unless zero is allowed", () => {
+    expect(parseScaledAmount("0", 1000)).toBeUndefined();
+    expect(parseScaledAmount("0", 1000, true)).toBe(0);
+  });
+
+  it("rejects negative and non-numeric values", () => {
+    expect(parseScaledAmount("-1", 1000)).toBeUndefined();
+    expect(parseScaledAmount("-1", 1000, true)).toBeUndefined();
+    expect(parseScaledAmount("abc", 1000)).toBeUndefined();
   });
 });
 

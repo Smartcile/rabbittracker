@@ -3,6 +3,7 @@ import { CALENDAR_REPEATS } from "../../../shared/calendar.ts";
 import type { HealthChecklistDto } from "../../../shared/checklist.ts";
 import { LOOKUP_KINDS } from "../../../shared/lookups.ts";
 import { TASK_SLOTS } from "../../../shared/tasks.ts";
+import { TREATMENT_SLOTS } from "../../../shared/treatments.ts";
 
 export const usernameSchema = z.preprocess(
   (value) => (typeof value === "string" ? value.trim().toLowerCase() : value),
@@ -352,7 +353,6 @@ export const taskCreateSchema = z.object({
   label: z.string().trim().min(1, "Name is required").max(200),
   slot: z.enum(TASK_SLOTS).default("anytime"),
   intervalDays: z.number().int().min(1).max(3650).default(1),
-  treatmentId: z.number().int().positive().nullable().optional(),
   notes: z.string().trim().max(2000).default(""),
   active: z.boolean().default(true),
 });
@@ -362,7 +362,6 @@ export const taskUpdateSchema = z
     label: z.string().trim().min(1, "Name is required").max(200).optional(),
     slot: z.enum(TASK_SLOTS).optional(),
     intervalDays: z.number().int().min(1).max(3650).optional(),
-    treatmentId: z.number().int().positive().nullable().optional(),
     notes: z.string().trim().max(2000).optional(),
     active: z.boolean().optional(),
   })
@@ -380,9 +379,23 @@ export const medicationLogCreateSchema = z.object({
   treatmentId: z.number().int().positive().nullable().optional(),
   drugId: z.number().int().positive().nullable().optional(),
   givenAt: z.coerce.date(),
+  slot: z.enum(TREATMENT_SLOTS).nullable().optional(),
   amountMilliUnits: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
   notes: z.string().trim().max(2000).default(""),
 });
+
+export const medicationLogUpdateSchema = z
+  .object({
+    treatmentId: z.number().int().positive().nullable().optional(),
+    drugId: z.number().int().positive().nullable().optional(),
+    givenAt: z.coerce.date().optional(),
+    slot: z.enum(TREATMENT_SLOTS).nullable().optional(),
+    amountMilliUnits: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
+    notes: z.string().trim().max(2000).optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: "No changes provided",
+  });
 
 export const calendarEntryCreateSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(200),
@@ -507,6 +520,7 @@ export const treatmentCreateSchema = z.object({
   dose: z.string().trim().max(100).default(""),
   route: z.string().trim().max(100).default(""),
   frequency: z.string().trim().max(100).default(""),
+  slots: z.array(z.enum(TREATMENT_SLOTS)).max(TREATMENT_SLOTS.length).default([]),
   reason: z.string().trim().max(300).default(""),
   startDate: dateOnlySchema,
   endDate: optionalDate,
@@ -522,6 +536,7 @@ export const treatmentUpdateSchema = z
     dose: z.string().trim().max(100).optional(),
     route: z.string().trim().max(100).optional(),
     frequency: z.string().trim().max(100).optional(),
+    slots: z.array(z.enum(TREATMENT_SLOTS)).max(TREATMENT_SLOTS.length).optional(),
     reason: z.string().trim().max(300).optional(),
     startDate: dateOnlySchema.optional(),
     endDate: optionalDate,

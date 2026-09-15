@@ -16,6 +16,7 @@ import {
   checkLogCreateSchema,
   checkLogTypeCreateSchema,
   medicationLogCreateSchema,
+  medicationLogUpdateSchema,
   careRecordCreateSchema,
   careSchedulePutSchema,
   checkCreateSchema,
@@ -618,16 +619,14 @@ describe("task validation", () => {
     expect(result.slot).toBe("anytime");
     expect(result.intervalDays).toBe(1);
     expect(result.active).toBe(true);
-    expect(result.treatmentId).toBeUndefined();
   });
 
-  it("accepts a slot and treatment link", () => {
+  it("accepts a slot and interval", () => {
     const result = taskCreateSchema.safeParse({
       rabbitId: 1,
       label: "Evening meds",
       slot: "evening",
       intervalDays: 2,
-      treatmentId: 5,
     });
     expect(result.success).toBe(true);
   });
@@ -660,6 +659,29 @@ describe("medication log validation", () => {
 
   it("requires a time", () => {
     expect(medicationLogCreateSchema.safeParse({ rabbitId: 1 }).success).toBe(false);
+  });
+
+  it("accepts a known slot and rejects an unknown one", () => {
+    expect(
+      medicationLogCreateSchema.safeParse({
+        rabbitId: 1,
+        givenAt: "2026-09-01T08:00:00.000Z",
+        slot: "morning",
+      }).success,
+    ).toBe(true);
+    expect(
+      medicationLogCreateSchema.safeParse({
+        rabbitId: 1,
+        givenAt: "2026-09-01T08:00:00.000Z",
+        slot: "dawn",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("requires at least one change on update", () => {
+    expect(medicationLogUpdateSchema.safeParse({}).success).toBe(false);
+    expect(medicationLogUpdateSchema.safeParse({ notes: "Corrected" }).success).toBe(true);
+    expect(medicationLogUpdateSchema.safeParse({ slot: null }).success).toBe(true);
   });
 });
 
@@ -926,6 +948,33 @@ describe("treatment validation", () => {
     expect(
       treatmentCreateSchema.safeParse({ rabbitId: 1, medication: "Meloxicam", startDate: "01/05/2026" })
         .success,
+    ).toBe(false);
+  });
+
+  it("defaults to no time slots and accepts known slots", () => {
+    const defaults = treatmentCreateSchema.parse({
+      rabbitId: 1,
+      medication: "Meloxicam",
+      startDate: "2026-05-01",
+    });
+    expect(defaults.slots).toEqual([]);
+    const result = treatmentCreateSchema.parse({
+      rabbitId: 1,
+      medication: "Meloxicam",
+      startDate: "2026-05-01",
+      slots: ["early_morning", "evening"],
+    });
+    expect(result.slots).toEqual(["early_morning", "evening"]);
+  });
+
+  it("rejects unknown time slots", () => {
+    expect(
+      treatmentCreateSchema.safeParse({
+        rabbitId: 1,
+        medication: "Meloxicam",
+        startDate: "2026-05-01",
+        slots: ["dawn"],
+      }).success,
     ).toBe(false);
   });
 });

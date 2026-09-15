@@ -150,7 +150,6 @@ type DemoTask = {
   label: string;
   slot: "morning" | "afternoon" | "evening" | "anytime";
   intervalDays: number;
-  treatmentIndex: number | null;
   notes: string;
   active: boolean;
   completionsHoursAgo: number[];
@@ -623,10 +622,9 @@ export function buildDemoDataset(now: Date): DemoDataset {
   const tasks: DemoTask[] = [
     {
       rabbitIndex: 0,
-      label: "Meloxicam dose",
+      label: "Evening meds check",
       slot: "evening",
       intervalDays: 1,
-      treatmentIndex: 0,
       notes: "Give with food.",
       active: true,
       completionsHoursAgo: [26, 50, 74, 98],
@@ -636,7 +634,6 @@ export function buildDemoDataset(now: Date): DemoDataset {
       label: "Clean litter tray",
       slot: "morning",
       intervalDays: 3,
-      treatmentIndex: null,
       notes: "",
       active: true,
       completionsHoursAgo: [30],
@@ -646,7 +643,6 @@ export function buildDemoDataset(now: Date): DemoDataset {
       label: "Weigh Pepper",
       slot: "anytime",
       intervalDays: 7,
-      treatmentIndex: null,
       notes: "Senior check.",
       active: true,
       completionsHoursAgo: [100],
@@ -656,7 +652,6 @@ export function buildDemoDataset(now: Date): DemoDataset {
       label: "Nail check",
       slot: "afternoon",
       intervalDays: 30,
-      treatmentIndex: null,
       notes: "Paused while in quarantine.",
       active: false,
       completionsHoursAgo: [],
@@ -838,27 +833,22 @@ export async function enableDemoData(): Promise<void> {
       }
       if (values.length > 0) await tx.insert(checkLogs).values(values);
     }
-    let medLogIds: number[] = [];
     if (dataset.medicationLogs.length > 0) {
       const [drug] = await tx
         .select({ id: drugs.id })
         .from(drugs)
         .where(eq(drugs.activeIngredient, "meloxicam"))
         .limit(1);
-      const insertedLogs = await tx
-        .insert(medicationLogs)
-        .values(
-          dataset.medicationLogs.map((log) => ({
-            rabbitId: rabbitIds[log.rabbitIndex],
-            treatmentId: treatmentIds[log.treatmentIndex] ?? null,
-            drugId: drug?.id ?? null,
-            givenAt: hoursAgo(log.hoursAgo),
-            amountMilliUnits: log.amountMilliUnits,
-            notes: log.notes,
-          })),
-        )
-        .returning({ id: medicationLogs.id });
-      medLogIds = insertedLogs.map((row) => row.id);
+      await tx.insert(medicationLogs).values(
+        dataset.medicationLogs.map((log) => ({
+          rabbitId: rabbitIds[log.rabbitIndex],
+          treatmentId: treatmentIds[log.treatmentIndex] ?? null,
+          drugId: drug?.id ?? null,
+          givenAt: hoursAgo(log.hoursAgo),
+          amountMilliUnits: log.amountMilliUnits,
+          notes: log.notes,
+        })),
+      );
     }
     if (dataset.bowls.length > 0) {
       for (const bowl of dataset.bowls) {
@@ -886,19 +876,16 @@ export async function enableDemoData(): Promise<void> {
             label: task.label,
             slot: task.slot,
             intervalDays: task.intervalDays,
-            treatmentId:
-              task.treatmentIndex !== null ? treatmentIds[task.treatmentIndex] ?? null : null,
             notes: task.notes,
             active: task.active,
           })
           .returning({ id: rabbitTasks.id });
         if (task.completionsHoursAgo.length > 0) {
           await tx.insert(taskCompletions).values(
-            task.completionsHoursAgo.map((hours, index) => ({
+            task.completionsHoursAgo.map((hours) => ({
               taskId: taskRow.id,
               completedAt: hoursAgo(hours),
               completedBy: null,
-              medicationLogId: task.treatmentIndex !== null ? medLogIds[index] ?? null : null,
               notes: "",
             })),
           );

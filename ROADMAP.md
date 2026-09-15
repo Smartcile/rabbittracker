@@ -52,16 +52,20 @@
 - [x] **Bowl scale tracking.** Per-bunny food/water bowls with a starting weight, rolling weigh-ins
       that calculate consumption since the last reading, top-ups recorded as the amount added or the
       bowl's new total, and a refresh action that starts a new period with an optional final weight.
-- [x] **Daily routine tasks.** Repeating chores and medication rounds per bunny with
-      morning/afternoon/evening/anytime slots and an every-N-days repeat, one-tap completion from
-      the bunny profile or the home Today list, and automatic dose logging with FEFO stock
-      deduction (and undo) for tasks linked to a treatment.
+- [x] **Daily routine tasks.** Repeating chores per bunny with morning/afternoon/evening/anytime
+      slots and an every-N-days repeat, and one-tap completion from the bunny profile or the home
+      Today list.
 - [x] **Sunday check with daily observations.** The full health check form can switch on any
       configured daily check type (poo, water, food, behaviour, …) as an optional section for that
       check; amounts and text are stored on the check and shown in the history table.
 - [x] **Starter drug defaults.** An Add defaults button in the drug cabinet pulls in any missing
       starter medicines without touching edited or custom ones, so upgraded installs get new
       starters like Doxy 100 paste and Trimethoprim Sulfa (Deprim).
+- [x] **Treatment schedule + calendar dosing.** Treatments carry the times of day each dose is
+      given (early morning, morning, afternoon, evening, night); the calendar shows per-slot ticks
+      and logs a dose on tap; linked doses group under the treatment on the bunny page with edit
+      and delete (stock reconciled), one-off doses stay in the medication log, and logging a
+      different amount can update the treatment's dose from that day on.
 
 ## Planned features (agreed but not built)
 

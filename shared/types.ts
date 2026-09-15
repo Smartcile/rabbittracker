@@ -95,6 +95,7 @@ export type RabbitSummaryDto = RabbitDto & {
 };
 
 export type TreatmentStatus = "active" | "completed" | "stopped";
+export type TreatmentSlot = "early_morning" | "morning" | "afternoon" | "evening" | "night";
 
 export type TreatmentDto = {
   id: number;
@@ -103,6 +104,7 @@ export type TreatmentDto = {
   dose: string;
   route: string;
   frequency: string;
+  slots: TreatmentSlot[];
   reason: string;
   startDate: string;
   endDate: string | null;
@@ -313,7 +315,6 @@ export type TaskDto = {
   label: string;
   slot: TaskSlot;
   intervalDays: number;
-  treatmentId: number | null;
   notes: string;
   active: boolean;
   lastCompletedAt: string | null;
@@ -327,7 +328,6 @@ export type TaskCompletionDto = {
   rabbitId: number;
   completedAt: string;
   completedBy: number | null;
-  medicationLogId: number | null;
   notes: string;
   createdAt: string;
 };
@@ -338,6 +338,7 @@ export type MedicationLogDto = {
   treatmentId: number | null;
   drugId: number | null;
   givenAt: string;
+  slot: TreatmentSlot | null;
   amountMilliUnits: number | null;
   notes: string;
   createdAt: string;

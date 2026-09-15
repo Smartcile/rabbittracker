@@ -33,6 +33,7 @@ import type {
   TaskDto,
   TaskSlot,
   TreatmentDto,
+  TreatmentSlot,
   TreatmentStatus,
   UserDto,
   Vaccine,
@@ -42,6 +43,7 @@ import type {
 import type { DrugForm } from "../../../shared/drugs.ts";
 import { summarizeBowl } from "../../../shared/bowls.ts";
 import { emptyChecklist } from "../../../shared/checklist.ts";
+import { TREATMENT_SLOTS } from "../../../shared/treatments.ts";
 import type {
   AppointmentRow,
   BowlReadingRow,
@@ -165,6 +167,7 @@ export function treatmentToDto(row: TreatmentRow): TreatmentDto {
     dose: row.dose,
     route: row.route,
     frequency: row.frequency,
+    slots: treatmentSlots(row.slots),
     reason: row.reason,
     startDate: row.startDate,
     endDate: row.endDate,
@@ -380,7 +383,6 @@ export function taskToDto(row: RabbitTaskRow, lastCompletedAt: Date | null): Tas
     label: row.label,
     slot: taskSlot(row.slot),
     intervalDays: row.intervalDays,
-    treatmentId: row.treatmentId,
     notes: row.notes,
     active: row.active,
     lastCompletedAt: lastCompletedAt ? lastCompletedAt.toISOString() : null,
@@ -396,7 +398,6 @@ export function taskCompletionToDto(row: TaskCompletionRow, rabbitId: number): T
     rabbitId,
     completedAt: row.completedAt.toISOString(),
     completedBy: row.completedBy,
-    medicationLogId: row.medicationLogId,
     notes: row.notes,
     createdAt: row.createdAt.toISOString(),
   };
@@ -406,6 +407,16 @@ function taskSlot(value: string): TaskSlot {
   return value === "morning" || value === "afternoon" || value === "evening" ? value : "anytime";
 }
 
+function treatmentSlot(value: string | null): TreatmentSlot | null {
+  return (TREATMENT_SLOTS as readonly string[]).includes(value ?? "")
+    ? (value as TreatmentSlot)
+    : null;
+}
+
+function treatmentSlots(values: string[]): TreatmentSlot[] {
+  return values.filter((value): value is TreatmentSlot => treatmentSlot(value) !== null);
+}
+
 export function medicationLogToDto(row: MedicationLogRow): MedicationLogDto {
   return {
     id: row.id,
@@ -413,6 +424,7 @@ export function medicationLogToDto(row: MedicationLogRow): MedicationLogDto {
     treatmentId: row.treatmentId,
     drugId: row.drugId,
     givenAt: row.givenAt.toISOString(),
+    slot: treatmentSlot(row.slot),
     amountMilliUnits: row.amountMilliUnits,
     notes: row.notes,
     createdAt: row.createdAt.toISOString(),

@@ -3,12 +3,14 @@ import type {
   CheckLogTypeDto,
   DrugDto,
   HealthCheckDto,
+  MedicationLogDto,
   RabbitSummaryDto,
   TaskDto,
   TreatmentDto,
 } from "../../../shared/types.ts";
 import { ageLabel, taskDueStatus, upcomingAppointments } from "../../../shared/health.ts";
 import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
+import { TREATMENT_SLOT_LABELS } from "../../../shared/treatments.ts";
 import { api } from "../api.ts";
 import { loadCheckLogTypes } from "../dailyLogs.ts";
 import { rabbitAvatar } from "../components/avatar.ts";
@@ -67,20 +69,28 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
   );
 
   async function load(): Promise<void> {
-    const [{ rabbits }, { appointments }, { treatments }, { drugs }, logTypes, { tasks }] =
-      await Promise.all([
-        api.get<{ rabbits: RabbitSummaryDto[] }>("/api/rabbits"),
-        api.get<{ appointments: AppointmentDto[] }>("/api/appointments"),
-        api.get<{ treatments: TreatmentDto[] }>("/api/treatments"),
-        api.get<{ drugs: DrugDto[] }>("/api/drugs"),
-        loadCheckLogTypes(),
-        api.get<{ tasks: TaskDto[] }>("/api/tasks"),
-      ]);
+    const [
+      { rabbits },
+      { appointments },
+      { treatments },
+      { drugs },
+      logTypes,
+      { tasks },
+      { logs: medLogs },
+    ] = await Promise.all([
+      api.get<{ rabbits: RabbitSummaryDto[] }>("/api/rabbits"),
+      api.get<{ appointments: AppointmentDto[] }>("/api/appointments"),
+      api.get<{ treatments: TreatmentDto[] }>("/api/treatments"),
+      api.get<{ drugs: DrugDto[] }>("/api/drugs"),
+      loadCheckLogTypes(),
+      api.get<{ tasks: TaskDto[] }>("/api/tasks"),
+      api.get<{ logs: MedicationLogDto[] }>("/api/medication-logs"),
+    ]);
     const hasActive = rabbits.some((rabbit) => rabbit.status === "active");
     quickLog.disabled = !hasActive;
     fab.disabled = !hasActive;
     renderStats(rabbits, appointments, treatments);
-    renderToday(rabbits, appointments, treatments, drugs, logTypes, tasks);
+    renderToday(rabbits, appointments, treatments, drugs, logTypes, tasks, medLogs);
     renderAttention(rabbits);
     renderUpcoming(appointments, rabbits);
     if (rabbits.length === 0) {
@@ -130,6 +140,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
     drugs: DrugDto[],
     logTypes: CheckLogTypeDto[],
     tasks: TaskDto[],
+    medLogs: MedicationLogDto[],
   ): void {
     const activeRabbits = rabbits.filter((rabbit) => rabbit.status === "active");
     const byId = new Map(activeRabbits.map((rabbit) => [rabbit.id, rabbit]));
@@ -168,8 +179,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
       );
     for (const task of dueTasks) {
       const rabbit = byId.get(task.rabbitId)!;
-      const treatment = task.treatmentId != null ? treatments.find((item) => item.id === task.treatmentId) : undefined;
-      const detail = [TASK_SLOT_LABELS[task.slot], treatment?.medication].filter(Boolean).join(" · ");
+      const detail = TASK_SLOT_LABELS[task.slot];
       rows.push(
         h(
           "div",
@@ -206,7 +216,10 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
     );
     for (const treatment of activeTreatments) {
       const rabbit = byId.get(treatment.rabbitId)!;
-      const detail = [treatment.dose, treatment.frequency, treatment.reason].filter(Boolean).join(" · ");
+      const slots = treatment.slots.map((slot) => TREATMENT_SLOT_LABELS[slot]).join(", ");
+      const detail = [treatment.dose, treatment.frequency, slots, treatment.reason]
+        .filter(Boolean)
+        .join(" · ");
       rows.push(
         h(
           "div",
@@ -230,6 +243,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
                       rabbit,
                       treatments,
                       drugs,
+                      logs: medLogs,
                       treatmentId: treatment.id,
                       onSaved: () => void load(),
                     }),
@@ -391,7 +405,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
         completedAt: new Date().toISOString(),
         notes: "",
       });
-      toast(task.treatmentId != null ? "Done — dose logged" : "Done");
+      toast("Done");
       await load();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not complete the task", "error");

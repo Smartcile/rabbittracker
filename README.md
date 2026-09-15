@@ -51,12 +51,15 @@ Desktop:
   go: consumption is calculated since the last reading and the baseline rolls forward. Top up by
   entering the amount added or the bowl's new total, and refresh starts a new period with an
   optional final weight. Plain ml/g daily checks still work alongside.
-- **Daily routine tasks** — repeating chores and medication rounds per bunny with morning, afternoon,
-  evening or anytime slots and an every-N-days repeat. Tick them off from the bunny page or the home
-  Today list; completing a task linked to a treatment logs the dose and deducts drug stock, and undo
-  puts it back.
-- **Medication log** — record every dose given (linked to a treatment and drug). Logged doses
-  deduct from drug stock earliest-expiry-first and deleting a log puts it back.
+- **Daily routine tasks** — repeating chores per bunny with morning, afternoon, evening or anytime
+  slots and an every-N-days repeat. Tick them off from the bunny page or the home Today list.
+- **Treatments & medication** — courses with dose, route and frequency plus the times of day each
+  dose is given (early morning, morning, afternoon, evening, night). The calendar shows the doses
+  due each day with ticks per time; tap a treatment to log the dose (slot preselected) and it ticks
+  off. Linked doses are grouped under the treatment on the bunny page, one-off doses stay in the
+  medication log, and either can be edited later. Logged doses deduct from drug stock
+  earliest-expiry-first; editing or deleting a log reconciles it. Overriding the amount when logging
+  can update the treatment's dose from that day on.
 - Manual weigh-ins with a one-tap "Log weight" action.
 - Weight trend chart with loss alerts and target-range checks.
 - Timestamped notes & photos journal per bunny.

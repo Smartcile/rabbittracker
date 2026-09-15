@@ -49,6 +49,18 @@ export function formatUnitsFromMilliUnits(milliUnits: number | null | undefined)
   return Number.isInteger(units) ? String(units) : String(Number(units.toFixed(3)));
 }
 
+export function parseScaledAmount(
+  value: string,
+  scale: number,
+  allowZero = false,
+): number | null | undefined {
+  const text = value.trim();
+  if (!text) return null;
+  const number = Number(text);
+  if (!Number.isFinite(number) || number < 0 || (!allowZero && number === 0)) return undefined;
+  return Math.round(number * scale);
+}
+
 function utcDay(value: string): number | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return null;

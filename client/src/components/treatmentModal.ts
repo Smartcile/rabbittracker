@@ -1,4 +1,10 @@
-import type { DrugDto, HealthCheckDto, RabbitDto, TreatmentDto } from "../../../shared/types.ts";
+import type {
+  DrugDto,
+  HealthCheckDto,
+  RabbitDto,
+  TreatmentDto,
+  TreatmentSlot,
+} from "../../../shared/types.ts";
 import {
   courseTotalMilliUnits,
   doseMilliUnitsForWeight,
@@ -7,11 +13,13 @@ import {
   stockTotalMilliUnits,
 } from "../../../shared/drugs.ts";
 import { parseWeightInput, weightInputValue } from "../../../shared/health.ts";
+import { TREATMENT_SLOT_LABELS, TREATMENT_SLOTS } from "../../../shared/treatments.ts";
 import { api } from "../api.ts";
 import { h } from "../dom.ts";
 import { lookupSelect } from "./lookupSelect.ts";
 import { openModal } from "./modal.ts";
 import { toast } from "./toast.ts";
+import { optionButtons } from "./toggle.ts";
 
 export function openTreatmentModal(options: {
   rabbits: RabbitDto[];
@@ -42,6 +50,15 @@ export function openTreatmentModal(options: {
   const dose = h("input", { name: "dose", value: editing?.dose ?? "" });
   const route = lookupSelect("route", { initialLabel: editing?.route ?? "" });
   const frequency = lookupSelect("frequency", { initialLabel: editing?.frequency ?? "" });
+  let slots: TreatmentSlot[] = [...(editing?.slots ?? [])];
+  const slotGroup = optionButtons(
+    TREATMENT_SLOTS.map((value) => ({ value, label: TREATMENT_SLOT_LABELS[value] })),
+    slots,
+    true,
+    (values) => {
+      slots = values as TreatmentSlot[];
+    },
+  );
   const reason = lookupSelect("reason", { initialLabel: editing?.reason ?? "" });
   const startDate = h("input", {
     type: "date",
@@ -256,6 +273,7 @@ export function openTreatmentModal(options: {
             dose: dose.value.trim(),
             route: route.value().trim(),
             frequency: frequency.value().trim(),
+            slots,
             reason: reason.value().trim(),
             startDate: startDate.value,
             endDate: endDate.value || null,
@@ -299,6 +317,17 @@ export function openTreatmentModal(options: {
       ),
       h("div", { class: "field" }, h("label", null, "Route"), route.root),
       h("div", { class: "field" }, h("label", null, "Frequency"), frequency.root),
+      h(
+        "div",
+        { class: "field" },
+        h("label", null, "Times of day"),
+        slotGroup.root,
+        h(
+          "span",
+          { class: "dim small" },
+          "Tick each time this is given, e.g. Morning and Evening. Leave empty for one dose a day with no set time.",
+        ),
+      ),
       h("div", { class: "field" }, h("label", null, "Reason"), reason.root),
       h("div", { class: "field" }, h("label", null, "Start date"), startDate),
       h("div", { class: "field" }, h("label", null, "End date"), endDate),

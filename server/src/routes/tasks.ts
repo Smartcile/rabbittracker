@@ -2,13 +2,12 @@ import { and, asc, desc, eq, inArray, max } from "drizzle-orm";
 import { Router } from "express";
 import { taskCompletionToDto, taskToDto } from "../api/mappers.ts";
 import { db } from "../db/index.ts";
-import { medicationLogs, rabbitTasks, taskCompletions, treatments } from "../db/schema.ts";
+import { rabbitTasks, taskCompletions } from "../db/schema.ts";
 import type { RabbitTaskRow, TaskCompletionRow } from "../db/schema.ts";
 import { findVisibleRabbit, requirePermission, visibleRabbitIds } from "../lib/access.ts";
 import { requireAuth } from "../lib/auth.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
 import { taskCompleteSchema, taskCreateSchema, taskUpdateSchema } from "../lib/validation.ts";
-import { deductDrugStock, restoreDrugStock } from "../services/drugStock.ts";
 
 export const tasksRouter = Router();
 
@@ -52,7 +51,6 @@ tasksRouter.get("/", requireAuth, async (req, res) => {
 tasksRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {
   const input = parseInput(taskCreateSchema, req.body);
   await findVisibleRabbit(req.user!, input.rabbitId);
-  await requireTreatment(input.rabbitId, input.treatmentId ?? null);
   const [row] = await db
     .insert(rabbitTasks)
     .values({
@@ -60,7 +58,6 @@ tasksRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (
       label: input.label,
       slot: input.slot,
       intervalDays: input.intervalDays,
-      treatmentId: input.treatmentId ?? null,
       notes: input.notes,
       active: input.active,
     })
@@ -72,14 +69,12 @@ tasksRouter.patch("/:id", requireAuth, requirePermission("canRecordHealth"), asy
   const task = await findTask(parseId(String(req.params.id)));
   await findVisibleRabbit(req.user!, task.rabbitId);
   const input = parseInput(taskUpdateSchema, req.body);
-  if (input.treatmentId !== undefined) await requireTreatment(task.rabbitId, input.treatmentId);
   const [row] = await db
     .update(rabbitTasks)
     .set({
       label: input.label ?? task.label,
       slot: input.slot ?? task.slot,
       intervalDays: input.intervalDays ?? task.intervalDays,
-      treatmentId: input.treatmentId !== undefined ? input.treatmentId : task.treatmentId,
       notes: input.notes !== undefined ? input.notes : task.notes,
       active: input.active !== undefined ? input.active : task.active,
       updatedAt: new Date(),
@@ -100,51 +95,15 @@ tasksRouter.post("/:id/complete", requireAuth, requirePermission("canRecordHealt
   const task = await findTask(parseId(String(req.params.id)));
   await findVisibleRabbit(req.user!, task.rabbitId);
   const input = parseInput(taskCompleteSchema, req.body);
-  const completion = await db.transaction(async (tx) => {
-    let medicationLogId: number | null = null;
-    if (task.treatmentId !== null) {
-      const treatmentRows = await tx
-        .select()
-        .from(treatments)
-        .where(eq(treatments.id, task.treatmentId))
-        .limit(1);
-      const treatment = treatmentRows[0];
-      if (treatment && treatment.rabbitId === task.rabbitId) {
-        let deducted = 0;
-        if (
-          treatment.drugId !== null &&
-          treatment.doseMilliUnits !== null &&
-          treatment.doseMilliUnits > 0
-        ) {
-          deducted = await deductDrugStock(tx, treatment.drugId, treatment.doseMilliUnits);
-        }
-        const [log] = await tx
-          .insert(medicationLogs)
-          .values({
-            rabbitId: task.rabbitId,
-            treatmentId: treatment.id,
-            drugId: treatment.drugId,
-            givenAt: input.completedAt,
-            amountMilliUnits: treatment.doseMilliUnits,
-            stockDeductedMilliUnits: deducted,
-            notes: input.notes,
-          })
-          .returning();
-        medicationLogId = log.id;
-      }
-    }
-    const [row] = await tx
-      .insert(taskCompletions)
-      .values({
-        taskId: task.id,
-        completedAt: input.completedAt,
-        completedBy: req.user!.id,
-        medicationLogId,
-        notes: input.notes,
-      })
-      .returning();
-    return row;
-  });
+  const [completion] = await db
+    .insert(taskCompletions)
+    .values({
+      taskId: task.id,
+      completedAt: input.completedAt,
+      completedBy: req.user!.id,
+      notes: input.notes,
+    })
+    .returning();
   res.status(201).json({
     completion: taskCompletionToDto(completion, task.rabbitId),
     task: taskToDto(task, completion.completedAt),
@@ -159,23 +118,7 @@ tasksRouter.delete(
     const completion = await findCompletion(parseId(String(req.params.id)));
     const task = await findTask(completion.taskId);
     await findVisibleRabbit(req.user!, task.rabbitId);
-    await db.transaction(async (tx) => {
-      if (completion.medicationLogId !== null) {
-        const logRows = await tx
-          .select()
-          .from(medicationLogs)
-          .where(eq(medicationLogs.id, completion.medicationLogId))
-          .limit(1);
-        const log = logRows[0];
-        if (log) {
-          if (log.drugId !== null && log.stockDeductedMilliUnits > 0) {
-            await restoreDrugStock(tx, log.drugId, log.stockDeductedMilliUnits);
-          }
-          await tx.delete(medicationLogs).where(eq(medicationLogs.id, log.id));
-        }
-      }
-      await tx.delete(taskCompletions).where(eq(taskCompletions.id, completion.id));
-    });
+    await db.delete(taskCompletions).where(eq(taskCompletions.id, completion.id));
     res.json({ ok: true });
   },
 );
@@ -206,12 +149,4 @@ async function lastCompletion(taskId: number): Promise<Date | null> {
     .orderBy(desc(taskCompletions.completedAt))
     .limit(1);
   return rows[0]?.completedAt ?? null;
-}
-
-async function requireTreatment(rabbitId: number, treatmentId: number | null): Promise<void> {
-  if (treatmentId === null) return;
-  const rows = await db.select().from(treatments).where(eq(treatments.id, treatmentId)).limit(1);
-  if (!rows[0] || rows[0].rabbitId !== rabbitId) {
-    throw new HttpError(400, "Unknown treatment for this bunny");
-  }
 }

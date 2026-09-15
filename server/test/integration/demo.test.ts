@@ -86,9 +86,7 @@ describe("demo mode integration", () => {
       completions: TaskCompletionDto[];
     }>(ctx, `/api/tasks?rabbitId=${clover.id}`);
     expect(tasks.length).toBeGreaterThanOrEqual(1);
-    expect(tasks.some((task) => task.treatmentId !== null)).toBe(true);
     expect(completions.length).toBeGreaterThanOrEqual(1);
-    expect(completions.some((completion) => completion.medicationLogId !== null)).toBe(true);
 
     await api(ctx, "/api/settings/demo", { method: "PUT", body: { enabled: false } });
     const after = await api<{ rabbits: RabbitDto[] }>(ctx, "/api/rabbits");

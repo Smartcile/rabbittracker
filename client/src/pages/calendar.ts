@@ -1,5 +1,10 @@
 import { expandEntryStart } from "../../../shared/calendar.ts";
 import { checkLogValueSummary } from "../../../shared/checkLogs.ts";
+import {
+  TREATMENT_SLOT_SHORT_LABELS,
+  treatmentDayDone,
+  treatmentSlotStatus,
+} from "../../../shared/treatments.ts";
 import type {
   AppointmentDto,
   CalendarEntryDto,
@@ -7,6 +12,8 @@ import type {
   CalendarSubscriptionDto,
   CalendarSyncResultDto,
   CheckLogDto,
+  DrugDto,
+  MedicationLogDto,
   RabbitDto,
   SettingsDto,
   TreatmentDto,
@@ -14,8 +21,8 @@ import type {
 import { api } from "../api.ts";
 import { openAppointmentModal } from "../components/appointmentModal.ts";
 import { openCalendarEntryModal } from "../components/calendarEntryModal.ts";
+import { openMedicationLogModal } from "../components/medicationLogModal.ts";
 import { toast } from "../components/toast.ts";
-import { openTreatmentModal } from "../components/treatmentModal.ts";
 import type { PageContext } from "../context.ts";
 import { fmtDate, fmtTime, h } from "../dom.ts";
 import { can } from "../permissions.ts";
@@ -27,6 +34,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
   view.setDate(1);
   let timezone: string | undefined;
   let rabbits: RabbitDto[] = [];
+  let drugs: DrugDto[] = [];
   const canManage = can(ctx.user, "canManageCalendar");
   const canRecord = can(ctx.user, "canRecordHealth");
   const showCost = can(ctx.user, "canViewCosts");
@@ -103,21 +111,27 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
     const from = new Date(view.getFullYear(), view.getMonth(), 1);
     const to = new Date(view.getFullYear(), view.getMonth() + 1, 0, 23, 59, 59, 999);
     title.textContent = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(view);
-    const [eventsRes, appointmentsRes, treatmentsRes, entriesRes, logsRes] = await Promise.all([
-      api.get<{ events: CalendarEventDto[] }>(
-        `/api/calendar/events?from=${from.toISOString()}&to=${to.toISOString()}`,
-      ),
-      api.get<{ appointments: AppointmentDto[] }>(
-        `/api/appointments?from=${from.toISOString()}&to=${to.toISOString()}`,
-      ),
-      api.get<{ treatments: TreatmentDto[] }>("/api/treatments"),
-      api.get<{ entries: CalendarEntryDto[] }>(
-        `/api/calendar-entries?from=${from.toISOString()}&to=${to.toISOString()}`,
-      ),
-      api.get<{ logs: CheckLogDto[] }>(
-        `/api/check-logs?from=${from.toISOString()}&to=${to.toISOString()}`,
-      ),
-    ]);
+    const [eventsRes, appointmentsRes, treatmentsRes, entriesRes, logsRes, medLogsRes, drugsRes] =
+      await Promise.all([
+        api.get<{ events: CalendarEventDto[] }>(
+          `/api/calendar/events?from=${from.toISOString()}&to=${to.toISOString()}`,
+        ),
+        api.get<{ appointments: AppointmentDto[] }>(
+          `/api/appointments?from=${from.toISOString()}&to=${to.toISOString()}`,
+        ),
+        api.get<{ treatments: TreatmentDto[] }>("/api/treatments"),
+        api.get<{ entries: CalendarEntryDto[] }>(
+          `/api/calendar-entries?from=${from.toISOString()}&to=${to.toISOString()}`,
+        ),
+        api.get<{ logs: CheckLogDto[] }>(
+          `/api/check-logs?from=${from.toISOString()}&to=${to.toISOString()}`,
+        ),
+        api.get<{ logs: MedicationLogDto[] }>(
+          `/api/medication-logs?from=${from.toISOString()}&to=${to.toISOString()}`,
+        ),
+        api.get<{ drugs: DrugDto[] }>("/api/drugs"),
+      ]);
+    drugs = drugsRes.drugs;
     const monthStart = dayKey(from);
     const monthEnd = dayKey(to);
     const monthTreatments = treatmentsRes.treatments.filter(
@@ -135,6 +149,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
       monthTreatments,
       occurrences,
       logsRes.logs,
+      medLogsRes.logs,
     );
   }
 
@@ -144,12 +159,15 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
     treatments: TreatmentDto[],
     occurrences: { entry: CalendarEntryDto; at: Date }[],
     logs: CheckLogDto[],
+    medLogs: MedicationLogDto[],
   ): void {
     const eventsByDay = groupByDay(events, (event) => event.startAt);
     const appointmentsByDay = groupByDay(appointments, (appointment) => appointment.scheduledAt);
     const entriesByDay = groupByDay(occurrences, (item) => item.at.toISOString());
     const logsByDay = groupByDay(logs, (log) => log.loggedAt);
+    const medLogsByDay = groupByDay(medLogs, (log) => log.givenAt);
     const rabbitNames = new Map(rabbits.map((rabbit) => [rabbit.id, rabbit.name]));
+    const rabbitById = new Map(rabbits.map((rabbit) => [rabbit.id, rabbit]));
     grid.replaceChildren();
     for (const label of WEEKDAYS) grid.append(h("div", { class: "cal-head" }, label));
     const offset = (new Date(view.getFullYear(), view.getMonth(), 1).getDay() + 6) % 7;
@@ -182,31 +200,59 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         );
       }
       for (const treatment of treatments) {
+        const rabbit = rabbitById.get(treatment.rabbitId);
         const rabbitName = rabbitNames.get(treatment.rabbitId) ?? "Bunny";
-        const open = () =>
-          openTreatmentModal({ rabbits, treatment, onSaved: () => void refresh() });
         const startsToday = treatment.startDate === key;
         const endsToday = treatment.endDate === key;
+        const showsEnd = endsToday && treatment.endDate !== treatment.startDate;
         const activeToday =
           date.getMonth() === view.getMonth() &&
           treatment.startDate <= key &&
           (treatment.endDate === null || treatment.endDate >= key);
-        if (startsToday) {
-          const frequency = treatment.frequency ? ` · ${treatment.frequency}` : "";
-          cell.append(
-            treatmentChip(
-              `▶ ${rabbitName}: ${treatment.medication}${frequency}`,
-              open,
-              canRecord,
+        if (!startsToday && !showsEnd && !activeToday) continue;
+        const dayLogs = (medLogsByDay.get(key) ?? []).filter(
+          (log) => log.treatmentId === treatment.id,
+        );
+        const statuses =
+          treatment.slots.length > 0 ? treatmentSlotStatus(treatment.slots, dayLogs) : [];
+        const done = treatmentDayDone(treatment.slots, dayLogs);
+        const parts: (HTMLElement | string)[] = [];
+        if (startsToday) parts.push("▶ ");
+        else if (showsEnd) parts.push("■ ");
+        parts.push(`${rabbitName}: ${treatment.medication}`);
+        if (startsToday && treatment.frequency) parts.push(` · ${treatment.frequency}`);
+        if (showsEnd) parts.push(" ends");
+        if (statuses.length > 0) {
+          parts.push(
+            h(
+              "span",
+              { class: "cal-slots" },
+              statuses.map((entry) =>
+                h(
+                  "span",
+                  { class: `cal-slot${entry.done ? " done" : ""}` },
+                  `${TREATMENT_SLOT_SHORT_LABELS[entry.slot]}${entry.done ? " ✓" : ""}`,
+                ),
+              ),
             ),
           );
-        } else if (endsToday && treatment.endDate !== treatment.startDate) {
-          cell.append(
-            treatmentChip(`■ ${rabbitName}: ${treatment.medication} ends`, open, canRecord),
-          );
-        } else if (activeToday) {
-          cell.append(treatmentChip(`${rabbitName}: ${treatment.medication}`, open, canRecord));
+        } else if (done) {
+          parts.push(h("span", { class: "cal-slot done" }, "✓"));
         }
+        const open =
+          canRecord && rabbit
+            ? () =>
+                openMedicationLogModal({
+                  rabbit,
+                  treatments,
+                  drugs,
+                  logs: medLogs,
+                  treatmentId: treatment.id,
+                  date: new Date(date),
+                  onSaved: () => void refresh(),
+                })
+            : null;
+        cell.append(treatmentChip(parts, open, done));
       }
       for (const { entry } of entriesByDay.get(key) ?? []) {
         const label = entry.allDay ? entry.title : `${fmtTime(entry.startAt, timezone)} ${entry.title}`;
@@ -338,7 +384,12 @@ function dayKey(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-function treatmentChip(label: string, onClick: () => void, clickable: boolean): HTMLElement {
-  if (!clickable) return h("span", { class: "cal-chip med" }, label);
-  return h("button", { class: "cal-chip med", type: "button", onClick }, label);
+function treatmentChip(
+  parts: (HTMLElement | string)[],
+  onClick: (() => void) | null,
+  done: boolean,
+): HTMLElement {
+  const classes = `cal-chip med${done ? " done" : ""}`;
+  if (!onClick) return h("span", { class: classes }, ...parts);
+  return h("button", { class: classes, type: "button", onClick }, ...parts);
 }

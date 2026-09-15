@@ -4,20 +4,13 @@ import {
   formatDrugAmount,
   formatMgFromMicrograms,
   formatUnitsFromMilliUnits,
+  parseScaledAmount,
 } from "../../../shared/drugs.ts";
 import { api } from "../api.ts";
 import { fmtCalendarDate, h } from "../dom.ts";
 import { lookupSelect } from "./lookupSelect.ts";
 import { confirmDialog, openModal } from "./modal.ts";
 import { toast } from "./toast.ts";
-
-function parseScaled(value: string, scale: number): number | null | undefined {
-  const text = value.trim();
-  if (!text) return null;
-  const number = Number(text);
-  if (!Number.isFinite(number) || number <= 0) return undefined;
-  return Math.round(number * scale);
-}
 
 export function openDrugModal(options: {
   drug?: DrugDto;
@@ -125,7 +118,7 @@ export function openDrugModal(options: {
 
   async function addBatch(): Promise<void> {
     if (!current) return;
-    const quantity = parseScaled(batchQuantity.value, 1000);
+    const quantity = parseScaledAmount(batchQuantity.value, 1000);
     if (quantity === undefined || quantity === null || quantity <= 0) {
       toast("Enter a stock amount", "error");
       return;
@@ -197,17 +190,17 @@ export function openDrugModal(options: {
         onSubmit: async (event: Event) => {
           event.preventDefault();
           error.style.display = "none";
-          const concentrationValue = parseScaled(concentration.value, 1000);
-          const doseValue = parseScaled(dose.value, 1000);
-          const reorderValue = parseScaled(reorder.value, 1000);
-          const initialValue = editing ? null : parseScaled(initialQuantity.value, 1000);
+          const concentrationValue = parseScaledAmount(concentration.value, 1000);
+          const doseValue = parseScaledAmount(dose.value, 1000);
+          const reorderValue = parseScaledAmount(reorder.value, 1000, true);
+          const initialValue = editing ? null : parseScaledAmount(initialQuantity.value, 1000);
           if (
             concentrationValue === undefined ||
             doseValue === undefined ||
             reorderValue === undefined ||
             initialValue === undefined
           ) {
-            error.textContent = "Amounts must be positive numbers, or left blank.";
+            error.textContent = "Amounts must be positive numbers, or left blank (reorder level can be 0).";
             error.style.display = "";
             return;
           }

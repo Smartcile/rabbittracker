@@ -2,6 +2,7 @@ import { emptyChecklist } from "../../../shared/checklist.ts";
 import { bowlReadingKindLabel } from "../../../shared/bowls.ts";
 import { checkLogValueParts } from "../../../shared/checkLogs.ts";
 import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
+import { TREATMENT_SLOT_LABELS } from "../../../shared/treatments.ts";
 import type {
   AppointmentDto,
   BowlDto,
@@ -116,14 +117,7 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
         profileGroup(
           { id: "routine", title: "Daily routine", hint: "Repeating chores and med rounds", open: true },
           [
-            tasksCard(
-              bundle.rabbit,
-              taskResponse.tasks,
-              taskResponse.completions,
-              bundle.treatments,
-              load,
-              canRecord,
-            ),
+            tasksCard(bundle.rabbit, taskResponse.tasks, taskResponse.completions, load, canRecord),
           ],
         ),
         profileGroup(
@@ -143,7 +137,14 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
         profileGroup(
           { id: "treatment", title: "Treatments & medication", hint: "Courses, doses and stock" },
           [
-            treatmentsCard(bundle.rabbit, bundle.treatments, drugResponse.drugs, load, canRecord),
+            treatmentsCard(
+              bundle.rabbit,
+              bundle.treatments,
+              drugResponse.drugs,
+              medLogResponse.logs,
+              load,
+              canRecord,
+            ),
             medicationCard(
               bundle.rabbit,
               bundle.treatments,
@@ -904,12 +905,10 @@ function tasksCard(
   rabbit: RabbitDto,
   tasks: TaskDto[],
   completions: TaskCompletionDto[],
-  treatments: TreatmentDto[],
   reload: () => Promise<void>,
   canRecord: boolean,
 ): HTMLElement {
   const now = new Date();
-  const treatmentById = new Map(treatments.map((treatment) => [treatment.id, treatment]));
   const taskById = new Map(tasks.map((task) => [task.id, task]));
   const due = tasks
     .filter(
@@ -927,11 +926,7 @@ function tasksCard(
       currentSlot = task.slot;
       list.append(h("p", { class: "task-slot dim small" }, TASK_SLOT_LABELS[task.slot]));
     }
-    const treatment = task.treatmentId != null ? treatmentById.get(task.treatmentId) : undefined;
     const detail = [
-      treatment
-        ? `${treatment.medication}${treatment.dose ? ` · ${treatment.dose}` : ""}`
-        : null,
       task.intervalDays === 1 ? "every day" : `every ${task.intervalDays} days`,
       task.lastCompletedAt ? `last done ${fmtDate(task.lastCompletedAt)}` : "not done yet",
     ]
@@ -962,8 +957,7 @@ function tasksCard(
               {
                 class: "btn ghost small",
                 type: "button",
-                onClick: () =>
-                  openTaskModal({ rabbit, task, treatments, onSaved: () => void reload() }),
+                onClick: () => openTaskModal({ rabbit, task, onSaved: () => void reload() }),
               },
               "Edit",
             )
@@ -989,7 +983,7 @@ function tasksCard(
             h(
               "span",
               { class: "dim small" },
-              `${fmtDate(completion.completedAt)} ${fmtTime(completion.completedAt)}${completion.medicationLogId != null ? " · dose logged" : ""}`,
+              `${fmtDate(completion.completedAt)} ${fmtTime(completion.completedAt)}`,
             ),
           ),
           h("span", { class: "spacer" }),
@@ -1015,7 +1009,7 @@ function tasksCard(
         {
           class: "btn outline small",
           type: "button",
-          onClick: () => openTaskModal({ rabbit, treatments, onSaved: () => void reload() }),
+          onClick: () => openTaskModal({ rabbit, onSaved: () => void reload() }),
         },
         "Add task",
       )
@@ -1028,7 +1022,7 @@ function tasksCard(
     h(
       "p",
       { class: "dim small" },
-      "Repeating chores and medication rounds. Tap Done when finished — linked medication logs the dose automatically.",
+      "Repeating chores and care rounds. Tap Done when finished.",
     ),
     list,
   );
@@ -1039,7 +1033,7 @@ function tasksCard(
         completedAt: new Date().toISOString(),
         notes: "",
       });
-      toast(task.treatmentId != null ? "Done — dose logged" : "Done");
+      toast("Done");
       await reload();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not complete the task", "error");
@@ -1049,10 +1043,7 @@ function tasksCard(
   async function undoCompletion(completion: TaskCompletionDto): Promise<void> {
     const confirmed = await confirmDialog({
       title: "Undo completion?",
-      message:
-        completion.medicationLogId != null
-          ? "The logged dose is removed and returned to drug stock."
-          : "The task becomes due again.",
+      message: "The task becomes due again.",
       confirmLabel: "Undo",
       danger: true,
     });
@@ -1072,45 +1063,19 @@ function medicationCard(
   canRecord: boolean,
 ): HTMLElement {
   const list = h("div", { class: "stack", style: { gap: "0" } });
-  const recent = logs.slice(0, 10);
-  if (recent.length === 0) {
-    list.append(h("p", { class: "dim small", style: { margin: 0 } }, "No doses logged yet."));
+  const oneOff = logs.filter((entry) => entry.treatmentId === null);
+  if (oneOff.length === 0) {
+    list.append(h("p", { class: "dim small", style: { margin: 0 } }, "No one-off doses logged yet."));
   }
-  for (const entry of recent) {
-    const drug = drugs.find((item) => item.id === entry.drugId);
-    const amount =
-      entry.amountMilliUnits != null
-        ? formatDrugAmount(entry.amountMilliUnits, drug?.unit ?? "dose")
-        : "";
-    list.append(
-      h(
-        "div",
-        { class: "list-row" },
-        h(
-          "div",
-          { class: "stack", style: { gap: "0.15rem" } },
-          h("strong", null, drug?.name ?? "Medication"),
-          amount ? h("span", { class: "dim small" }, amount) : null,
-          entry.notes ? h("span", { class: "dim small" }, entry.notes) : null,
-        ),
-        h("span", { class: "spacer" }),
-        h("span", { class: "dim small" }, `${fmtDate(entry.givenAt)} ${fmtTime(entry.givenAt)}`),
-        canRecord
-          ? h(
-              "button",
-              { class: "btn ghost small", type: "button", onClick: () => void removeMedicationLog(entry, reload) },
-              "Delete",
-            )
-          : null,
-      ),
-    );
+  for (const entry of oneOff.slice(0, 10)) {
+    list.append(medicationLogRow(rabbit, entry, treatments, drugs, logs, reload, canRecord));
   }
   const log = h(
     "button",
     {
       class: "btn primary small",
       type: "button",
-      onClick: () => openMedicationLogModal({ rabbit, treatments, drugs, onSaved: () => void reload() }),
+      onClick: () => openMedicationLogModal({ rabbit, treatments, drugs, logs, onSaved: () => void reload() }),
     },
     "Log a dose",
   );
@@ -1127,9 +1092,67 @@ function medicationCard(
     h(
       "p",
       { class: "dim small" },
-      "Every dose given, especially anything issued by the vet. Logged doses deduct from drug stock.",
+      "One-off doses that are not part of a treatment. Doses linked to a treatment are grouped under that treatment above; every logged dose deducts from drug stock.",
     ),
     list,
+  );
+}
+
+function medicationLogRow(
+  rabbit: RabbitDto,
+  entry: MedicationLogDto,
+  treatments: TreatmentDto[],
+  drugs: DrugDto[],
+  logs: MedicationLogDto[],
+  reload: () => Promise<void>,
+  canRecord: boolean,
+): HTMLElement {
+  const drug = drugs.find((item) => item.id === entry.drugId);
+  const amount =
+    entry.amountMilliUnits != null
+      ? formatDrugAmount(entry.amountMilliUnits, drug?.unit ?? "dose")
+      : "";
+  const detail = [entry.slot ? TREATMENT_SLOT_LABELS[entry.slot] : null, amount]
+    .filter(Boolean)
+    .join(" · ");
+  return h(
+    "div",
+    { class: "list-row" },
+    h(
+      "div",
+      { class: "stack", style: { gap: "0.15rem" } },
+      h("strong", null, drug?.name ?? "Medication"),
+      detail ? h("span", { class: "dim small" }, detail) : null,
+      entry.notes ? h("span", { class: "dim small" }, entry.notes) : null,
+    ),
+    h("span", { class: "spacer" }),
+    h("span", { class: "dim small" }, `${fmtDate(entry.givenAt)} ${fmtTime(entry.givenAt)}`),
+    canRecord
+      ? h(
+          "button",
+          {
+            class: "btn ghost small",
+            type: "button",
+            onClick: () =>
+              openMedicationLogModal({
+                rabbit,
+                treatments,
+                drugs,
+                logs,
+                editing: entry,
+                onSaved: () => void reload(),
+              }),
+          },
+          "Edit",
+        )
+      : null,
+    canRecord
+      ? h(
+          "button",
+          { class: "btn ghost small", type: "button", onClick: () => void removeMedicationLog(entry, reload) },
+          "Delete",
+        )
+      : null,
   );
 }
 
@@ -1507,6 +1530,7 @@ function treatmentsCard(
   rabbit: RabbitDto,
   treatments: TreatmentDto[],
   drugs: DrugDto[],
+  logs: MedicationLogDto[],
   reload: () => Promise<void>,
   canRecord: boolean,
 ): HTMLElement {
@@ -1539,7 +1563,9 @@ function treatmentsCard(
       : h(
           "div",
           null,
-          sorted.map((treatment) => treatmentRow(rabbit, treatment, drugs, reload, canRecord)),
+          sorted.map((treatment) =>
+            treatmentRow(rabbit, treatment, treatments, drugs, logs, reload, canRecord),
+          ),
         ),
   );
 }
@@ -1547,7 +1573,9 @@ function treatmentsCard(
 function treatmentRow(
   rabbit: RabbitDto,
   treatment: TreatmentDto,
+  treatments: TreatmentDto[],
   drugs: DrugDto[],
+  logs: MedicationLogDto[],
   reload: () => Promise<void>,
   canRecord: boolean,
 ): HTMLElement {
@@ -1555,6 +1583,8 @@ function treatmentRow(
   const level = drug
     ? stockLevel(stockTotalMilliUnits(drug.batches), drug.reorderLevelMilliUnits)
     : null;
+  const history = logs.filter((entry) => entry.treatmentId === treatment.id);
+  const slotLabels = treatment.slots.map((slot) => TREATMENT_SLOT_LABELS[slot]).join(", ");
   return h(
     "div",
     { class: "list-row" },
@@ -1565,7 +1595,9 @@ function treatmentRow(
       h(
         "span",
         { class: "dim small" },
-        [treatment.dose, treatment.frequency, treatment.reason].filter(Boolean).join(" · ") || "—",
+        [treatment.dose, treatment.frequency, slotLabels, treatment.reason]
+          .filter(Boolean)
+          .join(" · ") || "—",
       ),
       h(
         "span",
@@ -1605,6 +1637,20 @@ function treatmentRow(
             null,
             h("summary", { class: "dim small" }, "How to use"),
             h("p", { class: "dim small", style: { margin: "0.25rem 0 0" } }, drug.howToUse),
+          )
+        : null,
+      history.length > 0
+        ? h(
+            "details",
+            null,
+            h("summary", { class: "dim small" }, `Dose history (${history.length})`),
+            h(
+              "div",
+              { class: "stack", style: { gap: "0" } },
+              history.map((entry) =>
+                medicationLogRow(rabbit, entry, treatments, drugs, logs, reload, canRecord),
+              ),
+            ),
           )
         : null,
     ),

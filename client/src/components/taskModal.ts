@@ -1,4 +1,4 @@
-import type { RabbitDto, TaskDto, TaskSlot, TreatmentDto } from "../../../shared/types.ts";
+import type { RabbitDto, TaskDto, TaskSlot } from "../../../shared/types.ts";
 import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
 import { api } from "../api.ts";
 import { h } from "../dom.ts";
@@ -9,7 +9,6 @@ import { optionButtons, toggleButton } from "./toggle.ts";
 export function openTaskModal(options: {
   rabbit: RabbitDto;
   task?: TaskDto;
-  treatments: TreatmentDto[];
   onSaved: () => void;
 }): void {
   const editing = options.task;
@@ -33,24 +32,6 @@ export function openTaskModal(options: {
     max: "3650",
     value: String(editing?.intervalDays ?? 1),
   });
-  const treatmentSelect = h("select");
-  treatmentSelect.append(h("option", { value: "" }, "No linked medication"));
-  const sorted = [...options.treatments].sort(
-    (a, b) => Number(b.status === "active") - Number(a.status === "active"),
-  );
-  for (const treatment of sorted) {
-    const detail = [treatment.dose, treatment.status !== "active" ? treatment.status : null]
-      .filter(Boolean)
-      .join(" · ");
-    treatmentSelect.append(
-      h(
-        "option",
-        { value: String(treatment.id) },
-        `${treatment.medication}${detail ? ` (${detail})` : ""}`,
-      ),
-    );
-  }
-  treatmentSelect.value = editing?.treatmentId != null ? String(editing.treatmentId) : "";
   const notes = h("textarea", null, editing?.notes ?? "");
   const active = toggleButton({ label: "Active", checked: editing?.active ?? true });
   const error = h("p", { class: "form-error" });
@@ -77,14 +58,12 @@ export function openTaskModal(options: {
             error.style.display = "";
             return;
           }
-          const treatmentId = treatmentSelect.value ? Number(treatmentSelect.value) : null;
           save.disabled = true;
           try {
             const payload = {
               label: name,
               slot,
               intervalDays,
-              treatmentId,
               notes: notes.value.trim(),
               active: active.checked(),
             };
@@ -113,13 +92,6 @@ export function openTaskModal(options: {
         h("label", null, "Repeat"),
         interval,
         h("span", { class: "dim small" }, "Every N days — 1 means every day."),
-      ),
-      h(
-        "div",
-        { class: "field" },
-        h("label", null, "Linked medication (optional)"),
-        treatmentSelect,
-        h("span", { class: "dim small" }, "Completing the task logs a dose and deducts drug stock."),
       ),
       h("div", { class: "field" }, h("label", null, "Status"), h("div", { class: "row wrap" }, active.root)),
       h("div", { class: "field" }, h("label", null, "Notes"), notes),

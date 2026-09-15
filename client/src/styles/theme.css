@@ -1630,6 +1630,33 @@ input.switch:focus-visible {
 .cal-chip.med {
   border-color: var(--ok-border);
   background: var(--ok-soft);
+  white-space: normal;
+}
+
+.cal-chip.med.done {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.cal-slots {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin-left: 0.3rem;
+}
+
+.cal-slot {
+  border-radius: 3px;
+  padding: 0 0.18rem;
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font-size: 0.6rem;
+}
+
+.cal-slot.done {
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-weight: 650;
 }
 
 .cal-chip.event {
