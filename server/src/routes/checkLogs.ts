@@ -7,6 +7,7 @@ import { checkLogPhotos, checkLogs, checkLogTypes } from "../db/schema.ts";
 import type { CheckLogPhotoRow, CheckLogTypeRow } from "../db/schema.ts";
 import { findVisibleRabbit, requirePermission, visibleRabbitIds } from "../lib/access.ts";
 import { requireAdmin, requireAuth } from "../lib/auth.ts";
+import { addMissingDefaultCheckLogTypes } from "../lib/checkLogSeed.ts";
 import { listCheckLogTypes } from "../lib/checkLogStore.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
 import {
@@ -22,6 +23,10 @@ export const checkLogsRouter = Router();
 
 checkLogsRouter.get("/types", requireAuth, async (_req, res) => {
   res.json({ types: (await listCheckLogTypes()).map(checkLogTypeToDto) });
+});
+
+checkLogsRouter.post("/types/defaults", requireAuth, requirePermission("canRecordHealth"), async (_req, res) => {
+  res.json({ added: await addMissingDefaultCheckLogTypes() });
 });
 
 checkLogsRouter.post("/types", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {

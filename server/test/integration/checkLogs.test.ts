@@ -148,4 +148,38 @@ describe("check log integration", () => {
     const { logs } = await api<{ logs: CheckLogDto[] }>(ctx, `/api/check-logs?rabbitId=${rabbit.id}`);
     expect(logs).toEqual([]);
   });
+
+  it("adds any missing default check types without duplicating", async () => {
+    const { types: existing } = await api<{ types: CheckLogTypeDto[] }>(
+      ctx,
+      "/api/check-logs/types",
+    );
+    for (const type of existing) {
+      await api(ctx, `/api/check-logs/types/${type.id}`, { method: "DELETE" });
+    }
+
+    const { added } = await api<{ added: string[] }>(ctx, "/api/check-logs/types/defaults", {
+      method: "POST",
+    });
+    expect(added).toEqual(["Poo", "Water intake", "Food", "Behaviour"]);
+
+    const { types } = await api<{ types: CheckLogTypeDto[] }>(ctx, "/api/check-logs/types");
+    const behaviour = types.find((type) => type.key === "behaviour");
+    expect(behaviour?.multiple).toBe(true);
+    expect(behaviour?.options).toEqual([
+      "Binkies",
+      "Exploring",
+      "Flopped",
+      "Comfortable",
+      "Uncomfortable",
+      "Hiding",
+      "Quiet",
+      "Active",
+    ]);
+
+    const again = await api<{ added: string[] }>(ctx, "/api/check-logs/types/defaults", {
+      method: "POST",
+    });
+    expect(again.added).toEqual([]);
+  });
 });

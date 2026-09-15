@@ -45,7 +45,8 @@ Desktop:
   the full form.
 - **Daily checks** — define your own types in Settings (Poo, Water intake, Food, Behaviour, …) with
   option buttons (single or multi-select), a number with a unit and free text, plus photos on any
-  log. A one-tap bar on the bunny profile logs a type in seconds.
+  log. A one-tap bar on the bunny profile logs a type in seconds. An **Add defaults** button in the
+  editor pulls in any missing starter types (including multi-select Behaviour) on upgraded installs.
 - **Food & water bowl tracking** — set a starting weight for a bowl, then log scale readings as you
   go: consumption is calculated since the last reading and the baseline rolls forward. Top-ups count
   as refills (or enter the amount added), and refresh starts a new period with an optional final

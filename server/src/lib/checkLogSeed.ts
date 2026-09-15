@@ -57,3 +57,15 @@ export async function ensureCheckLogSeed(): Promise<void> {
     DEFAULT_CHECK_LOG_TYPES.map((type, index) => ({ ...type, sortOrder: index })),
   );
 }
+
+export async function addMissingDefaultCheckLogTypes(): Promise<string[]> {
+  const rows = await db.select().from(checkLogTypes);
+  const existing = new Set(rows.map((row) => row.key));
+  const missing = DEFAULT_CHECK_LOG_TYPES.filter((type) => !existing.has(type.key));
+  if (missing.length === 0) return [];
+  const highest = rows.reduce((value, row) => Math.max(value, row.sortOrder), -1);
+  await db.insert(checkLogTypes).values(
+    missing.map((type, index) => ({ ...type, sortOrder: highest + 1 + index })),
+  );
+  return missing.map((type) => type.label);
+}

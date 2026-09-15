@@ -14,21 +14,52 @@ export function renderDailyChecksPage(_ctx: PageContext): HTMLElement {
     { class: "btn primary small", type: "button", onClick: () => openTypeModal(undefined, load) },
     "Add check type",
   );
+  const addDefaults = h(
+    "button",
+    {
+      class: "btn outline small",
+      type: "button",
+      onClick: async () => {
+        addDefaults.disabled = true;
+        try {
+          const { added } = await api.post<{ added: string[] }>("/api/check-logs/types/defaults");
+          if (added.length === 0) {
+            toast("All default check types are already set up");
+          } else {
+            invalidateCheckLogTypes();
+            toast(`Added ${added.join(", ")}`);
+            await load();
+          }
+        } catch (err) {
+          toast(err instanceof Error ? err.message : "Something went wrong", "error");
+        } finally {
+          addDefaults.disabled = false;
+        }
+      },
+    },
+    "Add defaults",
+  );
   const container = h(
     "section",
     { class: "stack" },
     h(
       "div",
-      { class: "card-title" },
+      { class: "card-title", style: { flexWrap: "wrap" } },
       h("h1", null, "Daily checks"),
       h("span", { class: "spacer" }),
       h("a", { class: "btn outline small", href: "#/settings" }, "Back to settings"),
+      addDefaults,
       add,
     ),
     h(
       "p",
       { class: "dim small" },
       "Define the daily checks you want to log, e.g. Poo, Water intake or Food. Each type can have option buttons, a number with a unit, free text and notes.",
+    ),
+    h(
+      "p",
+      { class: "dim small" },
+      "Add defaults brings in any missing starter types (Poo, Water intake, Food, Behaviour) without touching the ones you already have.",
     ),
     list,
   );
