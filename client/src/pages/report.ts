@@ -480,8 +480,8 @@ function tasksSection(
     (a, b) => TASK_SLOTS.indexOf(a.slot) - TASK_SLOTS.indexOf(b.slot) || a.id - b.id,
   );
   const rows = sorted.map((task) => {
-    const dueOn = taskNextDueOn(task.lastCompletedAt, task.intervalDays);
-    const due = taskDueStatus(task.lastCompletedAt, task.intervalDays, now) === "due";
+    const dueOn = taskNextDueOn(task.startDate, task.lastCompletedAt, task.intervalDays);
+    const due = taskDueStatus(task.startDate, task.lastCompletedAt, task.intervalDays, now) === "due";
     return [
       h(
         "div",

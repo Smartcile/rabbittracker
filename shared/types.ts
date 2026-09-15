@@ -371,6 +371,7 @@ export type TaskDto = {
   label: string;
   slot: TaskSlot;
   intervalDays: number;
+  startDate: string | null;
   productId: number | null;
   productName: string | null;
   amountGrams: number;
@@ -386,6 +387,7 @@ export type TaskTemplateDto = {
   label: string;
   slot: TaskSlot;
   intervalDays: number;
+  startDate: string | null;
   productId: number | null;
   productName: string | null;
   amountGrams: number;

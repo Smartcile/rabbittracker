@@ -19,6 +19,7 @@ import { rabbitAvatar } from "../components/avatar.ts";
 import { openCheckLogModal } from "../components/checkLogModal.ts";
 import { openCheckModal } from "../components/checkModal.ts";
 import { openMedicationLogModal } from "../components/medicationLogModal.ts";
+import { openTaskCompleteModal } from "../components/taskCompleteModal.ts";
 import { openRabbitModal } from "../components/rabbitModal.ts";
 import { slotChips } from "../components/slotChips.ts";
 import { toast } from "../components/toast.ts";
@@ -178,7 +179,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
         (task) =>
           task.active &&
           byId.has(task.rabbitId) &&
-          taskDueStatus(task.lastCompletedAt, task.intervalDays, new Date()) === "due",
+          taskDueStatus(task.startDate, task.lastCompletedAt, task.intervalDays, new Date()) === "due",
       )
       .sort(
         (a, b) => TASK_SLOTS.indexOf(a.slot) - TASK_SLOTS.indexOf(b.slot) || a.id - b.id,
@@ -469,16 +470,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
   }
 
   async function completeTask(task: TaskDto): Promise<void> {
-    try {
-      await api.post(`/api/tasks/${task.id}/complete`, {
-        completedAt: new Date().toISOString(),
-        notes: "",
-      });
-      toast("Done");
-      await load();
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not complete the task", "error");
-    }
+    openTaskCompleteModal({ task, onDone: () => void load() });
   }
 
   void load();

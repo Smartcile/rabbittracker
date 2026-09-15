@@ -107,6 +107,18 @@ describe("task integration", () => {
     expect(paused.active).toBe(false);
   });
 
+  it("stores a start date and can clear it", async () => {
+    const rabbit = await createRabbit();
+    const task = await createTask(rabbit.id, { startDate: "2026-10-01" });
+    expect(task.startDate).toBe("2026-10-01");
+
+    const { task: cleared } = await api<{ task: TaskDto }>(ctx, `/api/tasks/${task.id}`, {
+      method: "PATCH",
+      body: { startDate: "" },
+    });
+    expect(cleared.startDate).toBeNull();
+  });
+
   async function createProduct(name: string, stockGrams: number): Promise<number> {
     const { product } = await api<{ product: FoodProductDto }>(ctx, "/api/food-products", {
       method: "POST",

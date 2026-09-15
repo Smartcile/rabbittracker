@@ -64,6 +64,7 @@ import { confirmDialog, openModal } from "../components/modal.ts";
 import { openLightbox, photoPicker } from "../components/photoPicker.ts";
 import { openRabbitModal } from "../components/rabbitModal.ts";
 import { openTaskModal } from "../components/taskModal.ts";
+import { openTaskCompleteModal } from "../components/taskCompleteModal.ts";
 import { toast } from "../components/toast.ts";
 import { optionButtons } from "../components/toggle.ts";
 import { openTreatmentModal } from "../components/treatmentModal.ts";
@@ -1141,7 +1142,7 @@ function tasksCard(
   const taskById = new Map(tasks.map((task) => [task.id, task]));
   const due = tasks
     .filter(
-      (task) => task.active && taskDueStatus(task.lastCompletedAt, task.intervalDays, now) === "due",
+      (task) => task.active && taskDueStatus(task.startDate, task.lastCompletedAt, task.intervalDays, now) === "due",
     )
     .sort((a, b) => TASK_SLOTS.indexOf(a.slot) - TASK_SLOTS.indexOf(b.slot) || a.id - b.id);
 
@@ -1260,16 +1261,7 @@ function tasksCard(
   );
 
   async function completeTask(task: TaskDto): Promise<void> {
-    try {
-      await api.post(`/api/tasks/${task.id}/complete`, {
-        completedAt: new Date().toISOString(),
-        notes: "",
-      });
-      toast("Done");
-      await reload();
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not complete the task", "error");
-    }
+    openTaskCompleteModal({ task, onDone: () => void reload() });
   }
 
   async function undoCompletion(completion: TaskCompletionDto): Promise<void> {

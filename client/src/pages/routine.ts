@@ -120,6 +120,7 @@ function openTemplateModal(
     max: "3650",
     value: String(template?.intervalDays ?? 1),
   });
+  const start = h("input", { type: "date", value: template?.startDate ?? "" });
   const productSelect = h("select", null, h("option", { value: "" }, "— No stock item —"));
   for (const product of products) {
     productSelect.append(h("option", { value: String(product.id) }, product.name));
@@ -182,6 +183,7 @@ function openTemplateModal(
             label: name,
             slot,
             intervalDays,
+            startDate: start.value || null,
             productId,
             amountGrams,
             notes: notes.value.trim(),
@@ -213,6 +215,13 @@ function openTemplateModal(
         h("label", null, "Repeat"),
         interval,
         h("span", { class: "dim small" }, "Every N days — 1 means every day."),
+      ),
+      h(
+        "div",
+        { class: "field" },
+        h("label", null, "Start date (optional)"),
+        start,
+        h("span", { class: "dim small" }, "When the routine begins — sets the first due date."),
       ),
       h(
         "div",

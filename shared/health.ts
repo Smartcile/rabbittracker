@@ -174,23 +174,35 @@ export function careDueStatus(
 }
 
 export function taskNextDueOn(
+  startDate: string | null | undefined,
   lastCompletedAt: string | null | undefined,
   intervalDays: number,
 ): string | null {
-  if (!lastCompletedAt) return null;
-  if (!Number.isFinite(intervalDays) || intervalDays <= 0) return null;
-  const last = utcDay(lastCompletedAt);
-  if (last === null) return null;
-  return new Date(last + intervalDays * 86_400_000).toISOString().slice(0, 10);
+  if (lastCompletedAt) {
+    if (!Number.isFinite(intervalDays) || intervalDays <= 0) return null;
+    const last = utcDay(lastCompletedAt);
+    if (last === null) return null;
+    return new Date(last + intervalDays * 86_400_000).toISOString().slice(0, 10);
+  }
+  if (!startDate) return null;
+  const start = utcDay(`${startDate}T00:00:00.000Z`);
+  if (start === null) return null;
+  return new Date(start).toISOString().slice(0, 10);
 }
 
 export function taskDueStatus(
+  startDate: string | null | undefined,
   lastCompletedAt: string | null | undefined,
   intervalDays: number,
   now: Date,
 ): "due" | "upcoming" {
-  if (!lastCompletedAt) return "due";
-  const dueOn = taskNextDueOn(lastCompletedAt, intervalDays);
+  if (!lastCompletedAt) {
+    if (!startDate) return "due";
+    const start = utcDay(`${startDate}T00:00:00.000Z`);
+    if (start === null) return "due";
+    return start <= todayUtc(now) ? "due" : "upcoming";
+  }
+  const dueOn = taskNextDueOn(startDate, lastCompletedAt, intervalDays);
   if (!dueOn) return "due";
   const due = utcDay(`${dueOn}T00:00:00.000Z`);
   if (due === null) return "due";

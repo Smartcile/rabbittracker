@@ -32,6 +32,7 @@ export function openTaskModal(options: {
     max: "3650",
     value: String(editing?.intervalDays ?? 1),
   });
+  const start = h("input", { type: "date", value: editing?.startDate ?? "" });
   const templateSelect = editing
     ? null
     : h("select", null, h("option", { value: "" }, "— Custom task —"));
@@ -84,6 +85,7 @@ export function openTaskModal(options: {
           slot = template.slot;
           slotGroup.setValues([template.slot]);
           interval.value = String(template.intervalDays);
+          start.value = template.startDate ?? "";
           productSelect.value = template.productId != null ? String(template.productId) : "";
           amount.value = template.amountGrams > 0 ? String(template.amountGrams) : "";
           notes.value = template.notes;
@@ -131,6 +133,7 @@ export function openTaskModal(options: {
               label: name,
               slot,
               intervalDays,
+              startDate: start.value || null,
               productId,
               amountGrams,
               notes: notes.value.trim(),
@@ -168,6 +171,13 @@ export function openTaskModal(options: {
         h("label", null, "Repeat"),
         interval,
         h("span", { class: "dim small" }, "Every N days — 1 means every day."),
+      ),
+      h(
+        "div",
+        { class: "field" },
+        h("label", null, "Start date (optional)"),
+        start,
+        h("span", { class: "dim small" }, "When the routine begins — sets the first due date."),
       ),
       h(
         "div",

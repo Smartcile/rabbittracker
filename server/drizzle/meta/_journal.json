@@ -218,6 +218,13 @@
       "when": 1789461594025,
       "tag": "0030_old_vanisher",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789462572743,
+      "tag": "0031_loose_queen_noir",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { expandEntryStart } from "../../../shared/calendar.ts";
 import { checkLogValueSummary } from "../../../shared/checkLogs.ts";
 import { DAY_SLOT_SHORT_LABELS, allSlotsDone, slotStatus } from "../../../shared/slots.ts";
+import { taskScheduleDays } from "../../../shared/tasks.ts";
 import type {
   AppointmentDto,
   BowlDto,
@@ -14,6 +15,8 @@ import type {
   MedicationLogDto,
   RabbitDto,
   SettingsDto,
+  TaskCompletionDto,
+  TaskDto,
   TreatmentDto,
 } from "../../../shared/types.ts";
 import { api } from "../api.ts";
@@ -121,6 +124,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
       drugsRes,
       bowlScheduleRes,
       foodRes,
+      tasksRes,
     ] = await Promise.all([
       api.get<{ events: CalendarEventDto[] }>(
         `/api/calendar/events?from=${from.toISOString()}&to=${to.toISOString()}`,
@@ -143,6 +147,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         `/api/bowls/schedule?from=${from.toISOString()}&to=${to.toISOString()}`,
       ),
       api.get<{ products: FoodProductDto[] }>("/api/food-products"),
+      api.get<{ tasks: TaskDto[]; completions: TaskCompletionDto[] }>("/api/tasks"),
     ]);
     drugs = drugsRes.drugs;
     foodProducts = foodRes.products;
@@ -165,6 +170,8 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
       logsRes.logs,
       medLogsRes.logs,
       bowlScheduleRes.bowls,
+      tasksRes.tasks,
+      tasksRes.completions,
     );
   }
 
@@ -176,6 +183,8 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
     logs: CheckLogDto[],
     medLogs: MedicationLogDto[],
     bowls: BowlDto[],
+    tasks: TaskDto[],
+    completions: TaskCompletionDto[],
   ): void {
     const eventsByDay = groupByDay(events, (event) => event.startAt);
     const appointmentsByDay = groupByDay(appointments, (appointment) => appointment.scheduledAt);
@@ -195,6 +204,25 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
     }
     const rabbitNames = new Map(rabbits.map((rabbit) => [rabbit.id, rabbit.name]));
     const rabbitById = new Map(rabbits.map((rabbit) => [rabbit.id, rabbit]));
+    const monthStartKey = dayKey(new Date(view.getFullYear(), view.getMonth(), 1));
+    const monthEndKey = dayKey(new Date(view.getFullYear(), view.getMonth() + 1, 0));
+    const completedByTask = new Map<number, Set<string>>();
+    for (const completion of completions) {
+      const completionKey = dayKey(new Date(completion.completedAt));
+      const set = completedByTask.get(completion.taskId) ?? new Set<string>();
+      set.add(completionKey);
+      completedByTask.set(completion.taskId, set);
+    }
+    const scheduledByTask = new Map<number, Set<string>>();
+    for (const task of tasks) {
+      if (!task.active) continue;
+      scheduledByTask.set(
+        task.id,
+        new Set(
+          taskScheduleDays(task, [...(completedByTask.get(task.id) ?? [])], monthStartKey, monthEndKey),
+        ),
+      );
+    }
     grid.replaceChildren();
     for (const label of WEEKDAYS) grid.append(h("div", { class: "cal-head" }, label));
     const offset = (new Date(view.getFullYear(), view.getMonth(), 1).getDay() + 6) % 7;
@@ -337,6 +365,14 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
             : null;
         cell.append(calendarChip(parts, open, done, "bowl"));
       }
+      for (const task of tasks) {
+        if (!task.active) continue;
+        const completed = completedByTask.get(task.id)?.has(key) ?? false;
+        const scheduled = scheduledByTask.get(task.id)?.has(key) ?? false;
+        if (!completed && !scheduled) continue;
+        const rabbitName = rabbitNames.get(task.rabbitId) ?? "Bunny";
+        cell.append(calendarChip([`${rabbitName}: ${task.label}`], null, completed, "task"));
+      }
       for (const { entry } of entriesByDay.get(key) ?? []) {
         const label = entry.allDay ? entry.title : `${fmtTime(entry.startAt, timezone)} ${entry.title}`;
         cell.append(
@@ -471,7 +507,7 @@ function calendarChip(
   parts: (HTMLElement | string)[],
   onClick: (() => void) | null,
   done: boolean,
-  kind: "med" | "bowl",
+  kind: "med" | "bowl" | "task",
 ): HTMLElement {
   const classes = `cal-chip ${kind}${done ? " done" : ""}`;
   if (!onClick) return h("span", { class: classes }, ...parts);

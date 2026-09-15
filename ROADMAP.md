@@ -102,7 +102,8 @@
 - [x] **Routine task templates + stock links.** Reusable routine tasks live in Settings → Daily
       routine and are added to a bunny in a tap (the task copies the template's fields). A task can
       link a food/supply product with an amount, and completing it draws the amount from stock;
-      deleting the completion puts it back.
+      deleting the completion puts it back. Tasks take an optional start date, completions can be
+      dated, and the calendar shows each task's schedule with ticks for the days it was completed.
 
 ## Planned features (agreed but not built)
 

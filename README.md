@@ -63,9 +63,11 @@ Desktop:
   (add or remove amounts), a low-stock level and a type list. Link a product to a bowl and every
   top-up draws the amount added from its stock; editing or deleting the top-up puts it back.
 - **Daily routine tasks** — repeating chores per bunny with morning, afternoon, evening or anytime
-  slots and an every-N-days repeat. Define reusable templates in Settings → Daily routine and add
-  one to a bunny in a tap; link a stock item (product + amount) so completing a task draws it down
-  automatically. Tick them off from the bunny page or the home Today list.
+  slots, an every-N-days repeat and an optional start date that sets the first due date. Define
+  reusable templates in Settings → Daily routine and add one to a bunny in a tap; link a stock item
+  (product + amount) so completing a task draws it down automatically. Tick them off from the bunny
+  page or the home Today list (choosing the date it was done), and their schedule shows on the
+  calendar with a tick once completed.
 - **Treatments & medication** — courses with dose, route and frequency plus the times of day each
   dose is given, each with a window (early morning 05:00–08:00, morning 08:00–12:00, afternoon
   12:00–17:00, evening 17:00–21:00, night 21:00–05:00). Logging preselects the slot for the current
