@@ -11,12 +11,16 @@ import { requireAuth } from "../lib/auth.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
 import {
   bowlCreateSchema,
+  bowlReadingBatchSchema,
   bowlReadingCreateSchema,
   bowlReadingUpdateSchema,
   bowlUpdateSchema,
 } from "../lib/validation.ts";
+import type { BowlReadingCreateInput } from "../lib/validation.ts";
 
 export const bowlsRouter = Router();
+
+type BowlTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 bowlsRouter.get("/", requireAuth, async (req, res) => {
   const conditions = [];
@@ -147,77 +151,29 @@ bowlsRouter.post("/:id/readings", requireAuth, requirePermission("canRecordHealt
   const bowl = await findBowl(parseId(String(req.params.id)));
   await findVisibleRabbit(req.user!, bowl.rabbitId);
   const input = parseInput(bowlReadingCreateSchema, req.body);
-  const slot: DaySlot | null =
-    input.slot ?? (bowl.slots.length === 1 ? (bowl.slots[0] as DaySlot) : null);
-  const existing = await listReadings(bowl.id);
-  const summary = summarizeBowl(existing);
-  const added: BowlReadingRow[] = [];
-  let weightGrams: number;
-  if (input.kind === "refill") {
-    const base = input.preWeightGrams ?? summary.currentWeightGrams;
-    if (base === null) throw new HttpError(400, "Add a starting weight first");
-    weightGrams = base + (input.refillGrams ?? 0);
-  } else if (input.kind === "consume") {
-    if (summary.currentWeightGrams === null) throw new HttpError(400, "Add a starting weight first");
-    if ((input.consumedGrams ?? 0) > summary.currentWeightGrams) {
-      throw new HttpError(400, "That is more than the bowl holds");
-    }
-    weightGrams = summary.currentWeightGrams - (input.consumedGrams ?? 0);
-  } else {
-    weightGrams = input.weightGrams ?? 0;
-  }
+  const rows = await listReadings(bowl.id);
   await db.transaction(async (tx) => {
-    if (
-      input.kind === "refresh" &&
-      input.finalWeightGrams !== undefined &&
-      input.finalWeightGrams !== summary.currentWeightGrams
-    ) {
-      const [final] = await tx
-        .insert(bowlReadings)
-        .values({ bowlId: bowl.id, readAt: input.readAt, kind: "weigh", weightGrams: input.finalWeightGrams })
-        .returning();
-      added.push(final);
-    }
-    if (
-      input.kind === "refill" &&
-      input.preWeightGrams !== undefined &&
-      input.preWeightGrams !== summary.currentWeightGrams
-    ) {
-      const [weighed] = await tx
-        .insert(bowlReadings)
-        .values({
-          bowlId: bowl.id,
-          readAt: input.readAt,
-          kind: "weigh",
-          weightGrams: input.preWeightGrams,
-          notes: "",
-        })
-        .returning();
-      added.push(weighed);
-    }
-    const [reading] = await tx
-      .insert(bowlReadings)
-      .values({
-        bowlId: bowl.id,
-        readAt: input.readAt,
-        kind: input.kind,
-        slot,
-        weightGrams,
-        notes: input.notes,
-      })
-      .returning();
-    added.push(reading);
-    if (input.kind === "refill" && bowl.productId !== null && (input.refillGrams ?? 0) > 0) {
-      await tx.insert(foodStockEntries).values({
-        productId: bowl.productId,
-        bowlReadingId: reading.id,
-        amountGrams: -(input.refillGrams ?? 0),
-        note: `Bowl top-up: ${bowl.label}`,
-      });
-    }
+    await applyReading(tx, bowl, rows, input);
   });
-  res.status(201).json({ bowl: bowlToDto(bowl, [...existing, ...added]) });
+  res.status(201).json({ bowl: bowlToDto(bowl, await listReadings(bowl.id)) });
 });
+
+bowlsRouter.post(
+  "/:id/readings/batch",
+  requireAuth,
+  requirePermission("canRecordHealth"),
+  async (req, res) => {
+    const bowl = await findBowl(parseId(String(req.params.id)));
+    await findVisibleRabbit(req.user!, bowl.rabbitId);
+    const input = parseInput(bowlReadingBatchSchema, req.body);
+    const rows = await listReadings(bowl.id);
+    const ordered = [...input.readings].sort((a, b) => a.readAt.getTime() - b.readAt.getTime());
+    await db.transaction(async (tx) => {
+      for (const reading of ordered) await applyReading(tx, bowl, rows, reading);
+    });
+    res.status(201).json({ bowl: bowlToDto(bowl, await listReadings(bowl.id)) });
+  },
+);
 
 bowlsRouter.patch(
   "/:id/readings/:readingId",
@@ -287,6 +243,79 @@ bowlsRouter.delete(
     res.json({ bowl: bowlToDto(bowl, await listReadings(bowl.id)) });
   },
 );
+
+async function applyReading(
+  tx: BowlTx,
+  bowl: BowlRow,
+  rows: BowlReadingRow[],
+  input: BowlReadingCreateInput,
+): Promise<void> {
+  const summary = summarizeBowl(rows);
+  const slot: DaySlot | null =
+    input.slot ?? (bowl.slots.length === 1 ? (bowl.slots[0] as DaySlot) : null);
+  let weightGrams: number;
+  if (input.kind === "refill") {
+    const base = input.preWeightGrams ?? summary.currentWeightGrams;
+    if (base === null) throw new HttpError(400, "Add a starting weight first");
+    weightGrams = base + (input.refillGrams ?? 0);
+  } else if (input.kind === "consume") {
+    if (summary.currentWeightGrams === null) throw new HttpError(400, "Add a starting weight first");
+    if ((input.consumedGrams ?? 0) > summary.currentWeightGrams) {
+      throw new HttpError(400, "That is more than the bowl holds");
+    }
+    weightGrams = summary.currentWeightGrams - (input.consumedGrams ?? 0);
+  } else {
+    weightGrams = input.weightGrams ?? 0;
+  }
+  if (
+    input.kind === "refresh" &&
+    input.finalWeightGrams !== undefined &&
+    input.finalWeightGrams !== summary.currentWeightGrams
+  ) {
+    const [final] = await tx
+      .insert(bowlReadings)
+      .values({ bowlId: bowl.id, readAt: input.readAt, kind: "weigh", weightGrams: input.finalWeightGrams })
+      .returning();
+    rows.push(final);
+  }
+  if (
+    input.kind === "refill" &&
+    input.preWeightGrams !== undefined &&
+    input.preWeightGrams !== summary.currentWeightGrams
+  ) {
+    const [weighed] = await tx
+      .insert(bowlReadings)
+      .values({
+        bowlId: bowl.id,
+        readAt: input.readAt,
+        kind: "weigh",
+        weightGrams: input.preWeightGrams,
+        notes: "",
+      })
+      .returning();
+    rows.push(weighed);
+  }
+  const [reading] = await tx
+    .insert(bowlReadings)
+    .values({
+      bowlId: bowl.id,
+      readAt: input.readAt,
+      kind: input.kind,
+      slot,
+      weightGrams,
+      notes: input.notes,
+    })
+    .returning();
+  rows.push(reading);
+  if (input.kind === "refill" && bowl.productId !== null && (input.refillGrams ?? 0) > 0) {
+    await tx.insert(foodStockEntries).values({
+      productId: bowl.productId,
+      bowlReadingId: reading.id,
+      amountGrams: -(input.refillGrams ?? 0),
+      note: `Bowl top-up: ${bowl.label}`,
+    });
+  }
+}
 
 function parseId(value: string): number {
   const id = Number(value);

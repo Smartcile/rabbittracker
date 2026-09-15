@@ -52,6 +52,17 @@ describe("bowl integration", () => {
     return bowl;
   }
 
+  async function addReadings(
+    bowlId: number,
+    readings: Record<string, unknown>[],
+  ): Promise<BowlDto> {
+    const { bowl } = await api<{ bowl: BowlDto }>(ctx, `/api/bowls/${bowlId}/readings/batch`, {
+      method: "POST",
+      body: { readings },
+    });
+    return bowl;
+  }
+
   it("creates a bowl with a start reading", async () => {
     const rabbit = await createRabbit();
     const bowl = await createBowl(rabbit.id);
@@ -316,6 +327,72 @@ describe("bowl integration", () => {
     expect(updated.readings.some((row) => row.kind === "weigh" && row.weightGrams === 600)).toBe(
       true,
     );
+  });
+
+  it("logs several readings in one batch in chronological order", async () => {
+    const rabbit = await createRabbit();
+    const bowl = await createBowl(rabbit.id);
+
+    const updated = await addReadings(bowl.id, [
+      { kind: "weigh", readAt: "2026-09-02T09:00:00.000Z", weightGrams: 700 },
+      { kind: "weigh", readAt: "2026-09-02T08:00:00.000Z", weightGrams: 800 },
+      { kind: "consume", readAt: "2026-09-02T10:00:00.000Z", consumedGrams: 150 },
+      { kind: "refill", readAt: "2026-09-02T11:00:00.000Z", refillGrams: 250 },
+    ]);
+
+    expect(updated.readings).toHaveLength(5);
+    expect(updated.currentWeightGrams).toBe(800);
+    expect(updated.periodConsumptionGrams).toBe(350);
+    expect(updated.periodRefillGrams).toBe(250);
+  });
+
+  it("deducts product stock for every top-up in a batch", async () => {
+    const rabbit = await createRabbit();
+    const { product } = await api<{ product: { id: number } }>(ctx, "/api/food-products", {
+      method: "POST",
+      body: { name: "Timothy hay" },
+    });
+    await api(ctx, `/api/food-products/${product.id}/entries`, {
+      method: "POST",
+      body: { amountGrams: 1000 },
+    });
+    const { bowl } = await api<{ bowl: BowlDto }>(ctx, "/api/bowls", {
+      method: "POST",
+      body: {
+        rabbitId: rabbit.id,
+        label: "Hay bowl",
+        productId: product.id,
+        startWeightGrams: 500,
+        startedAt: "2026-09-01T08:00:00.000Z",
+      },
+    });
+
+    await addReadings(bowl.id, [
+      { kind: "refill", readAt: "2026-09-02T08:00:00.000Z", refillGrams: 250 },
+      { kind: "refill", readAt: "2026-09-02T09:00:00.000Z", refillGrams: 100 },
+    ]);
+
+    const { products } = await api<{ products: { id: number; stockGrams: number }[] }>(
+      ctx,
+      "/api/food-products",
+    );
+    expect(products.find((item) => item.id === product.id)?.stockGrams).toBe(650);
+  });
+
+  it("rolls back the whole batch when one reading is invalid", async () => {
+    const rabbit = await createRabbit();
+    const bowl = await createBowl(rabbit.id);
+
+    await expect(
+      addReadings(bowl.id, [
+        { kind: "weigh", readAt: "2026-09-02T08:00:00.000Z", weightGrams: 800 },
+        { kind: "consume", readAt: "2026-09-02T09:00:00.000Z", consumedGrams: 5000 },
+      ]),
+    ).rejects.toThrow("That is more than the bowl holds");
+
+    const { bowls } = await api<{ bowls: BowlDto[] }>(ctx, `/api/bowls?rabbitId=${rabbit.id}`);
+    expect(bowls[0]?.readings).toHaveLength(1);
+    expect(bowls[0]?.currentWeightGrams).toBe(900);
   });
 
   it("renames and deletes a bowl", async () => {

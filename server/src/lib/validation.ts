@@ -368,6 +368,12 @@ export const bowlReadingCreateSchema = z
     { message: "Enter a weight" },
   );
 
+export type BowlReadingCreateInput = z.infer<typeof bowlReadingCreateSchema>;
+
+export const bowlReadingBatchSchema = z.object({
+  readings: z.array(bowlReadingCreateSchema).min(1).max(50),
+});
+
 export const bowlReadingUpdateSchema = z
   .object({
     readAt: z.coerce.date().optional(),

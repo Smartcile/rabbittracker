@@ -82,6 +82,11 @@
       bowls; and doses can be marked missed, with courses auto-completing once the end date has
       passed and the last dose is accounted for. Light theme is now the default.
 
+- [x] **Bowl session logging.** One reading pop-up on the bunny profile replaces the separate
+      weigh/consumption/top-up/refresh buttons: pick the action, add each reading to the session and
+      save them together. The batch endpoint applies a session's readings chronologically in one
+      transaction, so an invalid reading rolls the whole session back.
+
 ## Planned features (agreed but not built)
 
 These are queued from the "bunny powerhouse" list; pick them up in any order.

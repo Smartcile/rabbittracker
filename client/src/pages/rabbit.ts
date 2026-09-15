@@ -861,7 +861,7 @@ function bowlsCard(
     h(
       "p",
       { class: "dim small" },
-      "Track consumption by weighing the bowl. Each weigh-in rolls the baseline forward, top-ups can add to the current weight or set a new total, and refresh starts a new period. Use Weigh & top up to record the weigh-in and the amount added in one go.",
+      "Track consumption by weighing the bowl. Log a reading to record a weigh-in, consumption, top-up or refresh; add several readings to one session and save them together. Each weigh-in rolls the baseline forward and refresh starts a new period.",
     ),
     consumptionNorms(bowls, settings, checks),
     renderBowlsChart(bowls),
@@ -949,7 +949,6 @@ function bowlPanel(
     onLog: (slot) =>
       openBowlReadingModal({
         bowl,
-        mode: "weigh",
         date: new Date(),
         slot,
         product: product ?? undefined,
@@ -966,60 +965,9 @@ function bowlPanel(
             class: "btn outline small",
             type: "button",
             onClick: () =>
-              openBowlReadingModal({ bowl, mode: "weigh", product: product ?? undefined, onSaved: () => void reload() }),
+              openBowlReadingModal({ bowl, product: product ?? undefined, onSaved: () => void reload() }),
           },
-          "Weigh",
-        ),
-        h(
-          "button",
-          {
-            class: "btn outline small",
-            type: "button",
-            onClick: () =>
-              openBowlReadingModal({
-                bowl,
-                mode: "consume",
-                product: product ?? undefined,
-                onSaved: () => void reload(),
-              }),
-          },
-          "Consumption",
-        ),
-        h(
-          "button",
-          {
-            class: "btn outline small",
-            type: "button",
-            onClick: () =>
-              openBowlReadingModal({
-                bowl,
-                mode: "refill",
-                weighFirst: true,
-                product: product ?? undefined,
-                onSaved: () => void reload(),
-              }),
-          },
-          "Weigh & top up",
-        ),
-        h(
-          "button",
-          {
-            class: "btn outline small",
-            type: "button",
-            onClick: () =>
-              openBowlReadingModal({ bowl, mode: "refill", product: product ?? undefined, onSaved: () => void reload() }),
-          },
-          "Top up",
-        ),
-        h(
-          "button",
-          {
-            class: "btn outline small",
-            type: "button",
-            onClick: () =>
-              openBowlReadingModal({ bowl, mode: "refresh", product: product ?? undefined, onSaved: () => void reload() }),
-          },
-          "Refresh",
+          "Log reading",
         ),
         h(
           "button",
@@ -1126,7 +1074,6 @@ function bowlReadingRow(
             onClick: () =>
               openBowlReadingModal({
                 bowl,
-                mode: "weigh",
                 editing: reading,
                 onSaved: () => void reload(),
               }),

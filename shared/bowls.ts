@@ -71,6 +71,31 @@ export function summarizeBowl(readings: BowlReadingInput[]): BowlSummary {
   };
 }
 
+export type BowlReadingDraft = {
+  kind: "weigh" | "consume" | "refill" | "refresh";
+  weightGrams?: number;
+  consumedGrams?: number;
+  refillGrams?: number;
+  preWeightGrams?: number;
+};
+
+export function projectBowlWeight(
+  currentWeightGrams: number | null,
+  drafts: readonly BowlReadingDraft[],
+): number | null {
+  let weight = currentWeightGrams;
+  for (const draft of drafts) {
+    if (draft.kind === "weigh" || draft.kind === "refresh") {
+      weight = draft.weightGrams ?? weight;
+    } else if (draft.kind === "consume") {
+      if (weight !== null) weight = Math.max(0, weight - (draft.consumedGrams ?? 0));
+    } else if (weight !== null) {
+      weight = (draft.preWeightGrams ?? weight) + (draft.refillGrams ?? 0);
+    }
+  }
+  return weight;
+}
+
 export function bowlReadingKindLabel(kind: BowlReadingKind): string {
   if (kind === "start") return "Start";
   if (kind === "consume") return "Consumption";

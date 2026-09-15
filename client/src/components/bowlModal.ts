@@ -1,5 +1,5 @@
 import type { BowlDto, BowlReadingDto, FoodProductDto, RabbitDto } from "../../../shared/types.ts";
-import { bowlReadingKindLabel } from "../../../shared/bowls.ts";
+import { bowlReadingKindLabel, projectBowlWeight } from "../../../shared/bowls.ts";
 import { formatFoodAmount } from "../../../shared/food.ts";
 import type { DaySlot } from "../../../shared/slots.ts";
 import {
@@ -18,6 +18,16 @@ import { toast } from "./toast.ts";
 import { optionButtons } from "./toggle.ts";
 
 export type BowlReadingMode = "weigh" | "consume" | "refill" | "refresh";
+
+type SessionReading = {
+  kind: BowlReadingMode;
+  slot: DaySlot | null;
+  weightGrams?: number;
+  consumedGrams?: number;
+  refillGrams?: number;
+  finalWeightGrams?: number;
+  notes: string;
+};
 
 export function openBowlModal(options: {
   rabbit: RabbitDto;
@@ -200,36 +210,26 @@ export function openBowlModal(options: {
 
 export function openBowlReadingModal(options: {
   bowl: BowlDto;
-  mode: BowlReadingMode;
   date?: Date;
   slot?: DaySlot;
   editing?: BowlReadingDto;
   product?: FoodProductDto;
-  weighFirst?: boolean;
   onSaved: () => void;
 }): void {
   const { bowl, product } = options;
   const editing = options.editing;
-  const weighFirst = options.weighFirst === true && options.mode === "refill";
-  const scheduled = !editing && (options.date !== undefined || options.slot !== undefined);
   const current = bowl.currentWeightGrams;
-  let mode: BowlReadingMode = editing ? readingMode(editing.kind) : options.mode;
-  let topUpTotal = false;
+  const session = editing === undefined;
+
+  let mode: BowlReadingMode = editing ? readingMode(editing.kind) : "weigh";
   let slot: DaySlot | null = editing?.slot ?? options.slot ?? null;
   let slotTouched = editing !== undefined || options.slot !== undefined;
   let overrideAll = false;
+  const queue: SessionReading[] = [];
 
-  const amount = h("input", {
-    inputmode: "decimal",
-    required: true,
-    placeholder: "e.g. 850",
-  });
+  const amount = h("input", { inputmode: "decimal", required: true, placeholder: "e.g. 850" });
   if (editing) amount.value = String(mode === "refill" ? editing.refillGrams : editing.weightGrams);
   const finalWeight = h("input", {
-    inputmode: "decimal",
-    placeholder: current != null ? String(current) : "e.g. 600",
-  });
-  const preWeight = h("input", {
     inputmode: "decimal",
     placeholder: current != null ? String(current) : "e.g. 600",
   });
@@ -246,10 +246,15 @@ export function openBowlReadingModal(options: {
   const breakdown = h("div", { class: "calc-box" });
   breakdown.style.display = "none";
   const save = h("button", { class: "btn primary", type: "submit" });
+  const addAnother = session
+    ? h("button", { class: "btn outline", type: "button", onClick: addToQueue }, "Add to session")
+    : null;
+
+  const baseline = (): number | null => projectBowlWeight(current, queue);
 
   const updateProductHint = (): void => {
     const grams = parseGrams(amount.value);
-    const show = product !== undefined && mode === "refill" && !topUpTotal && grams !== null && grams > 0;
+    const show = product !== undefined && mode === "refill" && grams !== null && grams > 0;
     productHint.style.display = show ? "" : "none";
     if (show && product) {
       productHint.textContent = `Deducts ${formatFoodAmount(grams)} from ${product.name} stock.`;
@@ -266,10 +271,11 @@ export function openBowlReadingModal(options: {
       breakdown.style.display = "none";
       return;
     }
+    const base = baseline();
     const lines: string[] = [];
     if (mode === "weigh") {
-      if (current != null) {
-        const delta = current - grams;
+      if (base != null) {
+        const delta = base - grams;
         lines.push(
           delta > 0
             ? `Consumed ${delta} g since the last reading`
@@ -280,35 +286,19 @@ export function openBowlReadingModal(options: {
       }
       lines.push(`New total ${grams} g`);
     } else if (mode === "consume") {
-      if (current != null) {
-        lines.push(
-          grams > current
-            ? `More than the bowl holds (${current} g)`
-            : `New total ${current - grams} g`,
-        );
+      if (base != null) {
+        lines.push(grams > base ? `More than the bowl holds (${base} g)` : `New total ${base - grams} g`);
       }
     } else if (mode === "refresh") {
       const final = parseGrams(finalWeight.value);
-      if (final != null && current != null) {
-        const delta = current - final;
+      if (final != null && base != null) {
+        const delta = base - final;
         lines.push(
           delta > 0 ? `Consumed ${delta} g up to the final weigh-in` : "Final weigh-in is above the last reading",
         );
       }
       lines.push(`New period starts at ${grams} g`);
-    } else if (topUpTotal) {
-      if (current != null && grams > current) {
-        lines.push(`Topped up ${grams - current} g`);
-      } else if (current != null && grams < current) {
-        lines.push(`Consumed ${current - grams} g since the last reading`);
-      }
-      lines.push(`New total ${grams} g`);
     } else {
-      const pre = parseGrams(preWeight.value);
-      if (pre != null && current != null && current > pre) {
-        lines.push(`Consumed ${current - pre} g before the top-up`);
-      }
-      const base = pre ?? current;
       lines.push(`Added ${grams} g`);
       if (base != null) lines.push(`New total ${base + grams} g`);
     }
@@ -320,8 +310,8 @@ export function openBowlReadingModal(options: {
     updateProductHint();
     updateBreakdown();
   });
-  preWeight.addEventListener("input", updateBreakdown);
   finalWeight.addEventListener("input", updateBreakdown);
+
   const finalField = h(
     "div",
     { class: "field" },
@@ -333,44 +323,8 @@ export function openBowlReadingModal(options: {
       "The last weight before the reset, so the final consumption is counted.",
     ),
   );
-  const preWeightField = h(
-    "div",
-    { class: "field" },
-    h("label", null, "Weight before top-up (optional)"),
-    preWeight,
-    h(
-      "span",
-      { class: "dim small" },
-      "Weigh the bowl before topping up and enter it here, so the consumption is counted too.",
-    ),
-  );
-  preWeightField.style.display = "none";
 
-  const topUpOptions = optionButtons(
-    weighFirst
-      ? [
-          { value: "add", label: "Weigh before topping up" },
-          { value: "total", label: "Weigh after topping up" },
-        ]
-      : [
-          { value: "add", label: "I added this much" },
-          { value: "total", label: "This is the new total" },
-        ],
-    ["add"],
-    false,
-    (values) => {
-      topUpTotal = values[0] === "total";
-      renderLabels();
-    },
-  );
-  const topUpField = h(
-    "div",
-    { class: "field" },
-    h("label", null, weighFirst ? "When did you weigh?" : "Record as"),
-    topUpOptions.root,
-  );
-
-  const modeOptions = scheduled
+  const modeOptions = session
     ? optionButtons(
         [
           { value: "weigh", label: "Weigh" },
@@ -391,6 +345,10 @@ export function openBowlReadingModal(options: {
     : null;
 
   const slotField = h("div", { class: "field" });
+  const queueHeader = h("p", { class: "task-slot dim small" });
+  queueHeader.style.display = "none";
+  const queueList = h("div", { class: "stack", style: { gap: "0" } });
+  queueList.style.display = "none";
   const dayList = h("div", { class: "stack", style: { gap: "0" } });
   const dayListLabel = h("p", { class: "task-slot dim small" });
 
@@ -403,10 +361,7 @@ export function openBowlReadingModal(options: {
 
   function renderLabels(): void {
     modeOptions?.setValues([mode]);
-    topUpField.style.display = mode === "refill" && !editing ? "" : "none";
     finalField.style.display = mode === "refresh" && !editing ? "" : "none";
-    preWeightField.style.display =
-      mode === "refill" && !editing && !topUpTotal ? "" : "none";
     updateProductHint();
     updateBreakdown();
     if (editing) {
@@ -415,44 +370,35 @@ export function openBowlReadingModal(options: {
       hint.textContent = "Edit this reading; consumption totals are recalculated.";
       return;
     }
+    save.textContent = queue.length > 0 ? "Save all" : "Save reading";
+    const base = baseline();
     if (mode === "weigh") {
       amountLabel.textContent = "Weight (g)";
-      hint.textContent = current != null ? `Current weight ${current} g.` : "Weigh the bowl and enter the number.";
-      save.textContent = "Log weight";
+      amount.placeholder = "e.g. 850";
+      hint.textContent = base != null ? `Current weight ${base} g.` : "Weigh the bowl and enter the number.";
       return;
     }
     if (mode === "consume") {
       amountLabel.textContent = "Amount consumed (g)";
+      amount.placeholder = "e.g. 150";
       hint.textContent =
-        current != null
-          ? `Current weight ${current} g — enter how much was eaten; the new weight is calculated.`
+        base != null
+          ? `Current weight ${base} g — enter how much was eaten; the new weight is calculated.`
           : "Add a starting weight first.";
-      save.textContent = "Log consumption";
       return;
     }
     if (mode === "refresh") {
       amountLabel.textContent = "New starting weight (g)";
+      amount.placeholder = "e.g. 850";
       hint.textContent =
-        current != null
-          ? `Current weight ${current} g. Optionally record it as the final weight, then enter the new starting weight.`
+        base != null
+          ? `Current weight ${base} g. Optionally record it as the final weight, then enter the new starting weight.`
           : "Weigh the bowl and enter the number.";
-      save.textContent = "Refresh";
       return;
     }
-    amountLabel.textContent = topUpTotal ? "New total weight (g)" : "Amount added (g)";
-    amount.placeholder = topUpTotal
-      ? current != null
-        ? String(current)
-        : "e.g. 850"
-      : "e.g. 250";
-    hint.textContent = topUpTotal
-      ? current != null
-        ? `Current weight ${current} g — enter the weight after topping up.`
-        : "Weigh the bowl after topping up and enter the number."
-      : current != null
-        ? `Current weight ${current} g — enter how much you added.`
-        : "Enter how much you added.";
-    save.textContent = topUpTotal ? "Log weight" : "Log top-up";
+    amountLabel.textContent = "Amount added (g)";
+    amount.placeholder = "e.g. 250";
+    hint.textContent = base != null ? `Current weight ${base} g — enter how much you added.` : "Enter how much you added.";
   }
 
   function renderSlotPicker(): void {
@@ -465,7 +411,10 @@ export function openBowlReadingModal(options: {
     if (slot !== null && !bowl.slots.includes(slot)) overrideAll = true;
     const available = overrideAll ? [...DAY_SLOTS] : [...bowl.slots];
     if (slot !== null && !available.includes(slot)) available.push(slot);
-    const pending = nextPendingSlot(available, dayReadings());
+    const queued = queue
+      .filter((reading) => reading.slot !== null)
+      .map((reading) => ({ slot: reading.slot as string }));
+    const pending = nextPendingSlot(available, [...dayReadings(), ...queued]);
     const reference = when.value ? new Date(when.value) : new Date();
     const keep =
       slotTouched && slot !== null && available.includes(slot)
@@ -509,6 +458,52 @@ export function openBowlReadingModal(options: {
       );
     }
     slotField.replaceChildren(...children);
+  }
+
+  function renderQueue(): void {
+    if (!session) return;
+    queueHeader.textContent = `This session (${queue.length})`;
+    queueHeader.style.display = queue.length > 0 ? "" : "none";
+    queueList.style.display = queue.length > 0 ? "" : "none";
+    queueList.replaceChildren(
+      ...queue.map((reading, index) =>
+        h(
+          "div",
+          { class: "list-row" },
+          h(
+            "div",
+            { class: "stack", style: { gap: "0.15rem" } },
+            h(
+              "div",
+              { class: "row wrap", style: { gap: "0.35rem" } },
+              h(
+                "span",
+                null,
+                bowlReadingKindLabel(reading.kind),
+                reading.slot ? h("span", { class: "dim small" }, ` · ${DAY_SLOT_LABELS[reading.slot]}`) : null,
+              ),
+            ),
+            reading.notes ? h("span", { class: "dim small" }, reading.notes) : null,
+          ),
+          h("span", { class: "spacer" }),
+          h("span", { class: "mono small" }, readingSummary(reading)),
+          h(
+            "button",
+            {
+              class: "btn ghost small",
+              type: "button",
+              onClick: () => {
+                queue.splice(index, 1);
+                renderLabels();
+                renderQueue();
+                renderDayList();
+              },
+            },
+            "Remove",
+          ),
+        ),
+      ),
+    );
   }
 
   function renderDayList(): void {
@@ -569,11 +564,125 @@ export function openBowlReadingModal(options: {
     );
   }
 
+  function collect(): SessionReading | null {
+    error.style.display = "none";
+    const amountGrams = parseGrams(amount.value);
+    if (amountGrams === null || amountGrams < 0) {
+      error.textContent = "Enter a number in grams.";
+      error.style.display = "";
+      return null;
+    }
+    if (mode === "refill" && amountGrams <= 0) {
+      error.textContent = "Enter how much you added.";
+      error.style.display = "";
+      return null;
+    }
+    const finalGrams = mode === "refresh" && finalWeight.value.trim() ? parseGrams(finalWeight.value) : null;
+    if (mode === "refresh" && finalWeight.value.trim() && (finalGrams === null || finalGrams < 0)) {
+      error.textContent = "Enter the final weight in grams.";
+      error.style.display = "";
+      return null;
+    }
+    const base = baseline();
+    if (mode === "consume" && base != null && amountGrams > base) {
+      error.textContent = "That is more than the bowl holds.";
+      error.style.display = "";
+      return null;
+    }
+    const reading: SessionReading = { kind: mode, slot, notes: notes.value.trim() };
+    if (mode === "weigh" || mode === "refresh") reading.weightGrams = amountGrams;
+    else if (mode === "consume") reading.consumedGrams = amountGrams;
+    else reading.refillGrams = amountGrams;
+    if (mode === "refresh" && finalGrams !== null) reading.finalWeightGrams = finalGrams;
+    return reading;
+  }
+
+  function addToQueue(): void {
+    const reading = collect();
+    if (!reading) return;
+    queue.push(reading);
+    amount.value = "";
+    finalWeight.value = "";
+    notes.value = "";
+    renderLabels();
+    renderQueue();
+    renderDayList();
+    amount.focus();
+  }
+
+  async function submit(): Promise<void> {
+    error.style.display = "none";
+    const readAt = new Date(when.value);
+    if (Number.isNaN(readAt.getTime())) {
+      error.textContent = "Pick a valid date and time.";
+      error.style.display = "";
+      return;
+    }
+    let readings: SessionReading[];
+    if (editing) {
+      const reading = collect();
+      if (!reading) return;
+      readings = [reading];
+    } else {
+      readings = [...queue];
+      if (amount.value.trim()) {
+        const reading = collect();
+        if (!reading) return;
+        readings.push(reading);
+      }
+      if (readings.length === 0) {
+        error.textContent = "Add a reading to log.";
+        error.style.display = "";
+        return;
+      }
+    }
+    save.disabled = true;
+    if (addAnother) addAnother.disabled = true;
+    try {
+      if (editing) {
+        const reading = readings[0];
+        await api.patch(`/api/bowls/${bowl.id}/readings/${editing.id}`, {
+          readAt: readAt.toISOString(),
+          slot: reading.slot,
+          weightGrams: reading.kind === "refill" ? undefined : reading.weightGrams,
+          refillGrams: reading.kind === "refill" ? reading.refillGrams : undefined,
+          notes: reading.notes,
+        });
+        toast("Reading updated");
+      } else {
+        await api.post(`/api/bowls/${bowl.id}/readings/batch`, {
+          readings: readings.map((reading) => ({
+            kind: reading.kind,
+            readAt: readAt.toISOString(),
+            slot: reading.slot,
+            weightGrams: reading.weightGrams,
+            consumedGrams: reading.consumedGrams,
+            refillGrams: reading.refillGrams,
+            finalWeightGrams: reading.finalWeightGrams,
+            notes: reading.notes,
+          })),
+        });
+        toast(
+          readings.length > 1
+            ? `${readings.length} readings logged`
+            : readingToast(readings[0].kind),
+        );
+      }
+      options.onSaved();
+      modal.close();
+    } catch (err) {
+      error.textContent = err instanceof Error ? err.message : "Something went wrong";
+      error.style.display = "";
+    } finally {
+      save.disabled = false;
+      if (addAnother) addAnother.disabled = false;
+    }
+  }
+
   function editReading(reading: BowlReadingDto): void {
     modal.close();
     openBowlReadingModal({
       bowl,
-      mode: readingMode(reading.kind),
       editing: reading,
       onSaved: options.onSaved,
     });
@@ -599,6 +708,7 @@ export function openBowlReadingModal(options: {
 
   renderLabels();
   renderSlotPicker();
+  renderQueue();
   renderDayList();
   when.addEventListener("change", () => {
     renderSlotPicker();
@@ -607,157 +717,53 @@ export function openBowlReadingModal(options: {
 
   const modal = openModal({
     guardUnsaved: true,
-    title: editing
-      ? `Edit ${bowlReadingKindLabel(editing.kind)} — ${bowl.label}`
-      : weighFirst
-        ? `Weigh & top up — ${bowl.label}`
-        : scheduled
-          ? `Log reading — ${bowl.label}`
-          : mode === "weigh"
-            ? `Weigh bowl — ${bowl.label}`
-            : mode === "refill"
-              ? `Top up bowl — ${bowl.label}`
-              : `Refresh bowl — ${bowl.label}`,
+    title: editing ? `Edit ${bowlReadingKindLabel(editing.kind)} — ${bowl.label}` : `Log reading — ${bowl.label}`,
     body: h(
       "form",
       {
-        onSubmit: async (event: Event) => {
+        onSubmit: (event: Event) => {
           event.preventDefault();
-          error.style.display = "none";
-          const readAt = new Date(when.value);
-          if (Number.isNaN(readAt.getTime())) {
-            error.textContent = "Pick a valid date and time.";
-            error.style.display = "";
-            return;
-          }
-          const amountGrams = parseGrams(amount.value);
-          if (amountGrams === null || amountGrams < 0) {
-            error.textContent = "Enter a number in grams.";
-            error.style.display = "";
-            return;
-          }
-          if (mode === "refill" && !topUpTotal && amountGrams <= 0) {
-            error.textContent = "Enter how much you added.";
-            error.style.display = "";
-            return;
-          }
-          const finalGrams = mode === "refresh" && finalWeight.value.trim() ? parseGrams(finalWeight.value) : null;
-          if (mode === "refresh" && finalWeight.value.trim() && (finalGrams === null || finalGrams < 0)) {
-            error.textContent = "Enter the final weight in grams.";
-            error.style.display = "";
-            return;
-          }
-          const asNewTotal = mode === "refill" && topUpTotal;
-          const preGrams =
-            mode === "refill" && !asNewTotal && preWeight.value.trim()
-              ? parseGrams(preWeight.value)
-              : null;
-          if (
-            mode === "refill" &&
-            !asNewTotal &&
-            preWeight.value.trim() &&
-            (preGrams === null || preGrams < 0)
-          ) {
-            error.textContent = "Enter the weight before topping up in grams.";
-            error.style.display = "";
-            return;
-          }
-          if (mode === "consume" && current != null && amountGrams > current) {
-            error.textContent = "That is more than the bowl holds.";
-            error.style.display = "";
-            return;
-          }
-          let kind: "weigh" | "consume" | "refill" | "refresh" = mode;
-          let weightGrams: number | undefined;
-          let consumedGrams: number | undefined;
-          let refillGrams: number | undefined;
-          if (mode === "weigh" || mode === "refresh") {
-            weightGrams = amountGrams;
-          } else if (mode === "consume") {
-            consumedGrams = amountGrams;
-          } else if (!asNewTotal) {
-            kind = "refill";
-            refillGrams = amountGrams;
-          } else {
-            const added = current != null ? amountGrams - current : null;
-            if (added !== null && added > 0) {
-              kind = "refill";
-              refillGrams = added;
-            } else {
-              kind = "weigh";
-              weightGrams = amountGrams;
-            }
-          }
-          save.disabled = true;
-          try {
-            if (editing) {
-              await api.patch(`/api/bowls/${bowl.id}/readings/${editing.id}`, {
-                readAt: readAt.toISOString(),
-                slot,
-                weightGrams: mode === "refill" ? undefined : amountGrams,
-                refillGrams: mode === "refill" ? amountGrams : undefined,
-                notes: notes.value.trim(),
-              });
-            } else {
-              await api.post(`/api/bowls/${bowl.id}/readings`, {
-                kind,
-                readAt: readAt.toISOString(),
-                slot,
-                weightGrams,
-                consumedGrams,
-                refillGrams,
-                preWeightGrams: preGrams ?? undefined,
-                finalWeightGrams: finalGrams ?? undefined,
-                notes: notes.value.trim(),
-              });
-            }
-            toast(
-              editing
-                ? "Reading updated"
-                : kind === "refill"
-                  ? "Top-up logged"
-                  : kind === "consume"
-                    ? "Consumption logged"
-                    : kind === "refresh"
-                      ? "Bowl refreshed"
-                      : "Weight logged",
-            );
-            options.onSaved();
-            modal.close();
-          } catch (err) {
-            error.textContent = err instanceof Error ? err.message : "Something went wrong";
-            error.style.display = "";
-          } finally {
-            save.disabled = false;
-          }
+          void submit();
         },
       },
       error,
       modeField,
       slotField,
-      topUpField,
-      ...(weighFirst ? [preWeightField] : []),
       h("div", { class: "field" }, amountLabel, amount, hint, productHint),
       breakdown,
-      ...(weighFirst ? [] : [preWeightField]),
       finalField,
       h("div", { class: "field" }, h("label", null, "When"), when),
       h("div", { class: "field" }, h("label", null, "Notes"), notes),
+      queueHeader,
+      queueList,
       dayListLabel,
       dayList,
       h(
         "div",
         { class: "modal-actions" },
         h("button", { class: "btn outline", type: "button", onClick: () => modal.close() }, "Cancel"),
+        addAnother,
         save,
       ),
     ),
   });
-  if (weighFirst) preWeight.focus();
 }
 
 function readingMode(kind: BowlReadingDto["kind"]): BowlReadingMode {
   return kind === "refill" || kind === "refresh" ? kind : "weigh";
+}
+
+function readingSummary(reading: SessionReading): string {
+  if (reading.kind === "consume") return `−${reading.consumedGrams} g`;
+  if (reading.kind === "refill") return `+${reading.refillGrams} g`;
+  return `${reading.weightGrams} g`;
+}
+
+function readingToast(kind: BowlReadingMode): string {
+  if (kind === "refill") return "Top-up logged";
+  if (kind === "consume") return "Consumption logged";
+  if (kind === "refresh") return "Bowl refreshed";
+  return "Weight logged";
 }
 
 function parseGrams(value: string): number | null {

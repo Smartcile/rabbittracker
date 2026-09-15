@@ -330,7 +330,6 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
             ? () =>
                 openBowlReadingModal({
                   bowl,
-                  mode: "weigh",
                   date: new Date(date),
                   product: foodProducts.find((item) => item.id === bowl.productId),
                   onSaved: () => void refresh(),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bowlReadingKindLabel, summarizeBowl, summarizeBowlByDay } from "./bowls.ts";
+import { bowlReadingKindLabel, projectBowlWeight, summarizeBowl, summarizeBowlByDay } from "./bowls.ts";
 import type { BowlReadingInput } from "./bowls.ts";
 
 function reading(
@@ -92,6 +92,42 @@ describe("bowlReadingKindLabel", () => {
     expect(bowlReadingKindLabel("consume")).toBe("Consumption");
     expect(bowlReadingKindLabel("refill")).toBe("Top up");
     expect(bowlReadingKindLabel("refresh")).toBe("Refresh");
+  });
+});
+
+describe("projectBowlWeight", () => {
+  it("returns the current weight without drafts", () => {
+    expect(projectBowlWeight(900, [])).toBe(900);
+    expect(projectBowlWeight(null, [])).toBeNull();
+  });
+
+  it("applies weigh-ins, consumption and top-ups in order", () => {
+    expect(
+      projectBowlWeight(900, [
+        { kind: "weigh", weightGrams: 800 },
+        { kind: "consume", consumedGrams: 150 },
+        { kind: "refill", refillGrams: 250 },
+      ]),
+    ).toBe(900);
+  });
+
+  it("treats refresh as a new starting weight", () => {
+    expect(
+      projectBowlWeight(900, [
+        { kind: "consume", consumedGrams: 300 },
+        { kind: "refresh", weightGrams: 850 },
+        { kind: "consume", consumedGrams: 50 },
+      ]),
+    ).toBe(800);
+  });
+
+  it("bases a top-up on the pre-weight when given", () => {
+    expect(projectBowlWeight(900, [{ kind: "refill", refillGrams: 250, preWeightGrams: 600 }])).toBe(850);
+  });
+
+  it("ignores amounts that need a baseline", () => {
+    expect(projectBowlWeight(null, [{ kind: "consume", consumedGrams: 100 }])).toBeNull();
+    expect(projectBowlWeight(null, [{ kind: "refill", refillGrams: 100 }])).toBeNull();
   });
 });
 

@@ -48,14 +48,14 @@ Desktop:
   bar on the bunny profile logs a type in seconds. An **Add defaults** button in the editor pulls in
   any missing starter types (including multi-select Behaviour) on upgraded installs.
 - **Food & water bowl tracking** — set a starting weight for a bowl, then log scale readings as you
-  go: consumption is calculated since the last reading and the baseline rolls forward. Top up by
-  entering the amount added or the bowl's new total — optionally recording the weigh-in first so
-  the consumption is counted — and refresh starts a new period with an optional final weight. One
-  daily consumption chart at the top of the card overlays every bowl with its day-by-day average,
-  readings can be edited or deleted, and bowls can be scheduled with times of day: the calendar
-  shows a chip per bowl per time and tapping it logs a weigh-in or top-up for that slot. Record the
-  bowl's empty weight to see how much is actually in it, link a food product so top-ups draw from
-  its stock, and enter consumption directly for greens and treats (the new weight is calculated).
+  go: consumption is calculated since the last reading and the baseline rolls forward. One pop-out
+  logs a whole session: pick weigh-in, consumption, top-up or refresh, add each reading, then save
+  them together. Refresh starts a new period with an optional final weight. One daily consumption
+  chart at the top of the card overlays every bowl with its day-by-day average, readings can be
+  edited or deleted, and bowls can be scheduled with times of day: the calendar shows a chip per
+  bowl per time and tapping it logs a reading for that slot. Record the bowl's empty weight to see
+  how much is actually in it, link a food product so top-ups draw from its stock, and enter
+  consumption directly for greens and treats (the new weight is calculated).
 - **Food & supplies** — a catalog for hay, pellets, greens and treats with a running stock total
   (add or remove amounts), a low-stock level and a type list. Link a product to a bowl and every
   top-up draws the amount added from its stock; editing or deleting the top-up puts it back.
