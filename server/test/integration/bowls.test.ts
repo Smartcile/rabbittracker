@@ -395,6 +395,27 @@ describe("bowl integration", () => {
     expect(bowls[0]?.currentWeightGrams).toBe(900);
   });
 
+  it("stores and updates the bowl kind", async () => {
+    const rabbit = await createRabbit();
+    const { bowl } = await api<{ bowl: BowlDto }>(ctx, "/api/bowls", {
+      method: "POST",
+      body: {
+        rabbitId: rabbit.id,
+        label: "Water bowl",
+        kind: "water",
+        startWeightGrams: 900,
+        startedAt: "2026-09-01T08:00:00.000Z",
+      },
+    });
+    expect(bowl.kind).toBe("water");
+
+    const { bowl: edited } = await api<{ bowl: BowlDto }>(ctx, `/api/bowls/${bowl.id}`, {
+      method: "PATCH",
+      body: { kind: "food" },
+    });
+    expect(edited.kind).toBe("food");
+  });
+
   it("renames and deletes a bowl", async () => {
     const rabbit = await createRabbit();
     const bowl = await createBowl(rabbit.id);

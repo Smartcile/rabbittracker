@@ -252,6 +252,9 @@ export function openBowlReadingModal(options: {
 
   const baseline = (): number | null => projectBowlWeight(current, queue);
 
+  const contents = (grams: number | null): string =>
+    grams != null && bowl.tareGrams != null ? ` (${formatFoodAmount(grams - bowl.tareGrams)} in bowl)` : "";
+
   const updateProductHint = (): void => {
     const grams = parseGrams(amount.value);
     const show = product !== undefined && mode === "refill" && grams !== null && grams > 0;
@@ -284,10 +287,14 @@ export function openBowlReadingModal(options: {
               : "Same as the last reading",
         );
       }
-      lines.push(`New total ${grams} g`);
+      lines.push(`New total ${grams} g${contents(grams)}`);
     } else if (mode === "consume") {
       if (base != null) {
-        lines.push(grams > base ? `More than the bowl holds (${base} g)` : `New total ${base - grams} g`);
+        lines.push(
+          grams > base
+            ? `More than the bowl holds (${base} g)`
+            : `New total ${base - grams} g${contents(base - grams)}`,
+        );
       }
     } else if (mode === "refresh") {
       const final = parseGrams(finalWeight.value);
@@ -297,10 +304,10 @@ export function openBowlReadingModal(options: {
           delta > 0 ? `Consumed ${delta} g up to the final weigh-in` : "Final weigh-in is above the last reading",
         );
       }
-      lines.push(`New period starts at ${grams} g`);
+      lines.push(`New period starts at ${grams} g${contents(grams)}`);
     } else {
       lines.push(`Added ${grams} g`);
-      if (base != null) lines.push(`New total ${base + grams} g`);
+      if (base != null) lines.push(`New total ${base + grams} g${contents(base + grams)}`);
     }
     breakdown.replaceChildren(...lines.map((line) => h("div", { class: "small" }, line)));
     breakdown.style.display = "";
@@ -375,7 +382,8 @@ export function openBowlReadingModal(options: {
     if (mode === "weigh") {
       amountLabel.textContent = "Weight (g)";
       amount.placeholder = "e.g. 850";
-      hint.textContent = base != null ? `Current weight ${base} g.` : "Weigh the bowl and enter the number.";
+      hint.textContent =
+        base != null ? `Current weight ${base} g${contents(base)}.` : "Weigh the bowl and enter the number.";
       return;
     }
     if (mode === "consume") {
@@ -383,7 +391,7 @@ export function openBowlReadingModal(options: {
       amount.placeholder = "e.g. 150";
       hint.textContent =
         base != null
-          ? `Current weight ${base} g — enter how much was eaten; the new weight is calculated.`
+          ? `Current weight ${base} g${contents(base)} — enter how much was eaten; the new weight is calculated.`
           : "Add a starting weight first.";
       return;
     }
@@ -392,13 +400,14 @@ export function openBowlReadingModal(options: {
       amount.placeholder = "e.g. 850";
       hint.textContent =
         base != null
-          ? `Current weight ${base} g. Optionally record it as the final weight, then enter the new starting weight.`
+          ? `Current weight ${base} g${contents(base)}. Optionally record it as the final weight, then enter the new starting weight.`
           : "Weigh the bowl and enter the number.";
       return;
     }
     amountLabel.textContent = "Amount added (g)";
     amount.placeholder = "e.g. 250";
-    hint.textContent = base != null ? `Current weight ${base} g — enter how much you added.` : "Enter how much you added.";
+    hint.textContent =
+      base != null ? `Current weight ${base} g${contents(base)} — enter how much you added.` : "Enter how much you added.";
   }
 
   function renderSlotPicker(): void {

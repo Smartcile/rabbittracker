@@ -103,6 +103,7 @@ bowlsRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (
     .values({
       rabbitId: input.rabbitId,
       label: input.label,
+      kind: input.kind,
       slots: input.slots,
       tareGrams: input.tareGrams ?? null,
       productId: input.productId ?? null,
@@ -130,6 +131,7 @@ bowlsRouter.patch("/:id", requireAuth, requirePermission("canRecordHealth"), asy
     .update(bowls)
     .set({
       label: input.label ?? bowl.label,
+      kind: input.kind ?? bowl.kind,
       slots: input.slots ?? bowl.slots,
       tareGrams: input.tareGrams !== undefined ? input.tareGrams : bowl.tareGrams,
       productId: input.productId !== undefined ? input.productId : bowl.productId,
