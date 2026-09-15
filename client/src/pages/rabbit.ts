@@ -13,6 +13,7 @@ import type {
   CheckLogTypeDto,
   ChecklistSectionDto,
   DrugDto,
+  FoodProductDto,
   HealthCheckDto,
   JournalEntryDto,
   LookupDto,
@@ -25,6 +26,7 @@ import type {
   VaccinationDto,
 } from "../../../shared/types.ts";
 import { formatDrugAmount, stockLevel, stockTotalMilliUnits } from "../../../shared/drugs.ts";
+import { formatFoodAmount } from "../../../shared/food.ts";
 import {
   ageLabel,
   careDueStatus,
@@ -41,6 +43,7 @@ import { openAppointmentModal } from "../components/appointmentModal.ts";
 import { openCheckLogModal } from "../components/checkLogModal.ts";
 import { openMedicationLogModal } from "../components/medicationLogModal.ts";
 import { rabbitAvatar } from "../components/avatar.ts";
+import { renderBowlsChart } from "../components/bowlChart.ts";
 import { openBowlModal, openBowlReadingModal } from "../components/bowlModal.ts";
 import { renderChecksTable } from "../components/checksTable.ts";
 import { openCheckModal } from "../components/checkModal.ts";
@@ -53,7 +56,7 @@ import { openTaskModal } from "../components/taskModal.ts";
 import { toast } from "../components/toast.ts";
 import { optionButtons } from "../components/toggle.ts";
 import { openTreatmentModal } from "../components/treatmentModal.ts";
-import { slotChips } from "../components/slotChips.ts";
+import { slotChips, slotTimeBadge } from "../components/slotChips.ts";
 import { openVaccinationModal } from "../components/vaccinationModal.ts";
 import { renderWeightChart } from "../components/weightChart.ts";
 import { openWeightModal } from "../components/weightModal.ts";
@@ -93,6 +96,7 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
         medLogResponse,
         bowlResponse,
         taskResponse,
+        foodResponse,
       ] = await Promise.all([
         api.get<RabbitBundle>(`/api/rabbits/${id}`),
         api.get<{ drugs: DrugDto[] }>("/api/drugs"),
@@ -103,12 +107,13 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
         api.get<{ logs: MedicationLogDto[] }>(`/api/medication-logs?rabbitId=${id}`),
         api.get<{ bowls: BowlDto[] }>(`/api/bowls?rabbitId=${id}`),
         api.get<{ tasks: TaskDto[]; completions: TaskCompletionDto[] }>(`/api/tasks?rabbitId=${id}`),
+        api.get<{ products: FoodProductDto[] }>("/api/food-products"),
       ]);
       const careTypes = lookups.filter((lookup) => lookup.kind === "care_type");
       const sections: (HTMLElement | null)[] = [
         header(bundle.rabbit, bundle.checks, load, canEdit),
         dailyChecksCard(bundle.rabbit, logTypes, checkLogResponse.logs, load, canRecord),
-        bowlsCard(bundle.rabbit, bowlResponse.bowls, load, canRecord),
+        bowlsCard(bundle.rabbit, bowlResponse.bowls, foodResponse.products, load, canRecord),
         quickLogCard(bundle.rabbit, checklistSections, load, canRecord),
         tasksCard(bundle.rabbit, taskResponse.tasks, taskResponse.completions, load, canRecord),
         weightCard(bundle.rabbit, bundle.checks, load, canRecord),
@@ -648,6 +653,7 @@ async function removeCheckLog(entry: CheckLogDto, reload: () => Promise<void>): 
 function bowlsCard(
   rabbit: RabbitDto,
   bowls: BowlDto[],
+  products: FoodProductDto[],
   reload: () => Promise<void>,
   canRecord: boolean,
 ): HTMLElement {
@@ -662,7 +668,7 @@ function bowlsCard(
   if (bowls.length === 0) {
     list.append(h("p", { class: "dim small", style: { margin: 0 } }, "No bowls tracked yet."));
   }
-  for (const bowl of bowls) list.append(bowlPanel(rabbit, bowl, reload, canRecord));
+  for (const bowl of bowls) list.append(bowlPanel(rabbit, bowl, products, reload, canRecord));
   return h(
     "div",
     { class: "card" },
@@ -672,6 +678,7 @@ function bowlsCard(
       { class: "dim small" },
       "Track consumption by weighing the bowl. Each weigh-in rolls the baseline forward, top-ups can add to the current weight or set a new total, and refresh starts a new period.",
     ),
+    renderBowlsChart(bowls),
     list,
   );
 }
@@ -679,12 +686,22 @@ function bowlsCard(
 function bowlPanel(
   rabbit: RabbitDto,
   bowl: BowlDto,
+  products: FoodProductDto[],
   reload: () => Promise<void>,
   canRecord: boolean,
 ): HTMLElement {
+  const product = products.find((item) => item.id === bowl.productId) ?? null;
+  const content =
+    bowl.currentWeightGrams != null && bowl.tareGrams != null
+      ? bowl.currentWeightGrams - bowl.tareGrams
+      : null;
   const parts = [
     bowl.periodStartAt ? `Since ${fmtDate(bowl.periodStartAt)}` : null,
-    bowl.currentWeightGrams != null ? `${bowl.currentWeightGrams} g now` : null,
+    content != null
+      ? `${formatFoodAmount(content)} in bowl`
+      : bowl.currentWeightGrams != null
+        ? `${bowl.currentWeightGrams} g now`
+        : null,
     `${bowl.periodConsumptionGrams} g consumed`,
     bowl.periodRefillGrams > 0 ? `${bowl.periodRefillGrams} g topped up` : null,
   ].filter(Boolean);
@@ -693,10 +710,17 @@ function bowlPanel(
   );
   const schedule = slotChips({
     slots: bowl.slots,
-    logs: todayReadings,
+    logs: todayReadings.map((reading) => ({ slot: reading.slot, at: reading.readAt })),
     canRecord,
     onLog: (slot) =>
-      openBowlReadingModal({ bowl, mode: "weigh", date: new Date(), slot, onSaved: () => void reload() }),
+      openBowlReadingModal({
+        bowl,
+        mode: "weigh",
+        date: new Date(),
+        slot,
+        product: product ?? undefined,
+        onSaved: () => void reload(),
+      }),
   });
   const actions = canRecord
     ? h(
@@ -704,17 +728,32 @@ function bowlPanel(
         { class: "row wrap" },
         h(
           "button",
-          { class: "btn outline small", type: "button", onClick: () => openBowlReadingModal({ bowl, mode: "weigh", onSaved: () => void reload() }) },
+          {
+            class: "btn outline small",
+            type: "button",
+            onClick: () =>
+              openBowlReadingModal({ bowl, mode: "weigh", product: product ?? undefined, onSaved: () => void reload() }),
+          },
           "Weigh",
         ),
         h(
           "button",
-          { class: "btn outline small", type: "button", onClick: () => openBowlReadingModal({ bowl, mode: "refill", onSaved: () => void reload() }) },
+          {
+            class: "btn outline small",
+            type: "button",
+            onClick: () =>
+              openBowlReadingModal({ bowl, mode: "refill", product: product ?? undefined, onSaved: () => void reload() }),
+          },
           "Top up",
         ),
         h(
           "button",
-          { class: "btn outline small", type: "button", onClick: () => openBowlReadingModal({ bowl, mode: "refresh", onSaved: () => void reload() }) },
+          {
+            class: "btn outline small",
+            type: "button",
+            onClick: () =>
+              openBowlReadingModal({ bowl, mode: "refresh", product: product ?? undefined, onSaved: () => void reload() }),
+          },
           "Refresh",
         ),
         h(
@@ -754,6 +793,14 @@ function bowlPanel(
       h("strong", null, bowl.label),
       h("span", { class: "dim small" }, parts.join(" · ")),
     ),
+    product
+      ? h(
+          "div",
+          { class: "row wrap", style: { gap: "0.35rem" } },
+          h("span", { class: "badge" }, product.name),
+          h("span", { class: "dim small" }, `${formatFoodAmount(product.stockGrams)} in stock`),
+        )
+      : null,
     schedule,
     actions,
     bowl.readings.length > 0
@@ -781,16 +828,38 @@ function bowlReadingRow(
       "div",
       { class: "stack", style: { gap: "0.15rem" } },
       h(
-        "span",
-        null,
-        bowlReadingKindLabel(reading.kind),
-        reading.slot ? h("span", { class: "dim small" }, ` · ${DAY_SLOT_LABELS[reading.slot]}`) : null,
-        delta ? h("span", { class: "dim small" }, ` ${delta}`) : null,
+        "div",
+        { class: "row wrap", style: { gap: "0.35rem" } },
+        h(
+          "span",
+          null,
+          bowlReadingKindLabel(reading.kind),
+          reading.slot ? h("span", { class: "dim small" }, ` · ${DAY_SLOT_LABELS[reading.slot]}`) : null,
+          delta ? h("span", { class: "dim small" }, ` ${delta}`) : null,
+        ),
+        slotTimeBadge(reading.slot, reading.readAt),
       ),
       reading.notes ? h("span", { class: "dim small" }, reading.notes) : null,
     ),
     h("span", { class: "spacer" }),
     h("span", { class: "dim small" }, `${fmtDate(reading.readAt)} ${fmtTime(reading.readAt)} · ${reading.weightGrams} g`),
+    canRecord
+      ? h(
+          "button",
+          {
+            class: "btn ghost small",
+            type: "button",
+            onClick: () =>
+              openBowlReadingModal({
+                bowl,
+                mode: "weigh",
+                editing: reading,
+                onSaved: () => void reload(),
+              }),
+          },
+          "Edit",
+        )
+      : null,
     canRecord
       ? h(
           "button",
@@ -1061,7 +1130,12 @@ function medicationLogRow(
       "div",
       { class: "stack", style: { gap: "0.15rem" } },
       h("strong", null, drug?.name ?? "Medication"),
-      detail ? h("span", { class: "dim small" }, detail) : null,
+      h(
+        "div",
+        { class: "row wrap", style: { gap: "0.35rem" } },
+        detail ? h("span", { class: "dim small" }, detail) : null,
+        slotTimeBadge(entry.slot, entry.givenAt),
+      ),
       entry.notes ? h("span", { class: "dim small" }, entry.notes) : null,
     ),
     h("span", { class: "spacer" }),
@@ -1534,7 +1608,7 @@ function treatmentRow(
     treatment.status === "active"
       ? slotChips({
           slots: treatment.slots,
-          logs: todayLogs,
+          logs: todayLogs.map((entry) => ({ slot: entry.slot, at: entry.givenAt })),
           canRecord,
           onLog: (slot) =>
             openMedicationLogModal({

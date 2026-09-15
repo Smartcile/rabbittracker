@@ -49,15 +49,25 @@ Desktop:
   any missing starter types (including multi-select Behaviour) on upgraded installs.
 - **Food & water bowl tracking** — set a starting weight for a bowl, then log scale readings as you
   go: consumption is calculated since the last reading and the baseline rolls forward. Top up by
-  entering the amount added or the bowl's new total, and refresh starts a new period with an
-  optional final weight. Bowls can be scheduled with times of day; the calendar shows a chip per
-  bowl per time and tapping it logs a weigh-in or top-up for that slot.
+  entering the amount added or the bowl's new total — optionally recording the weigh-in first so
+  the consumption is counted — and refresh starts a new period with an optional final weight. One
+  daily consumption chart at the top of the card overlays every bowl with its day-by-day average,
+  readings can be edited or deleted, and bowls can be scheduled with times of day: the calendar
+  shows a chip per bowl per time and tapping it logs a weigh-in or top-up for that slot. Record the
+  bowl's empty weight to see how much is actually in it, and link a food product so top-ups draw
+  from its stock.
+- **Food & supplies** — a catalog for hay, pellets, greens and treats with a running stock total
+  (add or remove amounts), a low-stock level and a type list. Link a product to a bowl and every
+  top-up draws the amount added from its stock; editing or deleting the top-up puts it back.
 - **Daily routine tasks** — repeating chores per bunny with morning, afternoon, evening or anytime
   slots and an every-N-days repeat. Tick them off from the bunny page or the home Today list.
 - **Treatments & medication** — courses with dose, route and frequency plus the times of day each
-  dose is given (early morning, morning, afternoon, evening, night). The calendar shows the doses
-  due each day with ticks per time; tap a treatment to see what is logged, log another dose or pick
-  a different time for that day (tick **Change going forward** to add it to the schedule). Multiple
+  dose is given, each with a window (early morning 05:00–08:00, morning 08:00–12:00, afternoon
+  12:00–17:00, evening 17:00–21:00, night 21:00–05:00). Logging preselects the slot for the current
+  time, and doses logged outside the window are flagged **Early** or **Late** so mistakes stand
+  out. The calendar shows the doses due each day with ticks per time; tap a treatment to see what
+  is logged, log another dose or pick a different time for that day (tick **Change going forward**
+  to add it to the schedule). Multiple
   doses can be logged per day, linked doses are grouped under the treatment on the bunny page,
   one-off doses stay in the medication log, and either can be edited later. Logged doses deduct from
   drug stock earliest-expiry-first; editing or deleting a log reconciles it. Overriding the amount

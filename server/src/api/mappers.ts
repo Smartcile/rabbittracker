@@ -18,6 +18,8 @@ import type {
   Droppings,
   DrugBatchDto,
   DrugDto,
+  FoodProductDto,
+  FoodStockEntryDto,
   LookupDto,
   MedicationLogDto,
   Energy,
@@ -62,6 +64,8 @@ import type {
   ClinicRow,
   DrugBatchRow,
   DrugRow,
+  FoodProductRow,
+  FoodStockEntryRow,
   MedicationLogRow,
   FaqEntryRow,
   HealthCheckRow,
@@ -345,6 +349,8 @@ export function bowlToDto(row: BowlRow, readings: BowlReadingRow[]): BowlDto {
     rabbitId: row.rabbitId,
     label: row.label,
     slots: daySlots(row.slots),
+    tareGrams: row.tareGrams,
+    productId: row.productId,
     currentWeightGrams: summary.currentWeightGrams,
     periodStartAt: summary.periodStartAt ? summary.periodStartAt.toISOString() : null,
     periodConsumptionGrams: summary.periodConsumptionGrams,
@@ -376,6 +382,33 @@ export function bowlToDto(row: BowlRow, readings: BowlReadingRow[]): BowlDto {
 
 function bowlReadingKind(value: string): BowlReadingKind {
   return value === "start" || value === "refill" || value === "refresh" ? value : "weigh";
+}
+
+export function foodStockEntryToDto(row: FoodStockEntryRow): FoodStockEntryDto {
+  return {
+    id: row.id,
+    productId: row.productId,
+    amountGrams: row.amountGrams,
+    note: row.note,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export function foodProductToDto(
+  row: FoodProductRow,
+  entries: FoodStockEntryRow[],
+): FoodProductDto {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    stockGrams: entries.reduce((sum, entry) => sum + entry.amountGrams, 0),
+    reorderLevelGrams: row.reorderLevelGrams,
+    notes: row.notes,
+    entries: entries.map(foodStockEntryToDto),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
 export function taskToDto(row: RabbitTaskRow, lastCompletedAt: Date | null): TaskDto {

@@ -18,6 +18,7 @@ import { clinicsRouter } from "./routes/clinics.ts";
 import { drugsRouter } from "./routes/drugs.ts";
 import { exportRouter } from "./routes/export.ts";
 import { faqRouter } from "./routes/faq.ts";
+import { foodProductsRouter } from "./routes/foodProducts.ts";
 import { journalRouter } from "./routes/journal.ts";
 import { lookupsRouter } from "./routes/lookups.ts";
 import { photosRouter } from "./routes/photos.ts";
@@ -56,6 +57,7 @@ export function createApp(): Express {
   app.use("/api/clinics", clinicsRouter);
   app.use("/api/lookups", lookupsRouter);
   app.use("/api/drugs", drugsRouter);
+  app.use("/api/food-products", foodProductsRouter);
   app.use("/api/treatments", treatmentsRouter);
   app.use("/api/vaccinations", vaccinationsRouter);
   app.use("/api/care-records", careRecordsRouter);

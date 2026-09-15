@@ -1,10 +1,21 @@
 import type { DaySlot } from "../../../shared/slots.ts";
-import { DAY_SLOT_LABELS, slotStatus } from "../../../shared/slots.ts";
+import { DAY_SLOT_LABELS, slotStatus, slotTimeStatus } from "../../../shared/slots.ts";
 import { h } from "../dom.ts";
+
+export function slotTimeBadge(slot: string | null, at: string | Date): HTMLElement | null {
+  if (!slot) return null;
+  const status = slotTimeStatus(slot as DaySlot, new Date(at));
+  if (status === "on_time") return null;
+  return h(
+    "span",
+    { class: status === "late" ? "badge watch" : "badge" },
+    status === "late" ? "Late" : "Early",
+  );
+}
 
 export function slotChips(options: {
   slots: DaySlot[];
-  logs: { slot: string | null }[];
+  logs: { slot: string | null; at?: string | Date }[];
   canRecord: boolean;
   onLog: (slot: DaySlot) => void;
 }): HTMLElement | null {
@@ -19,23 +30,21 @@ export function slotChips(options: {
         ),
     ),
   ];
-  const chips = [...statuses, ...extras.map((slot) => ({ slot, done: true }))];
+  const chips = [...statuses, ...extras.map((slot) => ({ slot, done: true, status: null }))];
   return h(
     "div",
     { class: "row wrap", style: { gap: "0.3rem" } },
     chips.map((entry) => {
-      const label = `${DAY_SLOT_LABELS[entry.slot]}${entry.done ? " ✓" : ""}`;
+      const late = entry.status === "late";
+      const label = `${DAY_SLOT_LABELS[entry.slot]}${entry.done ? (late ? " !" : " ✓") : ""}`;
+      const classes = `slot-chip${entry.done ? " done" : ""}${late ? " late" : ""}`;
       return options.canRecord
         ? h(
             "button",
-            {
-              class: `slot-chip${entry.done ? " done" : ""}`,
-              type: "button",
-              onClick: () => options.onLog(entry.slot),
-            },
+            { class: classes, type: "button", onClick: () => options.onLog(entry.slot) },
             label,
           )
-        : h("span", { class: `slot-chip${entry.done ? " done" : ""}` }, label);
+        : h("span", { class: classes }, label);
     }),
   );
 }

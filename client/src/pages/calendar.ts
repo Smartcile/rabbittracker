@@ -10,6 +10,7 @@ import type {
   CalendarSyncResultDto,
   CheckLogDto,
   DrugDto,
+  FoodProductDto,
   MedicationLogDto,
   RabbitDto,
   SettingsDto,
@@ -33,6 +34,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
   let timezone: string | undefined;
   let rabbits: RabbitDto[] = [];
   let drugs: DrugDto[] = [];
+  let foodProducts: FoodProductDto[] = [];
   const canManage = can(ctx.user, "canManageCalendar");
   const canRecord = can(ctx.user, "canRecordHealth");
   const showCost = can(ctx.user, "canViewCosts");
@@ -118,6 +120,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
       medLogsRes,
       drugsRes,
       bowlScheduleRes,
+      foodRes,
     ] = await Promise.all([
       api.get<{ events: CalendarEventDto[] }>(
         `/api/calendar/events?from=${from.toISOString()}&to=${to.toISOString()}`,
@@ -139,8 +142,10 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
       api.get<{ bowls: BowlDto[] }>(
         `/api/bowls/schedule?from=${from.toISOString()}&to=${to.toISOString()}`,
       ),
+      api.get<{ products: FoodProductDto[] }>("/api/food-products"),
     ]);
     drugs = drugsRes.drugs;
+    foodProducts = foodRes.products;
     const monthStart = dayKey(from);
     const monthEnd = dayKey(to);
     const monthTreatments = treatmentsRes.treatments.filter(
@@ -236,7 +241,12 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
           (log) => log.treatmentId === treatment.id,
         );
         const statuses =
-          treatment.slots.length > 0 ? slotStatus(treatment.slots, dayLogs) : [];
+          treatment.slots.length > 0
+            ? slotStatus(
+                treatment.slots,
+                dayLogs.map((log) => ({ slot: log.slot, at: log.givenAt })),
+              )
+            : [];
         const done = allSlotsDone(treatment.slots, dayLogs);
         const parts: (HTMLElement | string)[] = [];
         if (startsToday) parts.push("▶ ");
@@ -252,8 +262,14 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
               statuses.map((entry) =>
                 h(
                   "span",
-                  { class: `cal-slot${entry.done ? " done" : ""}` },
-                  `${DAY_SLOT_SHORT_LABELS[entry.slot]}${entry.done ? " ✓" : ""}`,
+                  {
+                    class: `cal-slot${entry.done ? " done" : ""}${
+                      entry.status === "late" ? " late" : ""
+                    }`,
+                  },
+                  `${DAY_SLOT_SHORT_LABELS[entry.slot]}${
+                    entry.done ? (entry.status === "late" ? " !" : " ✓") : ""
+                  }`,
                 ),
               ),
             ),
@@ -280,7 +296,10 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         const rabbit = rabbitById.get(bowl.rabbitId);
         const rabbitName = rabbitNames.get(bowl.rabbitId) ?? "Bunny";
         const dayReadings = bowlReadingsByDay.get(key)?.get(bowl.id) ?? [];
-        const statuses = slotStatus(bowl.slots, dayReadings);
+        const statuses = slotStatus(
+          bowl.slots,
+          dayReadings.map((reading) => ({ slot: reading.slot, at: reading.readAt })),
+        );
         const done = allSlotsDone(bowl.slots, dayReadings);
         const parts: (HTMLElement | string)[] = [`${rabbitName}: ${bowl.label}`];
         if (statuses.length > 0) {
@@ -291,8 +310,14 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
               statuses.map((entry) =>
                 h(
                   "span",
-                  { class: `cal-slot${entry.done ? " done" : ""}` },
-                  `${DAY_SLOT_SHORT_LABELS[entry.slot]}${entry.done ? " ✓" : ""}`,
+                  {
+                    class: `cal-slot${entry.done ? " done" : ""}${
+                      entry.status === "late" ? " late" : ""
+                    }`,
+                  },
+                  `${DAY_SLOT_SHORT_LABELS[entry.slot]}${
+                    entry.done ? (entry.status === "late" ? " !" : " ✓") : ""
+                  }`,
                 ),
               ),
             ),
@@ -307,6 +332,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
                   bowl,
                   mode: "weigh",
                   date: new Date(date),
+                  product: foodProducts.find((item) => item.id === bowl.productId),
                   onSaved: () => void refresh(),
                 })
             : null;

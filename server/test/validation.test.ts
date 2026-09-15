@@ -9,6 +9,7 @@ import {
   appointmentUpdateSchema,
   bowlCreateSchema,
   bowlReadingCreateSchema,
+  bowlReadingUpdateSchema,
   bowlUpdateSchema,
   calendarEntryCreateSchema,
   calendarSubscriptionSchema,
@@ -27,6 +28,9 @@ import {
   faqCreateSchema,
   faqReorderSchema,
   faqUpdateSchema,
+  foodProductCreateSchema,
+  foodProductUpdateSchema,
+  foodStockEntryCreateSchema,
   hasCheckContent,
   hasChecklistContent,
   loginSchema,
@@ -617,6 +621,45 @@ describe("bowl validation", () => {
     expect(bowlUpdateSchema.safeParse({ slots: ["morning"] }).success).toBe(true);
   });
 
+  it("accepts a tare weight and a linked food product", () => {
+    expect(
+      bowlCreateSchema.safeParse({
+        rabbitId: 1,
+        label: "Hay bowl",
+        startWeightGrams: 500,
+        startedAt: "2026-09-01T08:00:00.000Z",
+        tareGrams: 120,
+        productId: 3,
+      }).success,
+    ).toBe(true);
+    expect(
+      bowlCreateSchema.safeParse({
+        rabbitId: 1,
+        label: "Hay bowl",
+        startWeightGrams: 500,
+        startedAt: "2026-09-01T08:00:00.000Z",
+        tareGrams: -1,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts a weigh-in recorded with a top-up", () => {
+    expect(
+      bowlReadingCreateSchema.safeParse({
+        kind: "refill",
+        readAt: "2026-09-02T08:00:00.000Z",
+        refillGrams: 250,
+        preWeightGrams: 600,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("requires changes on a reading update", () => {
+    expect(bowlReadingUpdateSchema.safeParse({}).success).toBe(false);
+    expect(bowlReadingUpdateSchema.safeParse({ weightGrams: 750 }).success).toBe(true);
+    expect(bowlReadingUpdateSchema.safeParse({ slot: null }).success).toBe(true);
+  });
+
   it("requires a weight for weigh and refresh readings", () => {
     expect(
       bowlReadingCreateSchema.safeParse({
@@ -724,6 +767,29 @@ describe("medication log validation", () => {
     expect(medicationLogUpdateSchema.safeParse({}).success).toBe(false);
     expect(medicationLogUpdateSchema.safeParse({ notes: "Corrected" }).success).toBe(true);
     expect(medicationLogUpdateSchema.safeParse({ slot: null }).success).toBe(true);
+  });
+});
+
+describe("food product validation", () => {
+  it("accepts a minimal product with defaults", () => {
+    const result = foodProductCreateSchema.parse({ name: "Timothy hay" });
+    expect(result.type).toBe("");
+    expect(result.reorderLevelGrams).toBe(0);
+  });
+
+  it("requires a name", () => {
+    expect(foodProductCreateSchema.safeParse({ name: "  " }).success).toBe(false);
+  });
+
+  it("requires changes on update", () => {
+    expect(foodProductUpdateSchema.safeParse({}).success).toBe(false);
+    expect(foodProductUpdateSchema.safeParse({ reorderLevelGrams: 500 }).success).toBe(true);
+  });
+
+  it("accepts stock movements but rejects zero", () => {
+    expect(foodStockEntryCreateSchema.safeParse({ amountGrams: 2000 }).success).toBe(true);
+    expect(foodStockEntryCreateSchema.safeParse({ amountGrams: -250 }).success).toBe(true);
+    expect(foodStockEntryCreateSchema.safeParse({ amountGrams: 0 }).success).toBe(false);
   });
 });
 

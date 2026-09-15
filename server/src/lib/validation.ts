@@ -326,6 +326,8 @@ export const bowlCreateSchema = z.object({
   rabbitId: z.number().int().positive(),
   label: z.string().trim().min(1, "Name is required").max(100),
   slots: z.array(z.enum(DAY_SLOTS)).max(DAY_SLOTS.length).default([]),
+  tareGrams: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  productId: z.number().int().positive().nullable().optional(),
   startWeightGrams: z.number().int().min(0).max(1_000_000),
   startedAt: z.coerce.date(),
   notes: z.string().trim().max(2000).default(""),
@@ -335,6 +337,8 @@ export const bowlUpdateSchema = z
   .object({
     label: z.string().trim().min(1, "Name is required").max(100).optional(),
     slots: z.array(z.enum(DAY_SLOTS)).max(DAY_SLOTS.length).optional(),
+    tareGrams: z.number().int().min(0).max(1_000_000).nullable().optional(),
+    productId: z.number().int().positive().nullable().optional(),
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: "No changes provided",
@@ -347,6 +351,7 @@ export const bowlReadingCreateSchema = z
     slot: z.enum(DAY_SLOTS).nullable().optional(),
     weightGrams: z.number().int().min(0).max(1_000_000).optional(),
     refillGrams: z.number().int().min(1).max(1_000_000).optional(),
+    preWeightGrams: z.number().int().min(0).max(1_000_000).optional(),
     finalWeightGrams: z.number().int().min(0).max(1_000_000).optional(),
     notes: z.string().trim().max(2000).default(""),
   })
@@ -354,6 +359,46 @@ export const bowlReadingCreateSchema = z
     (value) => (value.kind === "refill" ? value.refillGrams !== undefined : value.weightGrams !== undefined),
     { message: "Enter a weight" },
   );
+
+export const bowlReadingUpdateSchema = z
+  .object({
+    readAt: z.coerce.date().optional(),
+    slot: z.enum(DAY_SLOTS).nullable().optional(),
+    weightGrams: z.number().int().min(0).max(1_000_000).optional(),
+    refillGrams: z.number().int().min(1).max(1_000_000).optional(),
+    notes: z.string().trim().max(2000).optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: "No changes provided",
+  });
+
+export const foodProductCreateSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(200),
+  type: z.string().trim().max(60).default(""),
+  reorderLevelGrams: z.number().int().min(0).max(1_000_000_000).default(0),
+  notes: z.string().trim().max(2000).default(""),
+});
+
+export const foodProductUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1, "Name is required").max(200).optional(),
+    type: z.string().trim().max(60).optional(),
+    reorderLevelGrams: z.number().int().min(0).max(1_000_000_000).optional(),
+    notes: z.string().trim().max(2000).optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: "No changes provided",
+  });
+
+export const foodStockEntryCreateSchema = z.object({
+  amountGrams: z
+    .number()
+    .int()
+    .min(-1_000_000_000)
+    .max(1_000_000_000)
+    .refine((value) => value !== 0, "Enter an amount"),
+  note: z.string().trim().max(2000).default(""),
+});
 
 export const taskCreateSchema = z.object({
   rabbitId: z.number().int().positive(),

@@ -70,6 +70,12 @@
       day's doses and lets you override the time for that day, optionally adding it to the schedule
       going forward, and every edit pop-out warns before discarding unsaved changes.
 
+- [x] **Time windows + food supplies.** Each time of day has a window (early morning 5–8, morning
+      8–12, afternoon 12–5, evening 5–9, night 9–5); logging preselects the slot for the current
+      time and flags early/late doses. Bowls gained an optional empty weight (so contents show), a
+      linked food product, editable readings and a daily consumption chart, and a new Food &
+      supplies catalog tracks stock with top-ups drawing from it.
+
 ## Planned features (agreed but not built)
 
 These are queued from the "bunny powerhouse" list; pick them up in any order.

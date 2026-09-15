@@ -993,6 +993,12 @@ input.switch:focus-visible {
   font-weight: 650;
 }
 
+.slot-chip.late {
+  border-color: var(--warn-border);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
 span.slot-chip {
   cursor: default;
 }
@@ -1428,6 +1434,75 @@ span.slot-chip {
   fill: var(--danger);
 }
 
+.chart-line.series-2 {
+  stroke: var(--warn);
+}
+
+.chart-line.series-3 {
+  stroke: var(--ok);
+}
+
+.chart-line.series-4 {
+  stroke: var(--danger);
+}
+
+.chart-line.series-5 {
+  stroke: var(--text-dim);
+}
+
+.chart-point.series-2 {
+  fill: var(--warn);
+}
+
+.chart-point.series-3 {
+  fill: var(--ok);
+}
+
+.chart-point.series-4 {
+  fill: var(--danger);
+}
+
+.chart-point.series-5 {
+  fill: var(--text-dim);
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+}
+
+.chart-legend-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.chart-legend-dot.series-2 {
+  background: var(--warn);
+}
+
+.chart-legend-dot.series-3 {
+  background: var(--ok);
+}
+
+.chart-legend-dot.series-4 {
+  background: var(--danger);
+}
+
+.chart-legend-dot.series-5 {
+  background: var(--text-dim);
+}
+
 .chart-hit {
   fill: transparent;
   cursor: pointer;
@@ -1649,6 +1724,12 @@ span.slot-chip {
   background: var(--ok-soft);
   color: var(--ok);
   font-weight: 650;
+}
+
+.cal-slot.late,
+.cal-slot.done.late {
+  background: var(--warn-soft);
+  color: var(--warn);
 }
 
 .cal-chip.event {

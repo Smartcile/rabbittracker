@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bowlReadingKindLabel, summarizeBowl } from "./bowls.ts";
+import { bowlReadingKindLabel, summarizeBowl, summarizeBowlByDay } from "./bowls.ts";
 import type { BowlReadingInput } from "./bowls.ts";
 
 function reading(
@@ -91,5 +91,54 @@ describe("bowlReadingKindLabel", () => {
     expect(bowlReadingKindLabel("weigh")).toBe("Weigh-in");
     expect(bowlReadingKindLabel("refill")).toBe("Top up");
     expect(bowlReadingKindLabel("refresh")).toBe("Refresh");
+  });
+});
+
+describe("summarizeBowlByDay", () => {
+  it("sums consumption within a single day", () => {
+    const summary = summarizeBowlByDay([
+      reading(1, new Date(2026, 8, 1, 8, 0).toISOString(), "start", 900),
+      reading(2, new Date(2026, 8, 1, 20, 0).toISOString(), "weigh", 800),
+    ]);
+    expect(summary.days).toEqual([{ day: "2026-09-01", consumptionGrams: 100 }]);
+    expect(summary.totalConsumptionGrams).toBe(100);
+    expect(summary.spanDays).toBe(1);
+    expect(summary.averageConsumptionGrams).toBe(100);
+  });
+
+  it("spreads consumption across the days between readings", () => {
+    const summary = summarizeBowlByDay([
+      reading(1, new Date(2026, 8, 1, 8, 0).toISOString(), "start", 900),
+      reading(2, new Date(2026, 8, 3, 8, 0).toISOString(), "weigh", 600),
+    ]);
+    expect(summary.days).toEqual([
+      { day: "2026-09-01", consumptionGrams: 100 },
+      { day: "2026-09-02", consumptionGrams: 100 },
+      { day: "2026-09-03", consumptionGrams: 100 },
+    ]);
+    expect(summary.spanDays).toBe(2);
+    expect(summary.averageConsumptionGrams).toBe(150);
+  });
+
+  it("ignores top-ups and measures consumption after them", () => {
+    const summary = summarizeBowlByDay([
+      reading(1, new Date(2026, 8, 1, 8, 0).toISOString(), "start", 900),
+      reading(2, new Date(2026, 8, 2, 8, 0).toISOString(), "weigh", 600),
+      reading(3, new Date(2026, 8, 2, 9, 0).toISOString(), "refill", 850),
+      reading(4, new Date(2026, 8, 3, 8, 0).toISOString(), "weigh", 800),
+    ]);
+    expect(summary.totalConsumptionGrams).toBe(350);
+    expect(summary.days.map((day) => day.day)).toEqual([
+      "2026-09-01",
+      "2026-09-02",
+      "2026-09-03",
+    ]);
+    expect(summary.averageConsumptionGrams).toBe(175);
+  });
+
+  it("returns an empty breakdown without readings", () => {
+    const summary = summarizeBowlByDay([]);
+    expect(summary.days).toEqual([]);
+    expect(summary.averageConsumptionGrams).toBe(0);
   });
 });

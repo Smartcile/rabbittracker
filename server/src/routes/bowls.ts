@@ -1,15 +1,20 @@
-import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, lte, ne } from "drizzle-orm";
 import { Router } from "express";
 import { summarizeBowl } from "../../../shared/bowls.ts";
 import type { DaySlot } from "../../../shared/slots.ts";
 import { bowlToDto } from "../api/mappers.ts";
 import { db } from "../db/index.ts";
-import { bowlReadings, bowls } from "../db/schema.ts";
-import type { BowlReadingRow, BowlRow } from "../db/schema.ts";
+import { bowlReadings, bowls, foodProducts, foodStockEntries } from "../db/schema.ts";
+import type { BowlReadingRow, BowlRow, FoodProductRow } from "../db/schema.ts";
 import { findVisibleRabbit, requirePermission, visibleRabbitIds } from "../lib/access.ts";
 import { requireAuth } from "../lib/auth.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
-import { bowlCreateSchema, bowlReadingCreateSchema, bowlUpdateSchema } from "../lib/validation.ts";
+import {
+  bowlCreateSchema,
+  bowlReadingCreateSchema,
+  bowlReadingUpdateSchema,
+  bowlUpdateSchema,
+} from "../lib/validation.ts";
 
 export const bowlsRouter = Router();
 
@@ -88,9 +93,16 @@ bowlsRouter.get("/schedule", requireAuth, async (req, res) => {
 bowlsRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {
   const input = parseInput(bowlCreateSchema, req.body);
   await findVisibleRabbit(req.user!, input.rabbitId);
+  if (input.productId != null) await findProduct(input.productId);
   const [bowl] = await db
     .insert(bowls)
-    .values({ rabbitId: input.rabbitId, label: input.label, slots: input.slots })
+    .values({
+      rabbitId: input.rabbitId,
+      label: input.label,
+      slots: input.slots,
+      tareGrams: input.tareGrams ?? null,
+      productId: input.productId ?? null,
+    })
     .returning();
   const [reading] = await db
     .insert(bowlReadings)
@@ -109,11 +121,14 @@ bowlsRouter.patch("/:id", requireAuth, requirePermission("canRecordHealth"), asy
   const bowl = await findBowl(parseId(String(req.params.id)));
   await findVisibleRabbit(req.user!, bowl.rabbitId);
   const input = parseInput(bowlUpdateSchema, req.body);
+  if (input.productId != null) await findProduct(input.productId);
   const [row] = await db
     .update(bowls)
     .set({
       label: input.label ?? bowl.label,
       slots: input.slots ?? bowl.slots,
+      tareGrams: input.tareGrams !== undefined ? input.tareGrams : bowl.tareGrams,
+      productId: input.productId !== undefined ? input.productId : bowl.productId,
       updatedAt: new Date(),
     })
     .where(eq(bowls.id, bowl.id))
@@ -137,34 +152,121 @@ bowlsRouter.post("/:id/readings", requireAuth, requirePermission("canRecordHealt
   const existing = await listReadings(bowl.id);
   const summary = summarizeBowl(existing);
   const added: BowlReadingRow[] = [];
-  if (input.kind === "refresh" && input.finalWeightGrams !== undefined && input.finalWeightGrams !== summary.currentWeightGrams) {
-    const [final] = await db
-      .insert(bowlReadings)
-      .values({ bowlId: bowl.id, readAt: input.readAt, kind: "weigh", weightGrams: input.finalWeightGrams })
-      .returning();
-    added.push(final);
-  }
   let weightGrams: number;
   if (input.kind === "refill") {
-    if (summary.currentWeightGrams === null) throw new HttpError(400, "Add a starting weight first");
-    weightGrams = summary.currentWeightGrams + (input.refillGrams ?? 0);
+    const base = input.preWeightGrams ?? summary.currentWeightGrams;
+    if (base === null) throw new HttpError(400, "Add a starting weight first");
+    weightGrams = base + (input.refillGrams ?? 0);
   } else {
     weightGrams = input.weightGrams ?? 0;
   }
-  const [reading] = await db
-    .insert(bowlReadings)
-    .values({
-      bowlId: bowl.id,
-      readAt: input.readAt,
-      kind: input.kind,
-      slot,
-      weightGrams,
-      notes: input.notes,
-    })
-    .returning();
-  added.push(reading);
+  await db.transaction(async (tx) => {
+    if (
+      input.kind === "refresh" &&
+      input.finalWeightGrams !== undefined &&
+      input.finalWeightGrams !== summary.currentWeightGrams
+    ) {
+      const [final] = await tx
+        .insert(bowlReadings)
+        .values({ bowlId: bowl.id, readAt: input.readAt, kind: "weigh", weightGrams: input.finalWeightGrams })
+        .returning();
+      added.push(final);
+    }
+    if (
+      input.kind === "refill" &&
+      input.preWeightGrams !== undefined &&
+      input.preWeightGrams !== summary.currentWeightGrams
+    ) {
+      const [weighed] = await tx
+        .insert(bowlReadings)
+        .values({
+          bowlId: bowl.id,
+          readAt: input.readAt,
+          kind: "weigh",
+          weightGrams: input.preWeightGrams,
+          notes: "",
+        })
+        .returning();
+      added.push(weighed);
+    }
+    const [reading] = await tx
+      .insert(bowlReadings)
+      .values({
+        bowlId: bowl.id,
+        readAt: input.readAt,
+        kind: input.kind,
+        slot,
+        weightGrams,
+        notes: input.notes,
+      })
+      .returning();
+    added.push(reading);
+    if (input.kind === "refill" && bowl.productId !== null && (input.refillGrams ?? 0) > 0) {
+      await tx.insert(foodStockEntries).values({
+        productId: bowl.productId,
+        bowlReadingId: reading.id,
+        amountGrams: -(input.refillGrams ?? 0),
+        note: `Bowl top-up: ${bowl.label}`,
+      });
+    }
+  });
   res.status(201).json({ bowl: bowlToDto(bowl, [...existing, ...added]) });
 });
+
+bowlsRouter.patch(
+  "/:id/readings/:readingId",
+  requireAuth,
+  requirePermission("canRecordHealth"),
+  async (req, res) => {
+    const bowl = await findBowl(parseId(String(req.params.id)));
+    await findVisibleRabbit(req.user!, bowl.rabbitId);
+    const reading = await findReading(parseId(String(req.params.readingId)));
+    if (reading.bowlId !== bowl.id) throw new HttpError(404, "Reading not found");
+    const input = parseInput(bowlReadingUpdateSchema, req.body);
+    const readAt = input.readAt ?? reading.readAt;
+    let weightGrams = reading.weightGrams;
+    if (reading.kind === "refill") {
+      if (input.refillGrams !== undefined) {
+        const previous = await previousReading(bowl.id, readAt, reading.id);
+        weightGrams = (previous?.weightGrams ?? 0) + input.refillGrams;
+      }
+    } else if (input.weightGrams !== undefined) {
+      weightGrams = input.weightGrams;
+    }
+    await db.transaction(async (tx) => {
+      await tx
+        .update(bowlReadings)
+        .set({
+          readAt,
+          slot: input.slot !== undefined ? input.slot : reading.slot,
+          weightGrams,
+          notes: input.notes ?? reading.notes,
+        })
+        .where(eq(bowlReadings.id, reading.id));
+      if (reading.kind === "refill" && input.refillGrams !== undefined) {
+        const entries = await tx
+          .select()
+          .from(foodStockEntries)
+          .where(eq(foodStockEntries.bowlReadingId, reading.id))
+          .limit(1);
+        if (entries[0]) {
+          await tx
+            .update(foodStockEntries)
+            .set({ amountGrams: -input.refillGrams })
+            .where(eq(foodStockEntries.id, entries[0].id));
+        } else if (bowl.productId !== null) {
+          await tx.insert(foodStockEntries).values({
+            productId: bowl.productId,
+            bowlReadingId: reading.id,
+            amountGrams: -input.refillGrams,
+            note: `Bowl top-up: ${bowl.label}`,
+          });
+        }
+      }
+    });
+    res.json({ bowl: bowlToDto(bowl, await listReadings(bowl.id)) });
+  },
+);
 
 bowlsRouter.delete(
   "/:id/readings/:readingId",
@@ -198,6 +300,12 @@ async function findBowl(id: number): Promise<BowlRow> {
   return rows[0];
 }
 
+async function findProduct(id: number): Promise<FoodProductRow> {
+  const rows = await db.select().from(foodProducts).where(eq(foodProducts.id, id)).limit(1);
+  if (!rows[0]) throw new HttpError(400, "Product not found");
+  return rows[0];
+}
+
 async function findReading(id: number): Promise<BowlReadingRow> {
   const rows = await db.select().from(bowlReadings).where(eq(bowlReadings.id, id)).limit(1);
   if (!rows[0]) throw new HttpError(404, "Reading not found");
@@ -210,4 +318,24 @@ async function listReadings(bowlId: number): Promise<BowlReadingRow[]> {
     .from(bowlReadings)
     .where(eq(bowlReadings.bowlId, bowlId))
     .orderBy(asc(bowlReadings.readAt), asc(bowlReadings.id));
+}
+
+async function previousReading(
+  bowlId: number,
+  before: Date,
+  excludeId: number,
+): Promise<BowlReadingRow | null> {
+  const rows = await db
+    .select()
+    .from(bowlReadings)
+    .where(
+      and(
+        eq(bowlReadings.bowlId, bowlId),
+        lt(bowlReadings.readAt, before),
+        ne(bowlReadings.id, excludeId),
+      ),
+    )
+    .orderBy(desc(bowlReadings.readAt), desc(bowlReadings.id))
+    .limit(1);
+  return rows[0] ?? null;
 }

@@ -1,10 +1,18 @@
 import type { DrugDto, MedicationLogDto, RabbitDto, TreatmentDto } from "../../../shared/types.ts";
 import { formatDrugAmount } from "../../../shared/drugs.ts";
 import type { DaySlot } from "../../../shared/slots.ts";
-import { DAY_SLOT_LABELS, DAY_SLOTS, nextPendingSlot } from "../../../shared/slots.ts";
+import {
+  DAY_SLOT_LABELS,
+  DAY_SLOTS,
+  nextPendingSlot,
+  slotForTime,
+  slotRangeLabel,
+  slotTimeStatus,
+} from "../../../shared/slots.ts";
 import { api } from "../api.ts";
 import { fmtTime, h } from "../dom.ts";
 import { confirmDialog, openModal } from "./modal.ts";
+import { slotTimeBadge } from "./slotChips.ts";
 import { toast } from "./toast.ts";
 import { optionButtons, toggleButton } from "./toggle.ts";
 import { openTreatmentModal } from "./treatmentModal.ts";
@@ -62,6 +70,7 @@ export function openMedicationLogModal(options: {
   );
 
   let slot: DaySlot | null = options.slot ?? editing?.slot ?? null;
+  let slotTouched = options.slot !== undefined || editing !== undefined;
   let overrideAll = false;
   const slotField = h("div", { class: "field" });
   const changeForward = toggleButton({ label: "Change going forward", checked: false });
@@ -151,7 +160,14 @@ export function openMedicationLogModal(options: {
     slotField.style.display = "";
     const logged = dayLogs(treatment.id);
     const pending = nextPendingSlot(treatment.slots, logged);
-    const keep = slot !== null && available.includes(slot) ? slot : (pending ?? available[0]);
+    const reference = when.value ? new Date(when.value) : new Date();
+    const timeSlot = slotForTime(reference);
+    const keep =
+      slotTouched && slot !== null && available.includes(slot)
+        ? slot
+        : available.includes(timeSlot)
+          ? timeSlot
+          : (pending ?? available[0]);
     slot = keep;
     const group = optionButtons(
       available.map((value) => {
@@ -162,6 +178,7 @@ export function openMedicationLogModal(options: {
       false,
       (values) => {
         const next = values[0] as DaySlot | undefined;
+        slotTouched = true;
         if (!next) {
           overrideAll = true;
           renderSlotPicker();
@@ -169,11 +186,23 @@ export function openMedicationLogModal(options: {
         }
         slot = next;
         renderForward();
+        renderSlotPicker();
       },
     );
+    const status = slotTimeStatus(keep, reference);
     const slotChildren: Node[] = [
       h("label", null, overrideAll ? "Time of day (this day only)" : "Time of day"),
       group.root,
+      h(
+        "span",
+        {
+          class: status === "on_time" ? "dim small" : "small",
+          style: status === "late" ? { color: "var(--warn)" } : undefined,
+        },
+        `${DAY_SLOT_LABELS[keep]} is ${slotRangeLabel(keep)}${
+          status === "late" ? " — this time is late" : status === "early" ? " — this time is early" : ""
+        }`,
+      ),
     ];
     if (overrideAll) {
       slotChildren.push(
@@ -200,10 +229,15 @@ export function openMedicationLogModal(options: {
               "div",
               { class: "stack", style: { gap: "0.15rem" } },
               h(
-                "span",
-                null,
-                entry.slot ? DAY_SLOT_LABELS[entry.slot] : "Dose",
-                h("span", { class: "dim small" }, ` · ${fmtTime(entry.givenAt)}`),
+                "div",
+                { class: "row wrap", style: { gap: "0.35rem" } },
+                h(
+                  "span",
+                  null,
+                  entry.slot ? DAY_SLOT_LABELS[entry.slot] : "Dose",
+                  h("span", { class: "dim small" }, ` · ${fmtTime(entry.givenAt)}`),
+                ),
+                slotTimeBadge(entry.slot, entry.givenAt),
               ),
               entry.notes ? h("span", { class: "dim small" }, entry.notes) : null,
             ),
@@ -294,6 +328,7 @@ export function openMedicationLogModal(options: {
       amount.value = String(Number((treatment.doseMilliUnits / 1000).toFixed(3)));
     }
     overrideAll = false;
+    slotTouched = false;
     renderTreatmentInfo();
     renderSlotPicker();
     renderDayList();

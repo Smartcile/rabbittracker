@@ -293,11 +293,33 @@ export type BowlReadingDto = {
   createdAt: string;
 };
 
+export type FoodStockEntryDto = {
+  id: number;
+  productId: number;
+  amountGrams: number;
+  note: string;
+  createdAt: string;
+};
+
+export type FoodProductDto = {
+  id: number;
+  name: string;
+  type: string;
+  stockGrams: number;
+  reorderLevelGrams: number;
+  notes: string;
+  entries: FoodStockEntryDto[];
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type BowlDto = {
   id: number;
   rabbitId: number;
   label: string;
   slots: DaySlot[];
+  tareGrams: number | null;
+  productId: number | null;
   currentWeightGrams: number | null;
   periodStartAt: string | null;
   periodConsumptionGrams: number;

@@ -77,3 +77,79 @@ export function bowlReadingKindLabel(kind: BowlReadingKind): string {
   if (kind === "refresh") return "Refresh";
   return "Weigh-in";
 }
+
+export type BowlDailyConsumption = {
+  day: string;
+  consumptionGrams: number;
+};
+
+export type BowlDailySummary = {
+  days: BowlDailyConsumption[];
+  totalConsumptionGrams: number;
+  spanDays: number;
+  averageConsumptionGrams: number;
+};
+
+export function summarizeBowlByDay(readings: BowlReadingInput[]): BowlDailySummary {
+  const ordered = [...readings].sort((a, b) => {
+    const byTime = new Date(a.readAt).getTime() - new Date(b.readAt).getTime();
+    return byTime !== 0 ? byTime : a.id - b.id;
+  });
+  const summary = summarizeBowl(ordered);
+  const consumptionById = new Map(summary.readings.map((item) => [item.id, item.consumptionGrams]));
+  const byDay = new Map<string, number>();
+  for (let index = 0; index < ordered.length; index += 1) {
+    const consumption = consumptionById.get(ordered[index].id) ?? 0;
+    if (consumption <= 0) continue;
+    const from = index > 0 ? ordered[index - 1].readAt : ordered[index].readAt;
+    distributeConsumption(byDay, from, ordered[index].readAt, consumption);
+  }
+  const days = [...byDay.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([day, consumptionGrams]) => ({ day, consumptionGrams }));
+  const totalConsumptionGrams = days.reduce((sum, day) => sum + day.consumptionGrams, 0);
+  const first = ordered[0];
+  const last = ordered[ordered.length - 1];
+  const spanDays =
+    first && last
+      ? Math.max(
+          1,
+          Math.round(
+            (new Date(last.readAt).getTime() - new Date(first.readAt).getTime()) / 86_400_000,
+          ),
+        )
+      : 0;
+  const averageConsumptionGrams =
+    spanDays > 0 ? Math.round(totalConsumptionGrams / spanDays) : 0;
+  return { days, totalConsumptionGrams, spanDays, averageConsumptionGrams };
+}
+
+function distributeConsumption(
+  byDay: Map<string, number>,
+  from: string | Date,
+  to: string | Date,
+  total: number,
+): void {
+  const start = new Date(from);
+  const end = new Date(to);
+  const keys: string[] = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  while (cursor <= last && keys.length < 3660) {
+    keys.push(localDayKey(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  if (keys.length === 0) return;
+  const base = Math.floor(total / keys.length);
+  let remainder = total - base * keys.length;
+  for (const key of keys) {
+    const extra = remainder > 0 ? 1 : 0;
+    remainder -= extra;
+    byDay.set(key, (byDay.get(key) ?? 0) + base + extra);
+  }
+}
+
+function localDayKey(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}

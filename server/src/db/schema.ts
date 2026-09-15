@@ -112,6 +112,16 @@ export const checkLogPhotos = pgTable("check_log_photos", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const foodProducts = pgTable("food_products", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  name: text("name").notNull(),
+  type: text("type").notNull().default(""),
+  reorderLevelGrams: integer("reorder_level_grams").notNull().default(0),
+  notes: text("notes").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const bowls = pgTable("bowls", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   rabbitId: integer("rabbit_id")
@@ -119,6 +129,8 @@ export const bowls = pgTable("bowls", {
     .references(() => rabbits.id, { onDelete: "cascade" }),
   label: text("label").notNull(),
   slots: text("slots").array().notNull().default([]),
+  tareGrams: integer("tare_grams"),
+  productId: integer("product_id").references(() => foodProducts.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -133,6 +145,19 @@ export const bowlReadings = pgTable("bowl_readings", {
   slot: text("slot"),
   weightGrams: integer("weight_grams").notNull(),
   notes: text("notes").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const foodStockEntries = pgTable("food_stock_entries", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  productId: integer("product_id")
+    .notNull()
+    .references(() => foodProducts.id, { onDelete: "cascade" }),
+  bowlReadingId: integer("bowl_reading_id").references(() => bowlReadings.id, {
+    onDelete: "cascade",
+  }),
+  amountGrams: integer("amount_grams").notNull(),
+  note: text("note").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -513,6 +538,8 @@ export type CheckLogRow = typeof checkLogs.$inferSelect;
 export type CheckLogPhotoRow = typeof checkLogPhotos.$inferSelect;
 export type BowlRow = typeof bowls.$inferSelect;
 export type BowlReadingRow = typeof bowlReadings.$inferSelect;
+export type FoodProductRow = typeof foodProducts.$inferSelect;
+export type FoodStockEntryRow = typeof foodStockEntries.$inferSelect;
 export type MedicationLogRow = typeof medicationLogs.$inferSelect;
 export type CalendarEntryRow = typeof calendarEntries.$inferSelect;
 export type JournalEntryRow = typeof journalEntries.$inferSelect;

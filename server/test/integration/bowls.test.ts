@@ -210,6 +210,66 @@ describe("bowl integration", () => {
     expect(updated.readings.find((reading) => reading.weightGrams === 800)?.slot).toBe("morning");
   });
 
+  it("edits a weigh-in and recalculates consumption", async () => {
+    const rabbit = await createRabbit();
+    const bowl = await createBowl(rabbit.id);
+    const afterWeigh = await addReading(bowl.id, {
+      kind: "weigh",
+      readAt: "2026-09-02T08:00:00.000Z",
+      weightGrams: 700,
+    });
+    expect(afterWeigh.periodConsumptionGrams).toBe(200);
+    const reading = afterWeigh.readings.find((row) => row.weightGrams === 700);
+    if (!reading) throw new Error("reading not found");
+
+    const { bowl: edited } = await api<{ bowl: BowlDto }>(
+      ctx,
+      `/api/bowls/${bowl.id}/readings/${reading.id}`,
+      { method: "PATCH", body: { weightGrams: 750, notes: "Corrected" } },
+    );
+    expect(edited.currentWeightGrams).toBe(750);
+    expect(edited.periodConsumptionGrams).toBe(150);
+    expect(edited.readings.find((row) => row.id === reading.id)?.notes).toBe("Corrected");
+  });
+
+  it("edits a top-up and recomputes the stored weight", async () => {
+    const rabbit = await createRabbit();
+    const bowl = await createBowl(rabbit.id);
+    const afterRefill = await addReading(bowl.id, {
+      kind: "refill",
+      readAt: "2026-09-02T08:00:00.000Z",
+      refillGrams: 250,
+    });
+    const reading = afterRefill.readings.find((row) => row.kind === "refill");
+    if (!reading) throw new Error("reading not found");
+    expect(reading.weightGrams).toBe(1150);
+
+    const { bowl: edited } = await api<{ bowl: BowlDto }>(
+      ctx,
+      `/api/bowls/${bowl.id}/readings/${reading.id}`,
+      { method: "PATCH", body: { refillGrams: 100 } },
+    );
+    expect(edited.currentWeightGrams).toBe(1000);
+    expect(edited.periodRefillGrams).toBe(100);
+  });
+
+  it("records a weigh-in together with a top-up", async () => {
+    const rabbit = await createRabbit();
+    const bowl = await createBowl(rabbit.id);
+    const updated = await addReading(bowl.id, {
+      kind: "refill",
+      readAt: "2026-09-02T08:00:00.000Z",
+      refillGrams: 250,
+      preWeightGrams: 600,
+    });
+    expect(updated.currentWeightGrams).toBe(850);
+    expect(updated.periodConsumptionGrams).toBe(300);
+    expect(updated.periodRefillGrams).toBe(250);
+    expect(updated.readings.some((row) => row.kind === "weigh" && row.weightGrams === 600)).toBe(
+      true,
+    );
+  });
+
   it("renames and deletes a bowl", async () => {
     const rabbit = await createRabbit();
     const bowl = await createBowl(rabbit.id);
