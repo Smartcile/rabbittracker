@@ -8,6 +8,7 @@ import {
   formatWeight,
   taskDueStatus,
   taskNextDueOn,
+  treatmentScheduleStatus,
   weightTrend,
 } from "../../../shared/health.ts";
 import {
@@ -15,9 +16,6 @@ import {
   dateRangesOverlap,
   isDateWithinRange,
   isWithinRange,
-  localDateValue,
-  resolveReportRange,
-  type ReportPreset,
   type ReportRange,
 } from "../../../shared/report.ts";
 import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
@@ -47,8 +45,10 @@ import type {
 } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { rabbitAvatar } from "../components/avatar.ts";
+import { renderBowlsChart } from "../components/bowlChart.ts";
+import { reportPeriodControls } from "../components/reportPeriod.ts";
 import { toast } from "../components/toast.ts";
-import { optionButtons, toggleButton } from "../components/toggle.ts";
+import { toggleButton } from "../components/toggle.ts";
 import { renderWeightChart } from "../components/weightChart.ts";
 import type { PageContext } from "../context.ts";
 import { copyText, fmtCalendarDate, fmtDate, fmtTime, h, type Child } from "../dom.ts";
@@ -84,7 +84,7 @@ export function renderReportSections(view: ReportView): HTMLElement[] {
     checksSection(bundle.checks, bundle.checklist, bundle.logTypes, range, includePhotos, timezone, photoUrl),
     vaccinationsSection(bundle.vaccinations, range, now),
     careSection(bundle.careSchedules, bundle.careRecords, bundle.careTypes, range, now),
-    treatmentsSection(bundle.treatments, range, now),
+    treatmentsSection(bundle.treatments, bundle.medicationLogs, range, now),
     medicationSection(bundle.medicationLogs, bundle.drugs, range, timezone),
     appointmentsSection(bundle.appointments, range, showCost, timezone),
     journalSection(bundle.journal, range, includePhotos, timezone, photoUrl),
@@ -94,9 +94,6 @@ export function renderReportSections(view: ReportView): HTMLElement[] {
 export function renderRabbitReportPage(ctx: PageContext, id: number): HTMLElement {
   document.documentElement.dataset.theme = "light";
 
-  let preset: ReportPreset = "week";
-  let customFrom = "";
-  let customTo = "";
   let includePhotos = false;
   let shareToken = "";
   let bundle: ReportBundleDto | null = null;
@@ -106,46 +103,11 @@ export function renderRabbitReportPage(ctx: PageContext, id: number): HTMLElemen
   const controls = h("div", { class: "card report-controls" });
   const body = h("div", { class: "report-body" });
 
-  const presets = optionButtons(
-    [
-      { value: "day", label: "Day" },
-      { value: "week", label: "Week" },
-      { value: "month", label: "Month" },
-      { value: "all", label: "All time" },
-      { value: "custom", label: "Custom" },
-    ],
-    [preset],
-    false,
-    (values) => {
-      const next = values[0] as ReportPreset | undefined;
-      if (!next) {
-        presets.setValues([preset]);
-        return;
-      }
-      preset = next;
-      if (preset === "custom" && !customFrom && !customTo) {
-        const week = resolveReportRange("week", new Date());
-        if (week.from && week.to) {
-          customFrom = localDateValue(week.from);
-          customTo = localDateValue(week.to);
-          fromInput.value = customFrom;
-          toInput.value = customTo;
-        }
-      }
+  const period = reportPeriodControls({
+    onChange: () => {
       renderControls();
       renderBody();
     },
-  );
-
-  const fromInput = h("input", { type: "date", value: customFrom });
-  const toInput = h("input", { type: "date", value: customTo });
-  fromInput.addEventListener("change", () => {
-    customFrom = fromInput.value;
-    renderBody();
-  });
-  toInput.addEventListener("change", () => {
-    customTo = toInput.value;
-    renderBody();
   });
 
   const photosToggle = toggleButton({
@@ -170,7 +132,6 @@ export function renderRabbitReportPage(ctx: PageContext, id: number): HTMLElemen
   }
 
   function renderControls(): void {
-    presets.setValues([preset]);
     const share = shareToken
       ? h(
           "button",
@@ -182,9 +143,7 @@ export function renderRabbitReportPage(ctx: PageContext, id: number): HTMLElemen
       h(
         "div",
         { class: "filters" },
-        h("div", { class: "field" }, h("label", null, "Period"), presets.root),
-        preset === "custom" ? h("div", { class: "field" }, h("label", null, "From"), fromInput) : null,
-        preset === "custom" ? h("div", { class: "field" }, h("label", null, "To"), toInput) : null,
+        ...period.fields(),
         h("div", { class: "field" }, h("label", null, "Photos"), photosToggle.root),
       ),
       h(
@@ -205,7 +164,7 @@ export function renderRabbitReportPage(ctx: PageContext, id: number): HTMLElemen
   function renderBody(): void {
     if (!bundle) return;
     const now = new Date();
-    const range = resolveReportRange(preset, now, customFrom, customTo);
+    const range = period.range();
     body.replaceChildren(
       head(bundle.rabbit, range, bundle.timezone),
       ...renderReportSections({
@@ -454,8 +413,10 @@ function bowlsSection(
   if (bowls.length === 0) {
     return section("Food & water", empty("No bowls tracked."));
   }
+  const chart = renderBowlsChart(bowls, range);
   return section(
     "Food & water",
+    chart,
     h(
       "div",
       { class: "stack" },
@@ -611,36 +572,49 @@ function medicationSection(
   );
 }
 
-function treatmentsSection(treatments: TreatmentDto[], range: ReportRange, now: Date): HTMLElement {
+function treatmentsSection(
+  treatments: TreatmentDto[],
+  logs: MedicationLogDto[],
+  range: ReportRange,
+  now: Date,
+): HTMLElement {
   const inRange = treatments.filter((treatment) =>
     dateRangesOverlap(treatment.startDate, treatment.endDate, range, now),
   );
   if (inRange.length === 0) {
     return section("Treatments", empty("No treatments in this period."));
   }
-  const rows = inRange.map((treatment) => [
-    h(
-      "div",
-      null,
-      h("strong", null, treatment.medication),
-      treatment.notes ? h("div", { class: "dim small" }, treatment.notes) : null,
-    ),
-    [treatment.dose, treatment.route].filter(Boolean).join(" · ") || "—",
-    treatment.frequency || "—",
-    treatment.slots.map((slot) => DAY_SLOT_LABELS[slot]).join(", ") || "—",
-    treatment.reason || "—",
-    `${fmtCalendarDate(treatment.startDate)} → ${
-      treatment.endDate ? fmtCalendarDate(treatment.endDate) : "ongoing"
-    }`,
-    h(
-      "span",
-      { class: `badge ${treatment.status === "active" ? "accent" : ""}` },
-      treatment.status,
-    ),
-  ]);
+  const rows = inRange.map((treatment) => {
+    const treatmentLogs = logs.filter((log) => log.treatmentId === treatment.id);
+    const schedule = treatmentScheduleStatus(treatment, treatmentLogs, now);
+    return [
+      h(
+        "div",
+        null,
+        h("strong", null, treatment.medication),
+        treatment.notes ? h("div", { class: "dim small" }, treatment.notes) : null,
+      ),
+      [treatment.dose, treatment.route].filter(Boolean).join(" · ") || "—",
+      treatment.frequency || "—",
+      treatment.slots.map((slot) => DAY_SLOT_LABELS[slot]).join(", ") || "—",
+      treatment.reason || "—",
+      `${fmtCalendarDate(treatment.startDate)} → ${
+        treatment.endDate ? fmtCalendarDate(treatment.endDate) : "ongoing"
+      }`,
+      h(
+        "span",
+        { class: `badge ${treatment.status === "active" ? "accent" : ""}` },
+        treatment.status,
+      ),
+      scheduleBadge(schedule),
+    ];
+  });
   return section(
     "Treatments",
-    reportTable(["Medication", "Dose", "Frequency", "Times", "Reason", "Dates", "Status"], rows),
+    reportTable(
+      ["Medication", "Dose", "Frequency", "Times", "Reason", "Dates", "Status", "Schedule"],
+      rows,
+    ),
   );
 }
 
@@ -858,6 +832,14 @@ function dueBadge(status: ReturnType<typeof dueStatus>): Node | null {
   if (status === "due-soon") return h("span", { class: "badge watch" }, "Due soon");
   if (status === "ok") return h("span", { class: "badge ok" }, "OK");
   return null;
+}
+
+function scheduleBadge(state: ReturnType<typeof treatmentScheduleStatus>): HTMLElement {
+  if (state === "completed") return h("span", { class: "badge ok" }, "Completed");
+  if (state === "up-to-date") return h("span", { class: "badge ok" }, "Up to date");
+  if (state === "missed") return h("span", { class: "badge alert" }, "Missed dose");
+  if (state === "not-started") return h("span", { class: "badge" }, "Not started");
+  return h("span", { class: "badge watch" }, "Dose due");
 }
 
 function nextDueDate(lastDoneAt: string | null, intervalDays: number): string | null {

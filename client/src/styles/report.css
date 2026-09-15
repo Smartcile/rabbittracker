@@ -81,7 +81,8 @@
 
   tr,
   .journal-entry,
-  .report-head {
+  .report-head,
+  .chart-wrap {
     break-inside: avoid;
   }
 

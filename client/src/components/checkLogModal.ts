@@ -14,32 +14,56 @@ export function openCheckLogModal(options: {
   onSaved: () => void;
 }): void {
   const editing = options.log;
-  const typeSelect = h(
-    "select",
-    null,
-    options.types.map((type) => h("option", { value: String(type.id) }, type.label)),
-  );
-  typeSelect.value = String(editing?.typeId ?? options.initialTypeId ?? options.types[0]?.id ?? "");
+  let selectedTypeId: number | null =
+    editing?.typeId ?? options.initialTypeId ?? options.types[0]?.id ?? null;
 
   const when = h("input", { type: "datetime-local" });
   when.value = toLocalInputValue(editing ? new Date(editing.loggedAt) : new Date());
 
-  const fields = h("div", { class: "stack", style: { gap: "0.6rem" } });
+  const list = h("div", { class: "check-picker-list" });
+  const panel = h("div", { class: "check-picker-panel" });
   const numberInput = h("input", { inputmode: "decimal", placeholder: "e.g. 250" });
   const textInput = h("input", { placeholder: "Type / description" });
   let group: ReturnType<typeof optionButtons> | null = null;
 
-  const renderFields = () => {
-    const type = options.types.find((item) => String(item.id) === typeSelect.value);
+  const selectedType = (): CheckLogTypeDto | null =>
+    options.types.find((type) => type.id === selectedTypeId) ?? null;
+
+  const renderList = (): void => {
+    list.replaceChildren(
+      ...options.types.map((type) =>
+        h(
+          "button",
+          {
+            class: `check-picker-item${type.id === selectedTypeId ? " selected" : ""}`,
+            type: "button",
+            disabled: editing !== undefined && type.id !== editing.typeId,
+            onClick: () => {
+              if (type.id === selectedTypeId) return;
+              selectedTypeId = type.id;
+              numberInput.value = "";
+              textInput.value = "";
+              renderList();
+              renderPanel();
+            },
+          },
+          type.label,
+        ),
+      ),
+    );
+  };
+
+  const renderPanel = (): void => {
+    const type = selectedType();
     if (!type) {
-      fields.replaceChildren();
+      panel.replaceChildren();
       group = null;
       return;
     }
     const parts: Node[] = [];
     if (type.options.length > 0) {
       const selected =
-        editing && String(editing.typeId) === String(type.id)
+        editing && editing.typeId === type.id
           ? editing.valueLabels.length > 0
             ? editing.valueLabels
             : editing.valueText
@@ -51,13 +75,13 @@ export function openCheckLogModal(options: {
         selected,
         type.multiple,
       );
-      parts.push(h("div", { class: "field" }, h("label", null, type.label), group.root));
+      parts.push(h("div", { class: "option-buttons" }, group.root));
     } else if (type.hasText) {
-      parts.push(h("div", { class: "field" }, h("label", null, type.label), textInput));
+      parts.push(h("div", { class: "field" }, h("label", null, "Description"), textInput));
     }
     if (type.hasNumber) {
       numberInput.value =
-        editing && String(editing.typeId) === String(type.id) && editing.valueMilli != null
+        editing && editing.typeId === type.id && editing.valueMilli != null
           ? String(Number((editing.valueMilli / 1000).toFixed(3)))
           : numberInput.value;
       parts.push(
@@ -69,15 +93,11 @@ export function openCheckLogModal(options: {
         ),
       );
     }
-    fields.replaceChildren(...parts);
+    panel.replaceChildren(h("div", { class: "check-picker-heading" }, type.label), ...parts);
   };
 
-  typeSelect.addEventListener("change", () => {
-    numberInput.value = "";
-    textInput.value = "";
-    renderFields();
-  });
-  renderFields();
+  renderList();
+  renderPanel();
 
   const photos = editing ? [...editing.photos] : [];
   const photoList = h("div", { class: "check-photos" });
@@ -139,7 +159,7 @@ export function openCheckLogModal(options: {
         onSubmit: async (event: Event) => {
           event.preventDefault();
           error.style.display = "none";
-          const type = options.types.find((item) => String(item.id) === typeSelect.value);
+          const type = selectedType();
           if (!type) {
             error.textContent = "Pick a check type.";
             error.style.display = "";
@@ -199,10 +219,14 @@ export function openCheckLogModal(options: {
       },
       error,
       options.types.length > 0
-        ? h("div", { class: "field" }, h("label", null, "Type"), typeSelect)
+        ? h(
+            "div",
+            { class: "field" },
+            h("label", null, "Type"),
+            h("div", { class: "check-picker" }, list, panel),
+          )
         : h("p", { class: "form-error" }, "No check types yet — add one in Settings → Daily checks."),
       h("div", { class: "field" }, h("label", null, "When"), when),
-      fields,
       photoList,
       h("div", { class: "field" }, h("label", null, "Photo"), picker.root),
       h("div", { class: "field" }, h("label", null, "Notes"), notes),

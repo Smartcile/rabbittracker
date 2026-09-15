@@ -955,6 +955,80 @@ input.switch:focus-visible {
   margin-bottom: 0.6rem;
 }
 
+.check-picker {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.85fr) 1.4fr;
+  gap: 0.6rem;
+}
+
+.check-picker-list {
+  display: grid;
+  gap: 0.3rem;
+  align-content: start;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.check-picker-item {
+  font: inherit;
+  font-size: 0.88rem;
+  text-align: left;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 0.5rem 0.65rem;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.check-picker-item:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.check-picker-item.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 650;
+}
+
+.check-picker-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.check-picker-panel {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.check-picker-heading {
+  font-weight: 650;
+}
+
+.check-picker-panel .field {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .check-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .check-picker-list {
+    display: flex;
+    flex-wrap: wrap;
+    max-height: none;
+  }
+}
+
 .bowl-panel {
   display: grid;
   gap: 0.5rem;

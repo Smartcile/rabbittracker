@@ -11,6 +11,7 @@ import {
   parseWeightInput,
   taskDueStatus,
   taskNextDueOn,
+  treatmentScheduleStatus,
   upcomingAppointments,
   validateBodyCondition,
   weightChangePct,
@@ -504,5 +505,51 @@ describe("ageLabel", () => {
 
   it("labels years and months", () => {
     expect(ageLabel("2024-01-15", now)).toBe("2y 5m");
+  });
+});
+
+describe("treatmentScheduleStatus", () => {
+  const now = new Date("2026-09-15T10:00:00.000Z");
+  const base = { status: "active", startDate: "2026-09-10", endDate: "2026-09-20" };
+
+  it("marks a non-active course completed", () => {
+    expect(
+      treatmentScheduleStatus({ ...base, status: "completed", slots: ["morning"] }, [], now),
+    ).toBe("completed");
+  });
+
+  it("is up to date when every slot is logged today", () => {
+    const logs = [
+      { givenAt: "2026-09-15T08:00:00.000Z", slot: "morning", skipped: false },
+      { givenAt: "2026-09-15T18:00:00.000Z", slot: "evening", skipped: false },
+    ];
+    expect(treatmentScheduleStatus({ ...base, slots: ["morning", "evening"] }, logs, now)).toBe(
+      "up-to-date",
+    );
+  });
+
+  it("is due when a slot is still pending", () => {
+    const logs = [{ givenAt: "2026-09-15T08:00:00.000Z", slot: "morning", skipped: false }];
+    expect(treatmentScheduleStatus({ ...base, slots: ["morning", "evening"] }, logs, now)).toBe("due");
+  });
+
+  it("is missed when any dose was skipped", () => {
+    const logs = [{ givenAt: "2026-09-15T08:00:00.000Z", slot: "morning", skipped: true }];
+    expect(treatmentScheduleStatus({ ...base, slots: ["morning"] }, logs, now)).toBe("missed");
+  });
+
+  it("is up to date for an unscheduled course with a dose today", () => {
+    const logs = [{ givenAt: "2026-09-15T08:00:00.000Z", slot: null, skipped: false }];
+    expect(treatmentScheduleStatus({ ...base, slots: [] }, logs, now)).toBe("up-to-date");
+  });
+
+  it("is not started before the start date", () => {
+    expect(
+      treatmentScheduleStatus(
+        { ...base, startDate: "2026-09-20", slots: [] },
+        [],
+        now,
+      ),
+    ).toBe("not-started");
   });
 });

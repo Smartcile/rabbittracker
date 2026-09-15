@@ -1,6 +1,7 @@
 import type { BowlDto } from "../../../shared/types.ts";
 import { summarizeBowlByDay } from "../../../shared/bowls.ts";
 import { formatFoodAmount } from "../../../shared/food.ts";
+import type { ReportRange } from "../../../shared/report.ts";
 import { h } from "../dom.ts";
 
 const WIDTH = 640;
@@ -9,7 +10,8 @@ const PAD_LEFT = 56;
 const PAD_RIGHT = 16;
 const PAD_TOP = 26;
 const PAD_BOTTOM = 40;
-const WINDOW_DAYS = 14;
+const DEFAULT_WINDOW_DAYS = 14;
+const MAX_WINDOW_DAYS = 92;
 const SERIES_COUNT = 5;
 
 type BowlSeries = {
@@ -19,15 +21,12 @@ type BowlSeries = {
   average: number;
 };
 
-export function renderBowlsChart(bowls: BowlDto[], windowDays = WINDOW_DAYS): HTMLElement | null {
+export function renderBowlsChart(bowls: BowlDto[], range?: ReportRange): HTMLElement | null {
   const withData = bowls.filter((bowl) => bowl.readings.length >= 2);
   if (withData.length === 0) return null;
 
-  const window: string[] = [];
-  const today = new Date();
-  for (let index = windowDays - 1; index >= 0; index -= 1) {
-    window.push(localDayKey(new Date(today.getFullYear(), today.getMonth(), today.getDate() - index)));
-  }
+  const window = buildWindow(withData, range);
+  if (window.length === 0) return null;
 
   const series: BowlSeries[] = withData.map((bowl, index) => {
     const summary = summarizeBowlByDay(bowl.readings);
@@ -139,6 +138,44 @@ export function renderBowlsChart(bowls: BowlDto[], windowDays = WINDOW_DAYS): HT
       ),
     ),
   );
+}
+
+function buildWindow(bowls: BowlDto[], range?: ReportRange): string[] {
+  const today = new Date();
+  const todayKey = localDayKey(today);
+  if (!range) {
+    return dayKeys(shiftDays(today, -(DEFAULT_WINDOW_DAYS - 1)), today);
+  }
+  const readingDays = bowls
+    .flatMap((bowl) => bowl.readings.map((reading) => localDayKey(new Date(reading.readAt))))
+    .sort();
+  const first = readingDays[0] ?? todayKey;
+  const last = readingDays[readingDays.length - 1] ?? todayKey;
+  const start = parseDayKey(range.from ? localDayKey(range.from) : first);
+  const end = parseDayKey(range.to ? localDayKey(range.to) : last);
+  const span = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+  const from = span > MAX_WINDOW_DAYS ? shiftDays(end, -(MAX_WINDOW_DAYS - 1)) : start;
+  return dayKeys(from, end);
+}
+
+function dayKeys(start: Date, end: Date): string[] {
+  const keys: string[] = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const last = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  while (cursor <= last && keys.length < 3700) {
+    keys.push(localDayKey(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return keys;
+}
+
+function shiftDays(date: Date, days: number): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+}
+
+function parseDayKey(key: string): Date {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(year, month - 1, day);
 }
 
 function dayLabel(day: string): string {

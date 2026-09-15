@@ -197,6 +197,32 @@ export function taskDueStatus(
   return due <= todayUtc(now) ? "due" : "upcoming";
 }
 
+export type TreatmentScheduleState = "completed" | "up-to-date" | "due" | "missed" | "not-started";
+
+export function treatmentScheduleStatus(
+  treatment: {
+    status: string;
+    startDate: string;
+    endDate: string | null;
+    slots: readonly string[];
+  },
+  logs: readonly { givenAt: string; slot: string | null; skipped: boolean }[],
+  now: Date,
+): TreatmentScheduleState {
+  if (treatment.status !== "active") return "completed";
+  const today = todayUtc(now);
+  const started = utcDay(`${treatment.startDate}T00:00:00.000Z`);
+  const todays = logs.filter((log) => utcDay(log.givenAt) === today);
+  if (logs.some((log) => log.skipped)) return "missed";
+  if (treatment.slots.length > 0) {
+    const done = new Set(todays.map((log) => log.slot));
+    return treatment.slots.every((slot) => done.has(slot)) ? "up-to-date" : "due";
+  }
+  if (todays.length > 0) return "up-to-date";
+  if (started !== null && started > today) return "not-started";
+  return "due";
+}
+
 export type AttentionKind = "weight" | "vaccination" | "care" | "follow-up";
 export type AttentionSeverity = "watch" | "alert";
 

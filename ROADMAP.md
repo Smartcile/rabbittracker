@@ -87,6 +87,12 @@
       save them together. The batch endpoint applies a session's readings chronologically in one
       transaction, so an invalid reading rolls the whole session back.
 
+- [x] **Report charts, treatment schedules and share navigation.** The bunny report gained the
+      range-aware bowl-consumption chart alongside the weight chart and a per-treatment schedule
+      badge (completed / up to date / due / missed). Share links now reuse the report period
+      controls (day, week, month, all time, custom) and add a read-only Calendar tab, and the daily
+      check pop-up is a check-type list with the selected type's options on the right.
+
 ## Planned features (agreed but not built)
 
 These are queued from the "bunny powerhouse" list; pick them up in any order.

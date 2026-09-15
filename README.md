@@ -87,7 +87,9 @@ Desktop:
 - **Printable bunny report** — pick a period (day, week, month, all time or custom dates) and save
   a light-themed PDF of the full record: profile, weights, health checks, daily checks, bowl
   tracking, routine tasks, medication doses, treatments, vaccinations, routine care, appointments
-  and journal notes, with optional photos.
+  and journal notes, with optional photos. Weight and bowl-consumption charts follow the selected
+  period, and each treatment shows whether its course is completed, up to date, due or has a missed
+  dose.
 
 **Care & treatment**
 - Treatments with dose, route, frequency, reason, dates and status, plus a drug cabinet with stock
@@ -119,8 +121,9 @@ Desktop:
 - Export health checks CSV, appointments CSV, a JSON backup and a full ZIP backup that adds every
   photo file.
 - **Share links** — a read-only live report URL per bunny (`#/share/<token>/<id>`) that
-  auto-refreshes every minute. Viewers need no login, costs are hidden, and regenerating the token
-  in Settings revokes every link at once.
+  auto-refreshes every minute and lets viewers pick the same date ranges as the report, plus a
+  read-only Calendar tab. Viewers need no login, costs are hidden, and regenerating the token in
+  Settings revokes every link at once.
 - Demo mode — a Settings switch that loads sample bunnies, records, appointments (dated around the
   current month), journal entries, bonds, a vet and a clinic, and removes every demo row when
   switched off.
