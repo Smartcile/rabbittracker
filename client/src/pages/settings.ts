@@ -23,6 +23,7 @@ export function renderSettingsPage(ctx: PageContext): HTMLElement {
     renderChecklistsCard(),
     renderChecklistCard(),
     renderDailyChecksCard(),
+    renderRoutineCard(),
     renderNormsCard(),
     renderStagesCard(),
     renderSubscribeCard(),
@@ -74,6 +75,20 @@ function renderNormsCard(): HTMLElement {
       "Expected weight ranges per breed and expected daily food and water intake, used to flag when a bunny drifts into a warning range.",
     ),
     h("div", { class: "row" }, h("a", { class: "btn outline small", href: "#/norms" }, "Edit norms")),
+  );
+}
+
+function renderRoutineCard(): HTMLElement {
+  return h(
+    "div",
+    { class: "card" },
+    h("h2", null, "Daily routine"),
+    h(
+      "p",
+      { class: "dim small" },
+      "Reusable routine tasks such as changing the litter box or cleaning water bottles. Link a stock item so completing a task draws it down.",
+    ),
+    h("div", { class: "row" }, h("a", { class: "btn outline small", href: "#/routine" }, "Edit routine tasks")),
   );
 }
 

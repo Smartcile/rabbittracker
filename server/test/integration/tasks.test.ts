@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { RabbitDto, TaskCompletionDto, TaskDto } from "../../../shared/types.ts";
+import type { FoodProductDto, RabbitDto, TaskCompletionDto, TaskDto, TaskTemplateDto } from "../../../shared/types.ts";
 import { api, resetBusinessData, startTestServer } from "./helpers.ts";
 import type { TestContext } from "./helpers.ts";
 
@@ -105,5 +105,58 @@ describe("task integration", () => {
       body: { active: false },
     });
     expect(paused.active).toBe(false);
+  });
+
+  async function createProduct(name: string, stockGrams: number): Promise<number> {
+    const { product } = await api<{ product: FoodProductDto }>(ctx, "/api/food-products", {
+      method: "POST",
+      body: { name },
+    });
+    await api(ctx, `/api/food-products/${product.id}/entries`, {
+      method: "POST",
+      body: { amountGrams: stockGrams },
+    });
+    return product.id;
+  }
+
+  async function getProduct(id: number): Promise<FoodProductDto> {
+    const { products } = await api<{ products: FoodProductDto[] }>(ctx, "/api/food-products");
+    const product = products.find((item) => item.id === id);
+    if (!product) throw new Error("product not found");
+    return product;
+  }
+
+  it("creates and edits a routine task template", async () => {
+    const { template } = await api<{ template: TaskTemplateDto }>(ctx, "/api/task-templates", {
+      method: "POST",
+      body: { label: "Change litter box", slot: "evening", intervalDays: 3 },
+    });
+    expect(template.label).toBe("Change litter box");
+    expect(template.intervalDays).toBe(3);
+
+    const { template: edited } = await api<{ template: TaskTemplateDto }>(
+      ctx,
+      `/api/task-templates/${template.id}`,
+      { method: "PATCH", body: { intervalDays: 7 } },
+    );
+    expect(edited.intervalDays).toBe(7);
+
+    const { templates } = await api<{ templates: TaskTemplateDto[] }>(ctx, "/api/task-templates");
+    expect(templates.some((item) => item.id === template.id)).toBe(true);
+  });
+
+  it("draws stock when completing a linked task and restores it when undone", async () => {
+    const rabbit = await createRabbit();
+    const productId = await createProduct("Litter", 5000);
+    const task = await createTask(rabbit.id, { productId, amountGrams: 800 });
+    expect(task.productId).toBe(productId);
+    expect(task.productName).toBe("Litter");
+    expect(task.amountGrams).toBe(800);
+
+    const completion = await completeTask(task.id);
+    expect((await getProduct(productId)).stockGrams).toBe(4200);
+
+    await api(ctx, `/api/tasks/completions/${completion.id}`, { method: "DELETE" });
+    expect((await getProduct(productId)).stockGrams).toBe(5000);
   });
 });

@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, max } from "drizzle-orm";
 import { Router } from "express";
 import { taskCompletionToDto, taskToDto } from "../api/mappers.ts";
 import { db } from "../db/index.ts";
-import { rabbitTasks, taskCompletions } from "../db/schema.ts";
+import { rabbitTasks, taskCompletions, foodProducts, foodStockEntries } from "../db/schema.ts";
 import type { RabbitTaskRow, TaskCompletionRow } from "../db/schema.ts";
 import { findVisibleRabbit, requirePermission, visibleRabbitIds } from "../lib/access.ts";
 import { requireAuth } from "../lib/auth.ts";
@@ -42,8 +42,15 @@ tasksRouter.get("/", requireAuth, async (req, res) => {
       : [[], []];
   const lastByTask = new Map(lastRows.map((row) => [row.taskId, row.last]));
   const rabbitByTask = new Map(rows.map((row) => [row.id, row.rabbitId]));
+  const names = await productNames(rows.map((row) => row.productId));
   res.json({
-    tasks: rows.map((row) => taskToDto(row, lastByTask.get(row.id) ?? null)),
+    tasks: rows.map((row) =>
+      taskToDto(
+        row,
+        lastByTask.get(row.id) ?? null,
+        row.productId !== null ? (names.get(row.productId) ?? null) : null,
+      ),
+    ),
     completions: recent.map((row) => taskCompletionToDto(row, rabbitByTask.get(row.taskId) ?? 0)),
   });
 });
@@ -55,14 +62,17 @@ tasksRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (
     .insert(rabbitTasks)
     .values({
       rabbitId: input.rabbitId,
+      templateId: input.templateId ?? null,
       label: input.label,
       slot: input.slot,
       intervalDays: input.intervalDays,
+      productId: input.productId ?? null,
+      amountGrams: input.amountGrams,
       notes: input.notes,
       active: input.active,
     })
     .returning();
-  res.status(201).json({ task: taskToDto(row, null) });
+  res.status(201).json({ task: taskToDto(row, null, await productName(row.productId)) });
 });
 
 tasksRouter.patch("/:id", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {
@@ -75,13 +85,15 @@ tasksRouter.patch("/:id", requireAuth, requirePermission("canRecordHealth"), asy
       label: input.label ?? task.label,
       slot: input.slot ?? task.slot,
       intervalDays: input.intervalDays ?? task.intervalDays,
+      productId: input.productId !== undefined ? input.productId : task.productId,
+      amountGrams: input.amountGrams ?? task.amountGrams,
       notes: input.notes !== undefined ? input.notes : task.notes,
       active: input.active !== undefined ? input.active : task.active,
       updatedAt: new Date(),
     })
     .where(eq(rabbitTasks.id, task.id))
     .returning();
-  res.json({ task: taskToDto(row, await lastCompletion(task.id)) });
+  res.json({ task: taskToDto(row, await lastCompletion(task.id), await productName(row.productId)) });
 });
 
 tasksRouter.delete("/:id", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {
@@ -95,18 +107,29 @@ tasksRouter.post("/:id/complete", requireAuth, requirePermission("canRecordHealt
   const task = await findTask(parseId(String(req.params.id)));
   await findVisibleRabbit(req.user!, task.rabbitId);
   const input = parseInput(taskCompleteSchema, req.body);
-  const [completion] = await db
-    .insert(taskCompletions)
-    .values({
-      taskId: task.id,
-      completedAt: input.completedAt,
-      completedBy: req.user!.id,
-      notes: input.notes,
-    })
-    .returning();
+  const completion = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(taskCompletions)
+      .values({
+        taskId: task.id,
+        completedAt: input.completedAt,
+        completedBy: req.user!.id,
+        notes: input.notes,
+      })
+      .returning();
+    if (task.productId !== null && task.amountGrams > 0) {
+      await tx.insert(foodStockEntries).values({
+        productId: task.productId,
+        taskCompletionId: row.id,
+        amountGrams: -task.amountGrams,
+        note: `Task: ${task.label}`,
+      });
+    }
+    return row;
+  });
   res.status(201).json({
     completion: taskCompletionToDto(completion, task.rabbitId),
-    task: taskToDto(task, completion.completedAt),
+    task: taskToDto(task, completion.completedAt, await productName(task.productId)),
   });
 });
 
@@ -149,4 +172,24 @@ async function lastCompletion(taskId: number): Promise<Date | null> {
     .orderBy(desc(taskCompletions.completedAt))
     .limit(1);
   return rows[0]?.completedAt ?? null;
+}
+
+async function productName(productId: number | null): Promise<string | null> {
+  if (productId === null) return null;
+  const rows = await db
+    .select({ name: foodProducts.name })
+    .from(foodProducts)
+    .where(eq(foodProducts.id, productId))
+    .limit(1);
+  return rows[0]?.name ?? null;
+}
+
+async function productNames(ids: (number | null)[]): Promise<Map<number, string>> {
+  const unique = [...new Set(ids.filter((id): id is number => id !== null))];
+  if (unique.length === 0) return new Map();
+  const rows = await db
+    .select({ id: foodProducts.id, name: foodProducts.name })
+    .from(foodProducts)
+    .where(inArray(foodProducts.id, unique));
+  return new Map(rows.map((row) => [row.id, row.name]));
 }

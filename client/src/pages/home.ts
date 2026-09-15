@@ -185,7 +185,14 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
       );
     for (const task of dueTasks) {
       const rabbit = byId.get(task.rabbitId)!;
-      const detail = TASK_SLOT_LABELS[task.slot];
+      const detail = [
+        TASK_SLOT_LABELS[task.slot],
+        task.productName
+          ? `uses ${task.productName}${task.amountGrams > 0 ? ` (${task.amountGrams} g)` : ""}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
       rows.push(
         h(
           "div",

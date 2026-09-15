@@ -371,9 +371,27 @@ export type TaskDto = {
   label: string;
   slot: TaskSlot;
   intervalDays: number;
+  productId: number | null;
+  productName: string | null;
+  amountGrams: number;
   notes: string;
   active: boolean;
   lastCompletedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TaskTemplateDto = {
+  id: number;
+  label: string;
+  slot: TaskSlot;
+  intervalDays: number;
+  productId: number | null;
+  productName: string | null;
+  amountGrams: number;
+  notes: string;
+  active: boolean;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
 };

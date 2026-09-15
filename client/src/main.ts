@@ -10,6 +10,7 @@ import { renderBunniesPage } from "./pages/bunnies.ts";
 import { renderCalendarPage } from "./pages/calendar.ts";
 import { renderChecklistPage } from "./pages/checklist.ts";
 import { renderChecklistsPage } from "./pages/checklists.ts";
+import { renderRoutinePage } from "./pages/routine.ts";
 import { renderDailyChecksPage } from "./pages/dailyChecks.ts";
 import { renderDrugsPage } from "./pages/drugs.ts";
 import { renderFaqPage } from "./pages/faq.ts";
@@ -168,6 +169,9 @@ function render(): void {
       break;
     case "checklists":
       page = me.user.isAdmin ? renderChecklistsPage(ctx) : renderHomePage(ctx);
+      break;
+    case "routine":
+      page = me.user.isAdmin ? renderRoutinePage(ctx) : renderHomePage(ctx);
       break;
     case "vets":
       page = me.user.isAdmin ? renderVetsPage(ctx) : renderHomePage(ctx);

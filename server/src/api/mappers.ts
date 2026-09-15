@@ -37,6 +37,7 @@ import type {
   SettingsDto,
   TaskCompletionDto,
   TaskDto,
+  TaskTemplateDto,
   TaskSlot,
   TreatmentDto,
   TreatmentStatus,
@@ -82,6 +83,7 @@ import type {
   RabbitRow,
   RabbitStageCompletionRow,
   RabbitTaskRow,
+  TaskTemplateRow,
   SettingsRow,
   TaskCompletionRow,
   TreatmentRow,
@@ -460,16 +462,43 @@ export function foodProductToDto(
   };
 }
 
-export function taskToDto(row: RabbitTaskRow, lastCompletedAt: Date | null): TaskDto {
+export function taskToDto(
+  row: RabbitTaskRow,
+  lastCompletedAt: Date | null,
+  productName: string | null = null,
+): TaskDto {
   return {
     id: row.id,
     rabbitId: row.rabbitId,
     label: row.label,
     slot: taskSlot(row.slot),
     intervalDays: row.intervalDays,
+    productId: row.productId,
+    productName,
+    amountGrams: row.amountGrams,
     notes: row.notes,
     active: row.active,
     lastCompletedAt: lastCompletedAt ? lastCompletedAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+export function taskTemplateToDto(
+  row: TaskTemplateRow,
+  productName: string | null,
+): TaskTemplateDto {
+  return {
+    id: row.id,
+    label: row.label,
+    slot: taskSlot(row.slot),
+    intervalDays: row.intervalDays,
+    productId: row.productId,
+    productName,
+    amountGrams: row.amountGrams,
+    notes: row.notes,
+    active: row.active,
+    sortOrder: row.sortOrder,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

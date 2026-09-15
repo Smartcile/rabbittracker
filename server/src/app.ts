@@ -29,6 +29,7 @@ import { rabbitsRouter } from "./routes/rabbits.ts";
 import { settingsRouter } from "./routes/settings.ts";
 import { shareRouter } from "./routes/share.ts";
 import { tasksRouter } from "./routes/tasks.ts";
+import { taskTemplatesRouter } from "./routes/taskTemplates.ts";
 import { treatmentsRouter } from "./routes/treatments.ts";
 import { usersRouter } from "./routes/users.ts";
 import { vaccinationsRouter } from "./routes/vaccinations.ts";
@@ -55,6 +56,7 @@ export function createApp(): Express {
   app.use("/api/check-logs", checkLogsRouter);
   app.use("/api/bowls", bowlsRouter);
   app.use("/api/tasks", tasksRouter);
+  app.use("/api/task-templates", taskTemplatesRouter);
   app.use("/api/medication-logs", medicationLogsRouter);
   app.use("/api/calendar-entries", calendarEntriesRouter);
   app.use("/api/journal", journalRouter);

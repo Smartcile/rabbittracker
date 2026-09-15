@@ -493,9 +493,12 @@ export const stageCompletionSchema = z.object({
 
 export const taskCreateSchema = z.object({
   rabbitId: z.number().int().positive(),
+  templateId: z.number().int().positive().nullable().optional(),
   label: z.string().trim().min(1, "Name is required").max(200),
   slot: z.enum(TASK_SLOTS).default("anytime"),
   intervalDays: z.number().int().min(1).max(3650).default(1),
+  productId: z.number().int().positive().nullable().optional(),
+  amountGrams: z.number().int().min(0).max(1_000_000).default(0),
   notes: z.string().trim().max(2000).default(""),
   active: z.boolean().default(true),
 });
@@ -505,6 +508,32 @@ export const taskUpdateSchema = z
     label: z.string().trim().min(1, "Name is required").max(200).optional(),
     slot: z.enum(TASK_SLOTS).optional(),
     intervalDays: z.number().int().min(1).max(3650).optional(),
+    productId: z.number().int().positive().nullable().optional(),
+    amountGrams: z.number().int().min(0).max(1_000_000).optional(),
+    notes: z.string().trim().max(2000).optional(),
+    active: z.boolean().optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: "No changes provided",
+  });
+
+export const taskTemplateCreateSchema = z.object({
+  label: z.string().trim().min(1, "Name is required").max(200),
+  slot: z.enum(TASK_SLOTS).default("anytime"),
+  intervalDays: z.number().int().min(1).max(3650).default(1),
+  productId: z.number().int().positive().nullable().optional(),
+  amountGrams: z.number().int().min(0).max(1_000_000).default(0),
+  notes: z.string().trim().max(2000).default(""),
+  active: z.boolean().default(true),
+});
+
+export const taskTemplateUpdateSchema = z
+  .object({
+    label: z.string().trim().min(1, "Name is required").max(200).optional(),
+    slot: z.enum(TASK_SLOTS).optional(),
+    intervalDays: z.number().int().min(1).max(3650).optional(),
+    productId: z.number().int().positive().nullable().optional(),
+    amountGrams: z.number().int().min(0).max(1_000_000).optional(),
     notes: z.string().trim().max(2000).optional(),
     active: z.boolean().optional(),
   })

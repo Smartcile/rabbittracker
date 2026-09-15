@@ -99,6 +99,11 @@
       the quick log, a dedicated Checklists page creates more lists for other programs, and the
       daily-check editor edits its options as rows like the checklist editor.
 
+- [x] **Routine task templates + stock links.** Reusable routine tasks live in Settings → Daily
+      routine and are added to a bunny in a tap (the task copies the template's fields). A task can
+      link a food/supply product with an amount, and completing it draws the amount from stock;
+      deleting the completion puts it back.
+
 ## Planned features (agreed but not built)
 
 These are queued from the "bunny powerhouse" list; pick them up in any order.

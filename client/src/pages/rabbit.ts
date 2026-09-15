@@ -1158,6 +1158,9 @@ function tasksCard(
     const detail = [
       task.intervalDays === 1 ? "every day" : `every ${task.intervalDays} days`,
       task.lastCompletedAt ? `last done ${fmtDate(task.lastCompletedAt)}` : "not done yet",
+      task.productName
+        ? `uses ${task.productName}${task.amountGrams > 0 ? ` (${task.amountGrams} g)` : ""}`
+        : null,
     ]
       .filter(Boolean)
       .join(" · ");

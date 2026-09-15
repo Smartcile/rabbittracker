@@ -182,6 +182,9 @@ export const foodStockEntries = pgTable("food_stock_entries", {
   bowlReadingId: integer("bowl_reading_id").references(() => bowlReadings.id, {
     onDelete: "cascade",
   }),
+  taskCompletionId: integer("task_completion_id").references(() => taskCompletions.id, {
+    onDelete: "cascade",
+  }),
   amountGrams: integer("amount_grams").notNull(),
   note: text("note").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -383,11 +386,28 @@ export const rabbitTasks = pgTable("rabbit_tasks", {
   rabbitId: integer("rabbit_id")
     .notNull()
     .references(() => rabbits.id, { onDelete: "cascade" }),
+  templateId: integer("template_id").references(() => taskTemplates.id, { onDelete: "set null" }),
   label: text("label").notNull(),
   slot: text("slot").notNull().default("anytime"),
   intervalDays: integer("interval_days").notNull().default(1),
+  productId: integer("product_id").references(() => foodProducts.id, { onDelete: "set null" }),
+  amountGrams: integer("amount_grams").notNull().default(0),
   notes: text("notes").notNull().default(""),
   active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const taskTemplates = pgTable("task_templates", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  label: text("label").notNull(),
+  slot: text("slot").notNull().default("anytime"),
+  intervalDays: integer("interval_days").notNull().default(1),
+  productId: integer("product_id").references(() => foodProducts.id, { onDelete: "set null" }),
+  amountGrams: integer("amount_grams").notNull().default(0),
+  notes: text("notes").notNull().default(""),
+  active: boolean("active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -599,6 +619,7 @@ export type VaccinationRow = typeof vaccinations.$inferSelect;
 export type CareScheduleRow = typeof careSchedules.$inferSelect;
 export type CareRecordRow = typeof careRecords.$inferSelect;
 export type RabbitTaskRow = typeof rabbitTasks.$inferSelect;
+export type TaskTemplateRow = typeof taskTemplates.$inferSelect;
 export type TaskCompletionRow = typeof taskCompletions.$inferSelect;
 export type AppointmentRow = typeof appointments.$inferSelect;
 export type CalendarSubscriptionRow = typeof calendarSubscriptions.$inferSelect;
