@@ -14,6 +14,7 @@ import type {
   CareKind,
   CareRecordDto,
   CareScheduleDto,
+  ChecklistDto,
   ChecklistSectionDto,
   ClinicDto,
   Droppings,
@@ -64,6 +65,7 @@ import type {
   CheckLogTypeRow,
   ChecklistOptionRow,
   ChecklistPhotoRow,
+  ChecklistRow,
   ChecklistSectionRow,
   ClinicRow,
   DrugBatchRow,
@@ -592,12 +594,26 @@ export function checklistSectionToDto(
     label: row.label,
     hint: row.hint,
     multiple: row.multiple,
+    unit: row.unit,
+    hasNumber: row.hasNumber,
+    hasText: row.hasText,
     options: options.map((option) => ({
       id: option.id,
       value: option.value,
       label: option.label,
     })),
     photos: photos.map((photo) => ({ id: photo.id, caption: photo.caption })),
+  };
+}
+
+export function checklistToDto(row: ChecklistRow, itemCount: number): ChecklistDto {
+  return {
+    id: row.id,
+    key: row.key,
+    label: row.label,
+    isDaily: row.isDaily,
+    sortOrder: row.sortOrder,
+    itemCount,
   };
 }
 

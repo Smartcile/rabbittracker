@@ -1,5 +1,6 @@
 import type {
   AppointmentDto,
+  CheckLogDto,
   CheckLogTypeDto,
   DrugDto,
   HealthCheckDto,
@@ -9,6 +10,7 @@ import type {
   TreatmentDto,
 } from "../../../shared/types.ts";
 import { ageLabel, taskDueStatus, upcomingAppointments } from "../../../shared/health.ts";
+import { checkLogValueSummary } from "../../../shared/checkLogs.ts";
 import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
 import { DAY_SLOT_LABELS } from "../../../shared/slots.ts";
 import { api } from "../api.ts";
@@ -78,6 +80,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
       logTypes,
       { tasks },
       { logs: medLogs },
+      { logs: checkLogs },
     ] = await Promise.all([
       api.get<{ rabbits: RabbitSummaryDto[] }>("/api/rabbits"),
       api.get<{ appointments: AppointmentDto[] }>("/api/appointments"),
@@ -86,12 +89,13 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
       loadCheckLogTypes(),
       api.get<{ tasks: TaskDto[] }>("/api/tasks"),
       api.get<{ logs: MedicationLogDto[] }>("/api/medication-logs"),
+      api.get<{ logs: CheckLogDto[] }>("/api/check-logs"),
     ]);
     const hasActive = rabbits.some((rabbit) => rabbit.status === "active");
     quickLog.disabled = !hasActive;
     fab.disabled = !hasActive;
     renderStats(rabbits, appointments, treatments);
-    renderToday(rabbits, appointments, treatments, drugs, logTypes, tasks, medLogs);
+    renderToday(rabbits, appointments, treatments, drugs, logTypes, tasks, medLogs, checkLogs);
     renderAttention(rabbits);
     renderUpcoming(appointments, rabbits);
     if (rabbits.length === 0) {
@@ -142,6 +146,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
     logTypes: CheckLogTypeDto[],
     tasks: TaskDto[],
     medLogs: MedicationLogDto[],
+    checkLogs: CheckLogDto[],
   ): void {
     const activeRabbits = rabbits.filter((rabbit) => rabbit.status === "active");
     const byId = new Map(activeRabbits.map((rabbit) => [rabbit.id, rabbit]));
@@ -284,6 +289,36 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
 
     if (canRecord && logTypes.length > 0) {
       for (const rabbit of activeRabbits) {
+        const rabbitLogs = checkLogs.filter(
+          (log) => log.rabbitId === rabbit.id && localDayKey(new Date(log.loggedAt)) === todayKey,
+        );
+        for (const log of rabbitLogs) {
+          const summary = checkLogValueSummary(log);
+          rows.push(
+            h(
+              "div",
+              { class: "list-row" },
+              h("span", { class: "badge" }, "Check"),
+              h(
+                "div",
+                { class: "stack", style: { gap: "0.15rem" } },
+                h("strong", null, log.typeLabel),
+                h("span", { class: "dim small" }, `${rabbit.name}${summary ? ` · ${summary}` : ""}`),
+              ),
+              h("span", { class: "spacer" }),
+              h(
+                "button",
+                {
+                  class: "btn ghost small",
+                  type: "button",
+                  onClick: () =>
+                    openCheckLogModal({ rabbit, types: logTypes, log, onSaved: () => void load() }),
+                },
+                "Edit",
+              ),
+            ),
+          );
+        }
         rows.push(
           h(
             "div",
@@ -292,7 +327,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
             h(
               "div",
               { class: "stack", style: { gap: "0" } },
-              h("strong", null, "Daily check"),
+              h("strong", null, rabbitLogs.length > 0 ? "Add daily check" : "Daily check"),
               h("span", { class: "dim small" }, rabbit.name),
             ),
             h("span", { class: "spacer" }),

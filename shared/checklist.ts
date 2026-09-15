@@ -8,6 +8,9 @@ export type ChecklistSectionConfig = {
   label: string;
   hint: string;
   multiple: boolean;
+  unit?: string;
+  hasNumber?: boolean;
+  hasText?: boolean;
   options: ChecklistOption[];
 };
 
@@ -226,7 +229,13 @@ export function validateChecklistAnswers(
     }
     const section = sections.find((item) => item.key === key);
     if (!section) return `Unknown checklist section: ${key}`;
-    if (answer.numberMilli != null || answer.text) return `Unexpected value for ${section.label}`;
+    if (answer.numberMilli != null) {
+      if (!section.hasNumber) return `${section.label} does not take an amount`;
+      if (!Number.isInteger(answer.numberMilli) || answer.numberMilli < 0) {
+        return `Invalid amount for ${section.label}`;
+      }
+    }
+    if (answer.text && !section.hasText) return `${section.label} does not take text`;
     if (!section.multiple && answer.values.length > 1) {
       return `${section.label} allows only one answer`;
     }

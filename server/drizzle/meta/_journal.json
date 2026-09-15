@@ -204,6 +204,13 @@
       "when": 1789450659498,
       "tag": "0028_glossy_titania",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1789456895245,
+      "tag": "0029_oval_nightshade",
+      "breakpoints": true
     }
   ]
 }

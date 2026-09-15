@@ -191,6 +191,9 @@ export const checklistSectionCreateSchema = z.object({
   label: z.string().trim().min(1, "Label is required").max(100),
   hint: z.string().trim().max(500).default(""),
   multiple: z.boolean().default(false),
+  unit: z.string().trim().max(30).default(""),
+  hasNumber: z.boolean().default(false),
+  hasText: z.boolean().default(false),
 });
 
 export const checklistSectionUpdateSchema = z
@@ -198,10 +201,34 @@ export const checklistSectionUpdateSchema = z
     label: z.string().trim().min(1, "Label is required").max(100).optional(),
     hint: z.string().trim().max(500).optional(),
     multiple: z.boolean().optional(),
+    unit: z.string().trim().max(30).optional(),
+    hasNumber: z.boolean().optional(),
+    hasText: z.boolean().optional(),
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: "No changes provided",
   });
+
+export const checklistCreateSchema = z.object({
+  label: z.string().trim().min(1, "Label is required").max(100),
+});
+
+export const checklistUpdateSchema = z.object({
+  label: z.string().trim().min(1, "Label is required").max(100),
+});
+
+export const checklistItemCreateSchema = z
+  .object({
+    sectionId: z.number().int().positive().optional(),
+    typeId: z.number().int().positive().optional(),
+  })
+  .refine((value) => (value.sectionId !== undefined) !== (value.typeId !== undefined), {
+    message: "Provide either a section or a check type",
+  });
+
+export const checklistItemReorderSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(1, "No items to reorder"),
+});
 
 export const checklistOptionCreateSchema = z.object({
   label: z.string().trim().min(1, "Label is required").max(100),

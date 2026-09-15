@@ -1006,10 +1006,20 @@ describe("validateChecklistAnswers", () => {
   it("rejects amount and text fields on plain checklist sections", () => {
     expect(
       validateChecklistAnswers({ posture: { values: [], other: "", numberMilli: 5 } }, sections),
-    ).toContain("Unexpected value");
+    ).toContain("does not take an amount");
     expect(
       validateChecklistAnswers({ posture: { values: [], other: "", text: "fine" } }, sections),
-    ).toContain("Unexpected value");
+    ).toContain("does not take text");
+  });
+
+  it("accepts amounts and text on sections that allow them", () => {
+    const withFields = [{ ...sections[0], hasNumber: true, hasText: true }];
+    expect(
+      validateChecklistAnswers(
+        { posture: { values: [], other: "", numberMilli: 250, text: "fine" } },
+        withFields,
+      ),
+    ).toBeNull();
   });
 });
 

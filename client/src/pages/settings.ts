@@ -20,6 +20,7 @@ export function renderSettingsPage(ctx: PageContext): HTMLElement {
     renderBunniesCard(),
     renderVetsCard(),
     renderListsCard(),
+    renderChecklistsCard(),
     renderChecklistCard(),
     renderDailyChecksCard(),
     renderNormsCard(),
@@ -104,17 +105,31 @@ function renderListsCard(): HTMLElement {
   );
 }
 
+function renderChecklistsCard(): HTMLElement {
+  return h(
+    "div",
+    { class: "card" },
+    h("h2", null, "Checklists"),
+    h(
+      "p",
+      { class: "dim small" },
+      "Group questions and daily checks into checklists — add any item to several, or create a new checklist for another program.",
+    ),
+    h("div", { class: "row" }, h("a", { class: "btn outline small", href: "#/checklists" }, "Manage checklists")),
+  );
+}
+
 function renderChecklistCard(): HTMLElement {
   return h(
     "div",
     { class: "card" },
-    h("h2", null, "Health checklist"),
+    h("h2", null, "Checklist questions"),
     h(
       "p",
       { class: "dim small" },
-      "Edit the weekly checklist sections, answers and example photos shown on every health check.",
+      "Edit the questions, answers and example photos used in health checklists.",
     ),
-    h("div", { class: "row" }, h("a", { class: "btn outline small", href: "#/checklist" }, "Edit checklist")),
+    h("div", { class: "row" }, h("a", { class: "btn outline small", href: "#/checklist" }, "Edit questions")),
   );
 }
 

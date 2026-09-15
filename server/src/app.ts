@@ -14,6 +14,7 @@ import { calendarEntriesRouter } from "./routes/calendarEntries.ts";
 import { checkLogsRouter } from "./routes/checkLogs.ts";
 import { checksRouter } from "./routes/checks.ts";
 import { checklistRouter } from "./routes/checklist.ts";
+import { checklistsRouter } from "./routes/checklists.ts";
 import { medicationLogsRouter } from "./routes/medicationLogs.ts";
 import { clinicsRouter } from "./routes/clinics.ts";
 import { drugsRouter } from "./routes/drugs.ts";
@@ -50,6 +51,7 @@ export function createApp(): Express {
   app.use("/api/rabbits", rabbitsRouter);
   app.use("/api/checks", checksRouter);
   app.use("/api/checklist", checklistRouter);
+  app.use("/api/checklists", checklistsRouter);
   app.use("/api/check-logs", checkLogsRouter);
   app.use("/api/bowls", bowlsRouter);
   app.use("/api/tasks", tasksRouter);

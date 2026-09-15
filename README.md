@@ -39,14 +39,17 @@ Desktop:
   pain score (0–10), vet notes and a photo.
 - The RRR weekly health checklist (posture, demeanour, eyes, breathing, coat & skin, behaviour,
   bum, ears, nails, genitals, hocks) with tick-button answers, per-section notes and example
-  photos. The checklist itself is editable in Settings. The full check form can also switch on any
-  of your daily check types (Poo, Behaviour, …) so the Sunday check captures them too.
+  photos. The checklist itself is editable in Settings, and the full check form can also switch on
+  any of your daily check types (Poo, Behaviour, …) so the Sunday check captures them too.
 - Quick log — tick any checklist item from the bunny page and save it as a health check without
   the full form.
 - **Daily checks** — define your own types in Settings (Poo, Behaviour, …) with option buttons
   (single or multi-select), a number with a unit and free text, plus photos on any log. A one-tap
   bar on the bunny profile logs a type in seconds. An **Add defaults** button in the editor pulls in
   any missing starter types (including multi-select Behaviour) on upgraded installs.
+- **Checklists** — group questions and daily checks into named lists in Settings → Checklists. Add
+  any item to several lists, so a Daily check can appear on the weekly checklist, and create extra
+  checklists for other programs. The built-in **Daily checks** list is what the quick-log bar shows.
 - **Food & water bowl tracking** — set a starting weight for a bowl, then log scale readings as you
   go: consumption is calculated since the last reading and the baseline rolls forward. One pop-out
   logs a whole session: pick weigh-in, consumption, top-up or refresh, add each reading, then save

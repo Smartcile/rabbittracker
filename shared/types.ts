@@ -482,8 +482,29 @@ export type ChecklistSectionDto = {
   label: string;
   hint: string;
   multiple: boolean;
+  unit: string;
+  hasNumber: boolean;
+  hasText: boolean;
   options: ChecklistOptionDto[];
   photos: ChecklistPhotoDto[];
+};
+
+export type ChecklistDto = {
+  id: number;
+  key: string;
+  label: string;
+  isDaily: boolean;
+  sortOrder: number;
+  itemCount: number;
+};
+
+export type ChecklistItemDto = {
+  id: number;
+  kind: "section" | "type";
+  sectionId: number | null;
+  typeId: number | null;
+  label: string;
+  sortOrder: number;
 };
 
 export type ReportBundleDto = {

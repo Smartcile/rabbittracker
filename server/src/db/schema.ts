@@ -528,6 +528,9 @@ export const checklistSections = pgTable("checklist_sections", {
   label: text("label").notNull(),
   hint: text("hint").notNull().default(""),
   multiple: boolean("multiple").notNull().default(false),
+  unit: text("unit").notNull().default(""),
+  hasNumber: boolean("has_number").notNull().default(false),
+  hasText: boolean("has_text").notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -556,6 +559,33 @@ export const checklistPhotos = pgTable("checklist_photos", {
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const checklists = pgTable("checklists", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  key: text("key").notNull().unique(),
+  label: text("label").notNull(),
+  isDaily: boolean("is_daily").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const checklistItems = pgTable(
+  "checklist_items",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    checklistId: integer("checklist_id")
+      .notNull()
+      .references(() => checklists.id, { onDelete: "cascade" }),
+    sectionId: integer("section_id").references(() => checklistSections.id, { onDelete: "cascade" }),
+    typeId: integer("type_id").references(() => checkLogTypes.id, { onDelete: "cascade" }),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    unique("checklist_items_checklist_section_unique").on(table.checklistId, table.sectionId),
+    unique("checklist_items_checklist_type_unique").on(table.checklistId, table.typeId),
+  ],
+);
 
 export type SettingsRow = typeof settings.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
@@ -594,5 +624,7 @@ export type JournalPhotoRow = typeof journalPhotos.$inferSelect;
 export type ChecklistSectionRow = typeof checklistSections.$inferSelect;
 export type ChecklistOptionRow = typeof checklistOptions.$inferSelect;
 export type ChecklistPhotoRow = typeof checklistPhotos.$inferSelect;
+export type ChecklistRow = typeof checklists.$inferSelect;
+export type ChecklistItemRow = typeof checklistItems.$inferSelect;
 export type DrugRow = typeof drugs.$inferSelect;
 export type DrugBatchRow = typeof drugBatches.$inferSelect;

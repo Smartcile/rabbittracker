@@ -3,12 +3,13 @@ import { Router } from "express";
 import { slugifyLabel } from "../../../shared/checklist.ts";
 import { checkLogToDto, checkLogTypeToDto } from "../api/mappers.ts";
 import { db } from "../db/index.ts";
-import { checkLogPhotos, checkLogs, checkLogTypes } from "../db/schema.ts";
+import { checklistItems, checkLogPhotos, checkLogs, checkLogTypes } from "../db/schema.ts";
 import type { CheckLogPhotoRow, CheckLogTypeRow } from "../db/schema.ts";
 import { findVisibleRabbit, requirePermission, visibleRabbitIds } from "../lib/access.ts";
 import { requireAdmin, requireAuth } from "../lib/auth.ts";
 import { addMissingDefaultCheckLogTypes } from "../lib/checkLogSeed.ts";
-import { listCheckLogTypes } from "../lib/checkLogStore.ts";
+import { listAllCheckLogTypes, listDailyCheckLogTypes } from "../lib/checkLogStore.ts";
+import { DAILY_CHECKLIST_KEY, getChecklistByKey } from "../lib/checklistStore.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
 import {
   checkLogCreateSchema,
@@ -22,7 +23,11 @@ import { photoUpload } from "./photos.ts";
 export const checkLogsRouter = Router();
 
 checkLogsRouter.get("/types", requireAuth, async (_req, res) => {
-  res.json({ types: (await listCheckLogTypes()).map(checkLogTypeToDto) });
+  res.json({ types: (await listDailyCheckLogTypes()).map(checkLogTypeToDto) });
+});
+
+checkLogsRouter.get("/types/all", requireAuth, async (_req, res) => {
+  res.json({ types: (await listAllCheckLogTypes()).map(checkLogTypeToDto) });
 });
 
 checkLogsRouter.post("/types/defaults", requireAuth, requirePermission("canRecordHealth"), async (_req, res) => {
@@ -39,6 +44,17 @@ checkLogsRouter.post("/types", requireAuth, requirePermission("canRecordHealth")
     .insert(checkLogTypes)
     .values({ ...input, key, sortOrder: (highest ?? -1) + 1 })
     .returning();
+  const daily = await getChecklistByKey(DAILY_CHECKLIST_KEY);
+  if (daily) {
+    const items = await db
+      .select()
+      .from(checklistItems)
+      .where(eq(checklistItems.checklistId, daily.id));
+    const maxOrder = items.reduce((value, item) => Math.max(value, item.sortOrder), -1);
+    await db
+      .insert(checklistItems)
+      .values({ checklistId: daily.id, typeId: row.id, sortOrder: maxOrder + 1 });
+  }
   res.status(201).json({ type: checkLogTypeToDto(row) });
 });
 
@@ -81,7 +97,7 @@ checkLogsRouter.get("/", requireAuth, async (req, res) => {
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(checkLogs.loggedAt))
     .limit(500);
-  const types = new Map((await listCheckLogTypes()).map((type) => [type.id, type]));
+  const types = new Map((await listAllCheckLogTypes()).map((type) => [type.id, type]));
   const photos =
     rows.length > 0
       ? await db

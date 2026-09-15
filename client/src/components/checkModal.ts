@@ -8,7 +8,7 @@ import type {
 } from "../../../shared/types.ts";
 import { parseWeightInput, weightInputValue } from "../../../shared/health.ts";
 import { api } from "../api.ts";
-import { loadChecklist } from "../checklist.ts";
+import { loadChecklist, loadChecklistTypeKeys } from "../checklist.ts";
 import { loadCheckLogTypes } from "../dailyLogs.ts";
 import { h } from "../dom.ts";
 import { renderChecklistPhotos } from "./checklistPhotos.ts";
@@ -24,8 +24,10 @@ export function openCheckModal(options: {
   previousWeightGrams?: number | null;
   onSaved: (check: HealthCheckDto) => void;
 }): void {
-  void Promise.all([loadChecklist(), loadCheckLogTypes()])
-    .then(([sections, types]) => buildModal(options, sections, types))
+  void Promise.all([loadChecklist(), loadChecklistTypeKeys(), loadCheckLogTypes()])
+    .then(([sections, checklistTypeKeys, types]) =>
+      buildModal(options, sections, checklistTypeKeys, types),
+    )
     .catch((err) => {
       toast(err instanceof Error ? err.message : "Could not load the check form", "error");
     });
@@ -40,6 +42,7 @@ function buildModal(
     onSaved: (check: HealthCheckDto) => void;
   },
   sections: ChecklistSectionDto[],
+  checklistTypeKeys: string[],
   types: CheckLogTypeDto[],
 ): void {
   const editing = options.check;
@@ -108,12 +111,13 @@ function buildModal(
       (existing.values.length > 0 ||
         existing.numberMilli != null ||
         (existing.text ?? "").trim().length > 0);
-    if (filled) includedDaily.add(type.key);
+    const included = filled || checklistTypeKeys.includes(type.key);
+    if (included) includedDaily.add(type.key);
     dailyFields.set(type.key, dailyCheckField(type, existing));
     dailyToggles.append(
       toggleButton({
         label: type.label,
-        checked: filled,
+        checked: included,
         onChange: (checked) => {
           if (checked) includedDaily.add(type.key);
           else includedDaily.delete(type.key);

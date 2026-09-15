@@ -93,6 +93,12 @@
       controls (day, week, month, all time, custom) and add a read-only Calendar tab, and the daily
       check pop-up is a check-type list with the selected type's options on the right.
 
+- [x] **Checklists + shared check items.** Daily check types and checklist questions now live side
+      by side: named checklists group either kind of item, so a daily check can be added to the
+      weekly checklist and show up on the health check form. The built-in Daily checks list drives
+      the quick log, a dedicated Checklists page creates more lists for other programs, and the
+      daily-check editor edits its options as rows like the checklist editor.
+
 ## Planned features (agreed but not built)
 
 These are queued from the "bunny powerhouse" list; pick them up in any order.

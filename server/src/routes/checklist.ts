@@ -2,13 +2,22 @@ import { asc, eq, max } from "drizzle-orm";
 import { Router } from "express";
 import { checklistSectionToDto } from "../api/mappers.ts";
 import { db } from "../db/index.ts";
-import { checklistOptions, checklistPhotos, checklistSections } from "../db/schema.ts";
+import {
+  checklistItems,
+  checklistOptions,
+  checklistPhotos,
+  checklistSections,
+} from "../db/schema.ts";
 import { requireAdmin, requireAuth } from "../lib/auth.ts";
 import {
   findSection,
+  getChecklistByKey,
+  listAllChecklistSections,
   listChecklistConfig,
+  listChecklistTypeKeys,
   uniqueOptionValue,
   uniqueSectionKey,
+  WEEKLY_CHECKLIST_KEY,
 } from "../lib/checklistStore.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
 import {
@@ -25,7 +34,11 @@ import { photoUpload } from "./photos.ts";
 export const checklistRouter = Router();
 
 checklistRouter.get("/", requireAuth, async (_req, res) => {
-  res.json({ sections: await listChecklistConfig() });
+  res.json({ sections: await listChecklistConfig(), typeKeys: await listChecklistTypeKeys() });
+});
+
+checklistRouter.get("/sections", requireAuth, async (_req, res) => {
+  res.json({ sections: await listAllChecklistSections() });
 });
 
 checklistRouter.post("/sections", requireAuth, requireAdmin, async (req, res) => {
@@ -41,9 +54,23 @@ checklistRouter.post("/sections", requireAuth, requireAdmin, async (req, res) =>
       label: input.label,
       hint: input.hint,
       multiple: input.multiple,
+      unit: input.unit,
+      hasNumber: input.hasNumber,
+      hasText: input.hasText,
       sortOrder: (highest ?? -1) + 1,
     })
     .returning();
+  const weekly = await getChecklistByKey(WEEKLY_CHECKLIST_KEY);
+  if (weekly) {
+    const items = await db
+      .select()
+      .from(checklistItems)
+      .where(eq(checklistItems.checklistId, weekly.id));
+    const maxOrder = items.reduce((value, item) => Math.max(value, item.sortOrder), -1);
+    await db
+      .insert(checklistItems)
+      .values({ checklistId: weekly.id, sectionId: row.id, sortOrder: maxOrder + 1 });
+  }
   res.status(201).json({ section: checklistSectionToDto(row, [], []) });
 });
 

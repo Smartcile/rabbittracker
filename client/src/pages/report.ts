@@ -86,7 +86,7 @@ export function renderReportSections(view: ReportView): HTMLElement[] {
     careSection(bundle.careSchedules, bundle.careRecords, bundle.careTypes, range, now),
     treatmentsSection(bundle.treatments, bundle.medicationLogs, range, now),
     medicationSection(bundle.medicationLogs, bundle.drugs, range, timezone),
-    appointmentsSection(bundle.appointments, range, showCost, timezone),
+    appointmentsSection(bundle.appointments, range, showCost, timezone, now),
     journalSection(bundle.journal, range, includePhotos, timezone, photoUrl),
   ];
 }
@@ -684,11 +684,47 @@ function appointmentsSection(
   range: ReportRange,
   showCost: boolean,
   timezone: string | undefined,
+  now: Date,
 ): HTMLElement {
+  const upcomingByVet = new Map<string, AppointmentDto>();
+  for (const appointment of [...appointments]
+    .filter(
+      (item) =>
+        item.status === "scheduled" && new Date(item.scheduledAt).getTime() >= now.getTime(),
+    )
+    .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))) {
+    const vet = appointment.vet || appointment.clinic || "Unassigned";
+    if (!upcomingByVet.has(vet)) upcomingByVet.set(vet, appointment);
+  }
+  const nextBlock =
+    upcomingByVet.size > 0
+      ? h(
+          "div",
+          { class: "calc-box" },
+          h("strong", null, "Next appointment per vet"),
+          ...[...upcomingByVet.entries()].map(([vet, appointment]) =>
+            h(
+              "div",
+              { class: "row wrap", style: { gap: "0.4rem", alignItems: "center" } },
+              h("span", { class: "badge accent" }, vet),
+              h("span", null, appointment.title),
+              h(
+                "span",
+                { class: "mono small" },
+                `${fmtDate(appointment.scheduledAt, timezone)} ${fmtTime(appointment.scheduledAt, timezone)}`,
+              ),
+              appointment.clinic && appointment.vet
+                ? h("span", { class: "dim small" }, `· ${appointment.clinic}`)
+                : null,
+            ),
+          ),
+        )
+      : null;
+
   const inRange = appointments
     .filter((appointment) => isWithinRange(appointment.scheduledAt, range))
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
-  if (inRange.length === 0) {
+  if (inRange.length === 0 && !nextBlock) {
     return section("Appointments", empty("No appointments in this period."));
   }
   const headers = ["Date", "Title", "Clinic / vet", "Status"];
@@ -714,7 +750,13 @@ function appointmentsSection(
     }
     return cells;
   });
-  return section("Appointments", reportTable(headers, rows));
+  return section(
+    "Appointments",
+    nextBlock,
+    inRange.length > 0
+      ? reportTable(headers, rows)
+      : empty("No appointments in this period."),
+  );
 }
 
 function journalSection(

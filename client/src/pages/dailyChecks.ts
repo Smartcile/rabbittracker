@@ -135,10 +135,37 @@ function openTypeModal(type: CheckLogTypeDto | undefined, reload: () => Promise<
   const hasNumber = toggleButton({ label: "Number", checked: type?.hasNumber ?? true });
   const hasText = toggleButton({ label: "Free text", checked: type?.hasText ?? false });
   const multiple = toggleButton({ label: "Allow multiple", checked: type?.multiple ?? false });
-  const options = h("input", {
-    value: type?.options.join(", ") ?? "",
-    placeholder: "Normal, Soft, Runny",
-  });
+  const optionValues: HTMLInputElement[] = [];
+  const optionRows = h("div", { class: "stack", style: { gap: "0.35rem" } });
+  const addOptionRow = (value = ""): void => {
+    const input = h("input", { value, placeholder: "e.g. Normal" });
+    const row = h(
+      "div",
+      { class: "option-row" },
+      input,
+      h(
+        "button",
+        {
+          class: "btn ghost small",
+          type: "button",
+          onClick: () => {
+            const index = optionValues.indexOf(input);
+            if (index >= 0) optionValues.splice(index, 1);
+            row.remove();
+          },
+        },
+        "Remove",
+      ),
+    );
+    optionValues.push(input);
+    optionRows.append(row);
+  };
+  for (const value of type?.options ?? []) addOptionRow(value);
+  const addOption = h(
+    "button",
+    { class: "btn outline small", type: "button", onClick: () => addOptionRow() },
+    "Add option",
+  );
   const error = h("p", { class: "form-error" });
   error.style.display = "none";
   const save = h("button", { class: "btn primary", type: "submit" }, type ? "Save" : "Add");
@@ -158,10 +185,7 @@ function openTypeModal(type: CheckLogTypeDto | undefined, reload: () => Promise<
             hasNumber: hasNumber.checked(),
             hasText: hasText.checked(),
             multiple: multiple.checked(),
-            options: options.value
-              .split(",")
-              .map((value) => value.trim())
-              .filter(Boolean),
+            options: optionValues.map((input) => input.value.trim()).filter(Boolean),
           };
           try {
             if (type) {
@@ -194,11 +218,12 @@ function openTypeModal(type: CheckLogTypeDto | undefined, reload: () => Promise<
         "div",
         { class: "field" },
         h("label", null, "Option buttons (optional)"),
-        options,
+        optionRows,
+        h("div", { class: "row" }, addOption),
         h(
           "span",
           { class: "dim small" },
-          "Comma-separated. If set, these are shown as buttons instead of free text. Allow multiple lets you pick several.",
+          "Each option becomes a button. If any are set they replace free text. Allow multiple lets you pick several.",
         ),
       ),
       h(
