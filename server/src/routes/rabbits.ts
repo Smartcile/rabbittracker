@@ -7,6 +7,7 @@ import {
   healthCheckToDto,
   journalEntryToDto,
   rabbitToDto,
+  stageCompletionToDto,
   treatmentToDto,
   userToDto,
   vaccinationToDto,
@@ -21,6 +22,7 @@ import {
   journalPhotos,
   rabbitBonds,
   rabbitCarers,
+  rabbitStageCompletions,
   rabbits,
   users,
   vaccinations,
@@ -208,10 +210,15 @@ rabbitsRouter.get("/:id", requireAuth, async (req, res) => {
     listJournalForRabbit(id),
     listBondsForRabbit(id),
   ]);
+  const stageRows = await db
+    .select()
+    .from(rabbitStageCompletions)
+    .where(eq(rabbitStageCompletions.rabbitId, id));
   res.json({
     rabbit: rabbitToDto(row),
     carers: carerRows.map((carer) => userToDto(carer.user)),
     bonds: bondRows.map((bond) => rabbitToDto(bond)),
+    stageCompletions: stageRows.map((stage) => stageCompletionToDto(stage, id)),
     checks: checks.map(healthCheckToDto),
     treatments: treatments.map(treatmentToDto),
     vaccinations: vaccinations.map(vaccinationToDto),

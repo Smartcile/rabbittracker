@@ -28,6 +28,7 @@ import type {
   CareRecordDto,
   CareScheduleDto,
   CheckLogDto,
+  GrowthStageDto,
   CheckLogTypeDto,
   ChecklistSectionDto,
   DrugDto,
@@ -36,6 +37,7 @@ import type {
   LookupDto,
   MedicationLogDto,
   RabbitDto,
+  RabbitStageCompletionDto,
   ReportBundleDto,
   SettingsDto,
   TaskCompletionDto,
@@ -74,6 +76,7 @@ export function renderReportSections(view: ReportView): HTMLElement[] {
   const timezone = bundle.timezone;
   return [
     profileSection(bundle, showCarers),
+    stagesSection(bundle.growthStages, bundle.stageCompletions, timezone),
     dailyChecksSection(bundle.checkLogs, range, includePhotos, timezone, photoUrl),
     bowlsSection(bundle.bowls, range, timezone),
     tasksSection(bundle.tasks, bundle.taskCompletions, range, now, timezone),
@@ -556,6 +559,25 @@ function tasksSection(
     );
   }
   return section("Daily routine", ...children);
+}
+
+function stagesSection(
+  stages: GrowthStageDto[],
+  completions: RabbitStageCompletionDto[],
+  timezone: string | undefined,
+): HTMLElement {
+  if (completions.length === 0) {
+    return section("Growth stages", empty("No growth stages recorded."));
+  }
+  const stageById = new Map(stages.map((stage) => [stage.id, stage]));
+  const rows = [...completions]
+    .sort((a, b) => a.completedAt.localeCompare(b.completedAt))
+    .map((completion) => [
+      h("strong", null, stageById.get(completion.stageId)?.label ?? "Stage"),
+      fmtCalendarDate(completion.completedAt),
+      completion.notes || "—",
+    ]);
+  return section("Growth stages", reportTable(["Stage", "Done", "Notes"], rows));
 }
 
 function medicationSection(

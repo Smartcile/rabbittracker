@@ -227,7 +227,11 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
       );
       const chips = slotChips({
         slots: treatment.slots,
-        logs: todayLogs.map((entry) => ({ slot: entry.slot, at: entry.givenAt })),
+        logs: todayLogs.map((entry) => ({
+          slot: entry.slot,
+          at: entry.givenAt,
+          skipped: entry.skipped,
+        })),
         canRecord,
         onLog: (slot) =>
           openMedicationLogModal({

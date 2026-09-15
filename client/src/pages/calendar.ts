@@ -244,7 +244,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
           treatment.slots.length > 0
             ? slotStatus(
                 treatment.slots,
-                dayLogs.map((log) => ({ slot: log.slot, at: log.givenAt })),
+                dayLogs.map((log) => ({ slot: log.slot, at: log.givenAt, skipped: log.skipped })),
               )
             : [];
         const done = allSlotsDone(treatment.slots, dayLogs);
@@ -265,10 +265,10 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
                   {
                     class: `cal-slot${entry.done ? " done" : ""}${
                       entry.status === "late" ? " late" : ""
-                    }`,
+                    }${entry.missed ? " missed" : ""}`,
                   },
                   `${DAY_SLOT_SHORT_LABELS[entry.slot]}${
-                    entry.done ? (entry.status === "late" ? " !" : " ✓") : ""
+                    entry.done ? (entry.missed ? " ✗" : entry.status === "late" ? " !" : " ✓") : ""
                   }`,
                 ),
               ),

@@ -253,6 +253,54 @@ describe("bowl integration", () => {
     expect(edited.periodRefillGrams).toBe(100);
   });
 
+  it("calculates the new weight from a consumption entry", async () => {
+    const rabbit = await createRabbit();
+    const bowl = await createBowl(rabbit.id);
+    const updated = await addReading(bowl.id, {
+      kind: "consume",
+      readAt: "2026-09-02T08:00:00.000Z",
+      consumedGrams: 150,
+    });
+    expect(updated.currentWeightGrams).toBe(750);
+    expect(updated.periodConsumptionGrams).toBe(150);
+    expect(updated.readings.some((reading) => reading.kind === "consume")).toBe(true);
+  });
+
+  it("rejects consumption larger than the bowl holds", async () => {
+    const rabbit = await createRabbit();
+    const bowl = await createBowl(rabbit.id);
+    await expect(
+      addReading(bowl.id, {
+        kind: "consume",
+        readAt: "2026-09-02T08:00:00.000Z",
+        consumedGrams: 5000,
+      }),
+    ).rejects.toThrow("That is more than the bowl holds");
+  });
+
+  it("replaces the amount when editing a top-up that weighed first", async () => {
+    const rabbit = await createRabbit();
+    const bowl = await createBowl(rabbit.id);
+    const after = await addReading(bowl.id, {
+      kind: "refill",
+      readAt: "2026-09-02T08:00:00.000Z",
+      refillGrams: 250,
+      preWeightGrams: 600,
+    });
+    const refill = after.readings.find((row) => row.kind === "refill");
+    if (!refill) throw new Error("refill not found");
+    expect(refill.weightGrams).toBe(850);
+
+    const { bowl: edited } = await api<{ bowl: BowlDto }>(
+      ctx,
+      `/api/bowls/${bowl.id}/readings/${refill.id}`,
+      { method: "PATCH", body: { refillGrams: 100 } },
+    );
+    expect(edited.currentWeightGrams).toBe(700);
+    expect(edited.periodRefillGrams).toBe(100);
+    expect(edited.periodConsumptionGrams).toBe(300);
+  });
+
   it("records a weigh-in together with a top-up", async () => {
     const rabbit = await createRabbit();
     const bowl = await createBowl(rabbit.id);

@@ -89,6 +89,7 @@ describe("bowlReadingKindLabel", () => {
   it("labels each kind", () => {
     expect(bowlReadingKindLabel("start")).toBe("Start");
     expect(bowlReadingKindLabel("weigh")).toBe("Weigh-in");
+    expect(bowlReadingKindLabel("consume")).toBe("Consumption");
     expect(bowlReadingKindLabel("refill")).toBe("Top up");
     expect(bowlReadingKindLabel("refresh")).toBe("Refresh");
   });

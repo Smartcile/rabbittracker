@@ -654,6 +654,22 @@ describe("bowl validation", () => {
     ).toBe(true);
   });
 
+  it("accepts a direct consumption entry", () => {
+    expect(
+      bowlReadingCreateSchema.safeParse({
+        kind: "consume",
+        readAt: "2026-09-02T08:00:00.000Z",
+        consumedGrams: 30,
+      }).success,
+    ).toBe(true);
+    expect(
+      bowlReadingCreateSchema.safeParse({
+        kind: "consume",
+        readAt: "2026-09-02T08:00:00.000Z",
+      }).success,
+    ).toBe(false);
+  });
+
   it("requires changes on a reading update", () => {
     expect(bowlReadingUpdateSchema.safeParse({}).success).toBe(false);
     expect(bowlReadingUpdateSchema.safeParse({ weightGrams: 750 }).success).toBe(true);
@@ -744,6 +760,15 @@ describe("medication log validation", () => {
 
   it("requires a time", () => {
     expect(medicationLogCreateSchema.safeParse({ rabbitId: 1 }).success).toBe(false);
+  });
+
+  it("accepts a missed dose", () => {
+    const result = medicationLogCreateSchema.safeParse({
+      rabbitId: 1,
+      givenAt: "2026-09-01T08:00:00.000Z",
+      skipped: true,
+    });
+    expect(result.success).toBe(true);
   });
 
   it("accepts a known slot and rejects an unknown one", () => {

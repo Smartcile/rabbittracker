@@ -62,6 +62,30 @@ export function slotForTime(at: Date): DaySlot {
   );
 }
 
+export function nearestSlot(slots: readonly DaySlot[], at: Date): DaySlot | null {
+  if (slots.length === 0) return null;
+  const minutes = at.getHours() * 60 + at.getMinutes();
+  let best: DaySlot | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const slot of slots) {
+    const { start, end } = DAY_SLOT_RANGES[slot];
+    const inside = start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
+    const distance = inside
+      ? 0
+      : Math.min(circularMinutes(minutes, start), circularMinutes(minutes, end));
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = slot;
+    }
+  }
+  return best;
+}
+
+function circularMinutes(a: number, b: number): number {
+  const diff = Math.abs(a - b) % 1440;
+  return Math.min(diff, 1440 - diff);
+}
+
 export function slotRangeLabel(slot: DaySlot): string {
   const { start, end } = DAY_SLOT_RANGES[slot];
   return `${formatMinutes(start)}–${formatMinutes(end)}`;
@@ -75,14 +99,15 @@ function formatMinutes(minutes: number): string {
 export type SlotStatus = {
   slot: DaySlot;
   done: boolean;
+  missed: boolean;
   status: SlotTimeStatus | null;
 };
 
 export function slotStatus(
   slots: readonly DaySlot[],
-  dayLogs: readonly { slot: string | null; at?: string | Date }[],
+  dayLogs: readonly { slot: string | null; at?: string | Date; skipped?: boolean }[],
 ): SlotStatus[] {
-  const bySlot = new Map<string, { slot: string | null; at?: string | Date }>();
+  const bySlot = new Map<string, { slot: string | null; at?: string | Date; skipped?: boolean }>();
   for (const log of dayLogs) {
     if (log.slot && !bySlot.has(log.slot)) bySlot.set(log.slot, log);
   }
@@ -91,6 +116,7 @@ export function slotStatus(
     return {
       slot,
       done: log !== undefined,
+      missed: log?.skipped === true,
       status: log?.at ? slotTimeStatus(slot, new Date(log.at)) : null,
     };
   });
@@ -98,7 +124,7 @@ export function slotStatus(
 
 export function allSlotsDone(
   slots: readonly DaySlot[],
-  dayLogs: readonly { slot: string | null; at?: string | Date }[],
+  dayLogs: readonly { slot: string | null; at?: string | Date; skipped?: boolean }[],
 ): boolean {
   if (slots.length === 0) return dayLogs.length > 0;
   return slotStatus(slots, dayLogs).every((entry) => entry.done);

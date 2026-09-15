@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, lt, lte, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, lte, ne, or } from "drizzle-orm";
 import { Router } from "express";
 import { summarizeBowl } from "../../../shared/bowls.ts";
 import type { DaySlot } from "../../../shared/slots.ts";
@@ -157,6 +157,12 @@ bowlsRouter.post("/:id/readings", requireAuth, requirePermission("canRecordHealt
     const base = input.preWeightGrams ?? summary.currentWeightGrams;
     if (base === null) throw new HttpError(400, "Add a starting weight first");
     weightGrams = base + (input.refillGrams ?? 0);
+  } else if (input.kind === "consume") {
+    if (summary.currentWeightGrams === null) throw new HttpError(400, "Add a starting weight first");
+    if ((input.consumedGrams ?? 0) > summary.currentWeightGrams) {
+      throw new HttpError(400, "That is more than the bowl holds");
+    }
+    weightGrams = summary.currentWeightGrams - (input.consumedGrams ?? 0);
   } else {
     weightGrams = input.weightGrams ?? 0;
   }
@@ -331,8 +337,11 @@ async function previousReading(
     .where(
       and(
         eq(bowlReadings.bowlId, bowlId),
-        lt(bowlReadings.readAt, before),
         ne(bowlReadings.id, excludeId),
+        or(
+          lt(bowlReadings.readAt, before),
+          and(eq(bowlReadings.readAt, before), lt(bowlReadings.id, excludeId)),
+        ),
       ),
     )
     .orderBy(desc(bowlReadings.readAt), desc(bowlReadings.id))

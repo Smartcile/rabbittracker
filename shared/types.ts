@@ -30,6 +30,35 @@ export type SettingsDto = {
   feedToken: string;
   shareToken: string;
   demoMode: boolean;
+  foodMinGramsPerKg: number;
+  foodMaxGramsPerKg: number;
+  waterMinMilliLitresPerKg: number;
+  waterMaxMilliLitresPerKg: number;
+};
+
+export type BreedNormDto = {
+  id: number;
+  breed: string;
+  minGrams: number;
+  maxGrams: number;
+};
+
+export type GrowthStageDto = {
+  id: number;
+  label: string;
+  guidance: string;
+  startDays: number;
+  endDays: number;
+  sex: "any" | "male" | "female";
+  sortOrder: number;
+};
+
+export type RabbitStageCompletionDto = {
+  id: number;
+  rabbitId: number;
+  stageId: number;
+  completedAt: string;
+  notes: string;
 };
 
 export type CalendarSubscriptionDto = {
@@ -277,7 +306,7 @@ export type CheckLogDto = {
   createdAt: string;
 };
 
-export type BowlReadingKind = "start" | "weigh" | "refill" | "refresh";
+export type BowlReadingKind = "start" | "weigh" | "consume" | "refill" | "refresh";
 
 export type BowlReadingDto = {
   id: number;
@@ -317,6 +346,7 @@ export type BowlDto = {
   id: number;
   rabbitId: number;
   label: string;
+  kind: "food" | "water";
   slots: DaySlot[];
   tareGrams: number | null;
   productId: number | null;
@@ -365,6 +395,7 @@ export type MedicationLogDto = {
   drugId: number | null;
   givenAt: string;
   slot: DaySlot | null;
+  skipped: boolean;
   amountMilliUnits: number | null;
   notes: string;
   createdAt: string;
@@ -472,6 +503,8 @@ export type ReportBundleDto = {
   bowls: BowlDto[];
   tasks: TaskDto[];
   taskCompletions: TaskCompletionDto[];
+  growthStages: GrowthStageDto[];
+  stageCompletions: RabbitStageCompletionDto[];
   drugs: DrugDto[];
   checklist: ChecklistSectionDto[];
   logTypes: CheckLogTypeDto[];

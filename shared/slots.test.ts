@@ -3,6 +3,7 @@ import {
   DAY_SLOT_LABELS,
   DAY_SLOTS,
   allSlotsDone,
+  nearestSlot,
   nextPendingSlot,
   slotForTime,
   slotRangeLabel,
@@ -30,6 +31,21 @@ describe("slotForTime", () => {
   });
 });
 
+describe("nearestSlot", () => {
+  it("picks the slot containing the time", () => {
+    expect(nearestSlot(["morning", "evening"], new Date(2026, 8, 1, 9, 0))).toBe("morning");
+  });
+
+  it("falls back to the closest configured slot", () => {
+    expect(nearestSlot(["morning", "night"], new Date(2026, 8, 1, 20, 30))).toBe("night");
+    expect(nearestSlot(["morning", "evening"], new Date(2026, 8, 1, 20, 30))).toBe("evening");
+  });
+
+  it("returns null without slots", () => {
+    expect(nearestSlot([], new Date(2026, 8, 1, 9, 0))).toBeNull();
+  });
+});
+
 describe("slotTimeStatus", () => {
   it("flags doses inside the window as on time", () => {
     expect(slotTimeStatus("morning", new Date(2026, 8, 1, 9, 30))).toBe("on_time");
@@ -49,9 +65,15 @@ describe("slotStatus", () => {
   it("marks slots that have a matching log", () => {
     const status = slotStatus(["morning", "evening"], [{ slot: "morning" }, { slot: null }]);
     expect(status).toEqual([
-      { slot: "morning", done: true, status: null },
-      { slot: "evening", done: false, status: null },
+      { slot: "morning", done: true, missed: false, status: null },
+      { slot: "evening", done: false, missed: false, status: null },
     ]);
+  });
+
+  it("marks skipped doses as missed but accounted for", () => {
+    const status = slotStatus(["morning"], [{ slot: "morning", skipped: true }]);
+    expect(status[0]?.done).toBe(true);
+    expect(status[0]?.missed).toBe(true);
   });
 
   it("reports the time status when the log carries a timestamp", () => {

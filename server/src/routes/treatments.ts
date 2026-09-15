@@ -7,16 +7,18 @@ import type { DrugRow, TreatmentRow } from "../db/schema.ts";
 import { findVisibleRabbit, requirePermission, visibleRabbitIds } from "../lib/access.ts";
 import { requireAuth } from "../lib/auth.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
+import { autoCompleteTreatments } from "../lib/treatmentStatus.ts";
 import { treatmentCreateSchema, treatmentUpdateSchema } from "../lib/validation.ts";
 
 export const treatmentsRouter = Router();
 
-export function listTreatmentsForRabbit(rabbitId: number): Promise<TreatmentRow[]> {
-  return db
+export async function listTreatmentsForRabbit(rabbitId: number): Promise<TreatmentRow[]> {
+  const rows = await db
     .select()
     .from(treatments)
     .where(eq(treatments.rabbitId, rabbitId))
     .orderBy(desc(treatments.startDate));
+  return autoCompleteTreatments(rows);
 }
 
 treatmentsRouter.get("/", requireAuth, async (req, res) => {
@@ -34,7 +36,8 @@ treatmentsRouter.get("/", requireAuth, async (req, res) => {
     .from(treatments)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(treatments.startDate));
-  res.json({ treatments: rows.map(treatmentToDto) });
+  const completed = await autoCompleteTreatments(rows);
+  res.json({ treatments: completed.map(treatmentToDto) });
 });
 
 treatmentsRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {

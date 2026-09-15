@@ -325,6 +325,7 @@ export const checkLogUpdateSchema = z
 export const bowlCreateSchema = z.object({
   rabbitId: z.number().int().positive(),
   label: z.string().trim().min(1, "Name is required").max(100),
+  kind: z.enum(["food", "water"]).default("food"),
   slots: z.array(z.enum(DAY_SLOTS)).max(DAY_SLOTS.length).default([]),
   tareGrams: z.number().int().min(0).max(1_000_000).nullable().optional(),
   productId: z.number().int().positive().nullable().optional(),
@@ -336,6 +337,7 @@ export const bowlCreateSchema = z.object({
 export const bowlUpdateSchema = z
   .object({
     label: z.string().trim().min(1, "Name is required").max(100).optional(),
+    kind: z.enum(["food", "water"]).optional(),
     slots: z.array(z.enum(DAY_SLOTS)).max(DAY_SLOTS.length).optional(),
     tareGrams: z.number().int().min(0).max(1_000_000).nullable().optional(),
     productId: z.number().int().positive().nullable().optional(),
@@ -346,17 +348,23 @@ export const bowlUpdateSchema = z
 
 export const bowlReadingCreateSchema = z
   .object({
-    kind: z.enum(["weigh", "refill", "refresh"]),
+    kind: z.enum(["weigh", "consume", "refill", "refresh"]),
     readAt: z.coerce.date(),
     slot: z.enum(DAY_SLOTS).nullable().optional(),
     weightGrams: z.number().int().min(0).max(1_000_000).optional(),
+    consumedGrams: z.number().int().min(1).max(1_000_000).optional(),
     refillGrams: z.number().int().min(1).max(1_000_000).optional(),
     preWeightGrams: z.number().int().min(0).max(1_000_000).optional(),
     finalWeightGrams: z.number().int().min(0).max(1_000_000).optional(),
     notes: z.string().trim().max(2000).default(""),
   })
   .refine(
-    (value) => (value.kind === "refill" ? value.refillGrams !== undefined : value.weightGrams !== undefined),
+    (value) =>
+      value.kind === "refill"
+        ? value.refillGrams !== undefined
+        : value.kind === "consume"
+          ? value.consumedGrams !== undefined
+          : value.weightGrams !== undefined,
     { message: "Enter a weight" },
   );
 
@@ -400,6 +408,56 @@ export const foodStockEntryCreateSchema = z.object({
   note: z.string().trim().max(2000).default(""),
 });
 
+export const breedNormCreateSchema = z.object({
+  breed: z.string().trim().min(1, "Breed is required").max(100),
+  minGrams: z.number().int().min(0).max(1_000_000),
+  maxGrams: z.number().int().min(1).max(1_000_000),
+});
+
+export const breedNormUpdateSchema = z
+  .object({
+    breed: z.string().trim().min(1, "Breed is required").max(100).optional(),
+    minGrams: z.number().int().min(0).max(1_000_000).optional(),
+    maxGrams: z.number().int().min(1).max(1_000_000).optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: "No changes provided",
+  });
+
+export const normsUpdateSchema = z.object({
+  foodMinGramsPerKg: z.number().int().min(0).max(10_000),
+  foodMaxGramsPerKg: z.number().int().min(0).max(10_000),
+  waterMinMilliLitresPerKg: z.number().int().min(0).max(10_000),
+  waterMaxMilliLitresPerKg: z.number().int().min(0).max(10_000),
+});
+
+export const growthStageCreateSchema = z.object({
+  label: z.string().trim().min(1, "Name is required").max(200),
+  guidance: z.string().trim().max(4000).default(""),
+  startDays: z.number().int().min(0).max(20_000).default(0),
+  endDays: z.number().int().min(0).max(20_000),
+  sex: z.enum(["any", "male", "female"]).default("any"),
+  sortOrder: z.number().int().min(0).max(10_000).default(0),
+});
+
+export const growthStageUpdateSchema = z
+  .object({
+    label: z.string().trim().min(1, "Name is required").max(200).optional(),
+    guidance: z.string().trim().max(4000).optional(),
+    startDays: z.number().int().min(0).max(20_000).optional(),
+    endDays: z.number().int().min(0).max(20_000).optional(),
+    sex: z.enum(["any", "male", "female"]).optional(),
+    sortOrder: z.number().int().min(0).max(10_000).optional(),
+  })
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: "No changes provided",
+  });
+
+export const stageCompletionSchema = z.object({
+  completedAt: dateOnlySchema,
+  notes: z.string().trim().max(2000).default(""),
+});
+
 export const taskCreateSchema = z.object({
   rabbitId: z.number().int().positive(),
   label: z.string().trim().min(1, "Name is required").max(200),
@@ -432,6 +490,7 @@ export const medicationLogCreateSchema = z.object({
   drugId: z.number().int().positive().nullable().optional(),
   givenAt: z.coerce.date(),
   slot: z.enum(DAY_SLOTS).nullable().optional(),
+  skipped: z.boolean().default(false),
   amountMilliUnits: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
   notes: z.string().trim().max(2000).default(""),
 });
@@ -442,6 +501,7 @@ export const medicationLogUpdateSchema = z
     drugId: z.number().int().positive().nullable().optional(),
     givenAt: z.coerce.date().optional(),
     slot: z.enum(DAY_SLOTS).nullable().optional(),
+    skipped: z.boolean().optional(),
     amountMilliUnits: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
     notes: z.string().trim().max(2000).optional(),
   })

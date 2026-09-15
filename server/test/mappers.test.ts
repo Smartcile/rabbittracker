@@ -171,6 +171,10 @@ describe("settingsToDto", () => {
       feedToken: "abc123",
       shareToken: "def456",
       demoMode: true,
+      foodMinGramsPerKg: 20,
+      foodMaxGramsPerKg: 60,
+      waterMinMilliLitresPerKg: 50,
+      waterMaxMilliLitresPerKg: 150,
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
       updatedAt: new Date("2026-01-01T00:00:00.000Z"),
     };
@@ -179,6 +183,10 @@ describe("settingsToDto", () => {
       feedToken: "abc123",
       shareToken: "def456",
       demoMode: true,
+      foodMinGramsPerKg: 20,
+      foodMaxGramsPerKg: 60,
+      waterMinMilliLitresPerKg: 50,
+      waterMaxMilliLitresPerKg: 150,
     });
   });
 });

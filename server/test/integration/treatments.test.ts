@@ -115,6 +115,43 @@ describe("treatment slots integration", () => {
     );
   });
 
+  it("records a missed dose without deducting stock", async () => {
+    const rabbit = await createRabbit();
+    const drug = await createDrug();
+    const treatment = await createTreatment(rabbit.id, {
+      drugId: drug.id,
+      doseMilliUnits: 667,
+      slots: ["morning"],
+    });
+    const log = await logDose({
+      rabbitId: rabbit.id,
+      treatmentId: treatment.id,
+      skipped: true,
+    });
+    expect(log.skipped).toBe(true);
+    expect(log.amountMilliUnits).toBeNull();
+    expect(await stockFor(drug.id)).toBe(10000);
+  });
+
+  it("auto-completes a treatment once its last dose is recorded", async () => {
+    const rabbit = await createRabbit();
+    const treatment = await createTreatment(rabbit.id, {
+      endDate: "2020-01-05",
+      slots: ["morning"],
+    });
+    const before = await api<{ treatments: TreatmentDto[] }>(ctx, "/api/treatments");
+    expect(before.treatments.find((row) => row.id === treatment.id)?.status).toBe("active");
+
+    await logDose({
+      rabbitId: rabbit.id,
+      treatmentId: treatment.id,
+      givenAt: "2020-01-05T08:00:00.000Z",
+      skipped: true,
+    });
+    const after = await api<{ treatments: TreatmentDto[] }>(ctx, "/api/treatments");
+    expect(after.treatments.find((row) => row.id === treatment.id)?.status).toBe("completed");
+  });
+
   it("filters dose logs by date range", async () => {
     const rabbit = await createRabbit();
     const treatment = await createTreatment(rabbit.id);

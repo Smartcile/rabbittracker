@@ -4,6 +4,7 @@ import type {
   AppointmentStatus,
   BowlDto,
   BowlReadingKind,
+  BreedNormDto,
   CalendarEntryDto,
   CalendarEventDto,
   CalendarRepeat,
@@ -25,10 +26,12 @@ import type {
   Energy,
   FaqEntryDto,
   FaqGroupDto,
+  GrowthStageDto,
   HealthCheckDto,
   JournalEntryDto,
   RabbitDto,
   RabbitSex,
+  RabbitStageCompletionDto,
   RabbitStatus,
   SettingsDto,
   TaskCompletionDto,
@@ -50,6 +53,7 @@ import type {
   AppointmentRow,
   BowlReadingRow,
   BowlRow,
+  BreedNormRow,
   CalendarEntryRow,
   CalendarEventRow,
   CalendarSubscriptionRow,
@@ -66,6 +70,7 @@ import type {
   DrugRow,
   FoodProductRow,
   FoodStockEntryRow,
+  GrowthStageRow,
   MedicationLogRow,
   FaqEntryRow,
   HealthCheckRow,
@@ -73,6 +78,7 @@ import type {
   JournalPhotoRow,
   LookupRow,
   RabbitRow,
+  RabbitStageCompletionRow,
   RabbitTaskRow,
   SettingsRow,
   TaskCompletionRow,
@@ -106,6 +112,44 @@ export function settingsToDto(row: SettingsRow): SettingsDto {
     feedToken: row.feedToken,
     shareToken: row.shareToken,
     demoMode: row.demoMode,
+    foodMinGramsPerKg: row.foodMinGramsPerKg,
+    foodMaxGramsPerKg: row.foodMaxGramsPerKg,
+    waterMinMilliLitresPerKg: row.waterMinMilliLitresPerKg,
+    waterMaxMilliLitresPerKg: row.waterMaxMilliLitresPerKg,
+  };
+}
+
+export function breedNormToDto(row: BreedNormRow): BreedNormDto {
+  return {
+    id: row.id,
+    breed: row.breed,
+    minGrams: row.minGrams,
+    maxGrams: row.maxGrams,
+  };
+}
+
+export function growthStageToDto(row: GrowthStageRow): GrowthStageDto {
+  return {
+    id: row.id,
+    label: row.label,
+    guidance: row.guidance,
+    startDays: row.startDays,
+    endDays: row.endDays,
+    sex: row.sex === "male" || row.sex === "female" ? row.sex : "any",
+    sortOrder: row.sortOrder,
+  };
+}
+
+export function stageCompletionToDto(
+  row: RabbitStageCompletionRow,
+  rabbitId: number,
+): RabbitStageCompletionDto {
+  return {
+    id: row.id,
+    rabbitId,
+    stageId: row.stageId,
+    completedAt: row.completedAt,
+    notes: row.notes,
   };
 }
 
@@ -348,6 +392,7 @@ export function bowlToDto(row: BowlRow, readings: BowlReadingRow[]): BowlDto {
     id: row.id,
     rabbitId: row.rabbitId,
     label: row.label,
+    kind: row.kind === "water" ? "water" : "food",
     slots: daySlots(row.slots),
     tareGrams: row.tareGrams,
     productId: row.productId,
@@ -381,7 +426,9 @@ export function bowlToDto(row: BowlRow, readings: BowlReadingRow[]): BowlDto {
 }
 
 function bowlReadingKind(value: string): BowlReadingKind {
-  return value === "start" || value === "refill" || value === "refresh" ? value : "weigh";
+  return value === "start" || value === "consume" || value === "refill" || value === "refresh"
+    ? value
+    : "weigh";
 }
 
 export function foodStockEntryToDto(row: FoodStockEntryRow): FoodStockEntryDto {
@@ -460,6 +507,7 @@ export function medicationLogToDto(row: MedicationLogRow): MedicationLogDto {
     drugId: row.drugId,
     givenAt: row.givenAt.toISOString(),
     slot: daySlot(row.slot),
+    skipped: row.skipped,
     amountMilliUnits: row.amountMilliUnits,
     notes: row.notes,
     createdAt: row.createdAt.toISOString(),

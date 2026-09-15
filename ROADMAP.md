@@ -76,6 +76,12 @@
       linked food product, editable readings and a daily consumption chart, and a new Food &
       supplies catalog tracks stock with top-ups drawing from it.
 
+- [x] **Growth norms, stages and missed doses.** Editable adult weight ranges per breed scaled by
+      age, plus expected daily food/water per kg, shown as In range / Watch / Alert on the weight
+      and Food & water cards; age-based growth stages with tick-off; direct consumption entry for
+      bowls; and doses can be marked missed, with courses auto-completing once the end date has
+      passed and the last dose is accounted for. Light theme is now the default.
+
 ## Planned features (agreed but not built)
 
 These are queued from the "bunny powerhouse" list; pick them up in any order.

@@ -4,8 +4,8 @@ import type { DaySlot } from "../../../shared/slots.ts";
 import {
   DAY_SLOT_LABELS,
   DAY_SLOTS,
+  nearestSlot,
   nextPendingSlot,
-  slotForTime,
   slotRangeLabel,
   slotTimeStatus,
 } from "../../../shared/slots.ts";
@@ -72,7 +72,31 @@ export function openMedicationLogModal(options: {
   let slot: DaySlot | null = options.slot ?? editing?.slot ?? null;
   let slotTouched = options.slot !== undefined || editing !== undefined;
   let overrideAll = false;
+  let skipped = editing?.skipped ?? false;
   const slotField = h("div", { class: "field" });
+  const amountField = h(
+    "div",
+    { class: "field" },
+    h("label", null, "Amount given"),
+    amount,
+    amountHint,
+  );
+  const missedToggle = toggleButton({
+    label: "Didn't give this dose",
+    checked: skipped,
+    onChange: (checked) => {
+      skipped = checked;
+      syncSkipped();
+      syncHint();
+    },
+  });
+  const missedField = h(
+    "div",
+    { class: "field" },
+    h("label", null, "Missed dose"),
+    h("div", { class: "row wrap" }, missedToggle.root),
+    h("span", { class: "dim small" }, "Marks the dose as missed — no stock is deducted."),
+  );
   const changeForward = toggleButton({ label: "Change going forward", checked: false });
   const forwardField = h(
     "div",
@@ -161,13 +185,10 @@ export function openMedicationLogModal(options: {
     const logged = dayLogs(treatment.id);
     const pending = nextPendingSlot(treatment.slots, logged);
     const reference = when.value ? new Date(when.value) : new Date();
-    const timeSlot = slotForTime(reference);
     const keep =
       slotTouched && slot !== null && available.includes(slot)
         ? slot
-        : available.includes(timeSlot)
-          ? timeSlot
-          : (pending ?? available[0]);
+        : (nearestSlot(available, reference) ?? pending ?? available[0]);
     slot = keep;
     const group = optionButtons(
       available.map((value) => {
@@ -242,7 +263,9 @@ export function openMedicationLogModal(options: {
               entry.notes ? h("span", { class: "dim small" }, entry.notes) : null,
             ),
             h("span", { class: "spacer" }),
-            h("span", { class: "dim small" }, amountLabel(entry)),
+            entry.skipped
+              ? h("span", { class: "badge watch" }, "Missed")
+              : h("span", { class: "dim small" }, amountLabel(entry)),
             h(
               "button",
               { class: "btn ghost small", type: "button", onClick: () => void editEntry(entry) },
@@ -295,8 +318,14 @@ export function openMedicationLogModal(options: {
     }
   };
 
+  const syncSkipped = (): void => {
+    amountField.style.display = skipped ? "none" : "";
+    save.textContent = skipped ? "Log missed dose" : editing ? "Save dose" : "Log dose";
+    syncOverride();
+  };
+
   const overrideFor = (): { treatment: TreatmentDto; drug: DrugDto; amount: number } | null => {
-    if (editing) return null;
+    if (editing || skipped) return null;
     const treatment = selectedTreatment();
     if (!treatment || treatment.drugId === null) return null;
     const drug = options.drugs.find((item) => item.id === treatment.drugId);
@@ -374,8 +403,10 @@ export function openMedicationLogModal(options: {
     renderSlotPicker();
     renderDayList();
     syncHint();
+    syncSkipped();
   } else {
     syncFromTreatment();
+    syncSkipped();
   }
   editTreatmentField.style.display = selectedTreatment() ? "" : "none";
   treatmentSelect.addEventListener("change", () => {
@@ -398,8 +429,8 @@ export function openMedicationLogModal(options: {
             return;
           }
           const amountText = amount.value.trim();
-          const amountMilliUnits = parsedAmount();
-          if (amountText && amountMilliUnits === null) {
+          const amountMilliUnits = skipped ? null : parsedAmount();
+          if (!skipped && amountText && amountMilliUnits === null) {
             error.textContent = "Enter a valid amount.";
             error.style.display = "";
             return;
@@ -423,6 +454,7 @@ export function openMedicationLogModal(options: {
                 drugId: drugSelect.value ? Number(drugSelect.value) : null,
                 givenAt: givenAt.toISOString(),
                 slot,
+                skipped,
                 amountMilliUnits,
                 notes: notes.value.trim(),
               });
@@ -445,11 +477,12 @@ export function openMedicationLogModal(options: {
                 drugId: drugSelect.value ? Number(drugSelect.value) : null,
                 givenAt: givenAt.toISOString(),
                 slot,
+                skipped,
                 amountMilliUnits,
                 notes: notes.value.trim(),
               });
             }
-            toast(editing ? "Dose updated" : "Dose logged");
+            toast(editing ? "Dose updated" : skipped ? "Missed dose logged" : "Dose logged");
             options.onSaved();
             modal.close();
           } catch (err) {
@@ -466,8 +499,9 @@ export function openMedicationLogModal(options: {
       h("div", { class: "field" }, h("label", null, "Drug"), drugSelect),
       slotField,
       forwardField,
-      h("div", { class: "field" }, h("label", null, "Amount given"), amount, amountHint),
+      amountField,
       overrideField,
+      missedField,
       h("div", { class: "field" }, h("label", null, "When"), when),
       h("div", { class: "field" }, h("label", null, "Notes"), notes),
       dayListLabel,

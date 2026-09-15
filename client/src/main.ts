@@ -15,6 +15,8 @@ import { renderFaqPage } from "./pages/faq.ts";
 import { renderFoodPage } from "./pages/food.ts";
 import { renderHistoryPage } from "./pages/history.ts";
 import { renderLookupsPage } from "./pages/lookups.ts";
+import { renderNormsPage } from "./pages/norms.ts";
+import { renderStagesPage } from "./pages/stages.ts";
 import { renderHomePage } from "./pages/home.ts";
 import { renderRabbitPage } from "./pages/rabbit.ts";
 import { renderRabbitReportPage } from "./pages/report.ts";
@@ -195,6 +197,12 @@ function render(): void {
       break;
     case "food":
       page = renderFoodPage(ctx);
+      break;
+    case "norms":
+      page = me.user.isAdmin ? renderNormsPage(ctx) : renderHomePage(ctx);
+      break;
+    case "stages":
+      page = me.user.isAdmin ? renderStagesPage(ctx) : renderHomePage(ctx);
       break;
     case "faq":
       page = renderFaqPage(ctx);

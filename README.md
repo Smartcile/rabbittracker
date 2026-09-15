@@ -54,8 +54,8 @@ Desktop:
   daily consumption chart at the top of the card overlays every bowl with its day-by-day average,
   readings can be edited or deleted, and bowls can be scheduled with times of day: the calendar
   shows a chip per bowl per time and tapping it logs a weigh-in or top-up for that slot. Record the
-  bowl's empty weight to see how much is actually in it, and link a food product so top-ups draw
-  from its stock.
+  bowl's empty weight to see how much is actually in it, link a food product so top-ups draw from
+  its stock, and enter consumption directly for greens and treats (the new weight is calculated).
 - **Food & supplies** — a catalog for hay, pellets, greens and treats with a running stock total
   (add or remove amounts), a low-stock level and a type list. Link a product to a bowl and every
   top-up draws the amount added from its stock; editing or deleting the top-up puts it back.
@@ -71,8 +71,16 @@ Desktop:
   doses can be logged per day, linked doses are grouped under the treatment on the bunny page,
   one-off doses stay in the medication log, and either can be edited later. Logged doses deduct from
   drug stock earliest-expiry-first; editing or deleting a log reconciles it. Overriding the amount
-  when logging can update the treatment's dose from that day on. Pop-out forms warn before closing
-  with unsaved changes.
+  when logging can update the treatment's dose from that day on. A dose you skipped can be logged
+  as **Missed** (no stock is deducted, the slot shows a red cross), and a course **auto-completes**
+  once its end date has passed and the last scheduled dose has been recorded or marked missed.
+  Pop-out forms warn before closing with unsaved changes.
+- **Growth norms** — starter adult weight ranges per breed (editable in Settings) scaled by age,
+  plus expected daily food and water per kilogram. The weight card and the Food & water card flag
+  when a bunny drifts into a watch or alert range.
+- **Growing up** — age-based care stages (weaning, diet transitions, desexing windows, adult and
+  senior care) computed from the bunny's date of birth, with tick-off, dates and notes. The stage
+  list is editable in Settings, and the report includes the completed stages.
 - Manual weigh-ins with a one-tap "Log weight" action.
 - Weight trend chart with loss alerts and target-range checks.
 - Timestamped notes & photos journal per bunny.
@@ -116,7 +124,7 @@ Desktop:
 - Demo mode — a Settings switch that loads sample bunnies, records, appointments (dated around the
   current month), journal entries, bonds, a vet and a clinic, and removes every demo row when
   switched off.
-- Installable PWA with light and dark themes.
+- Installable PWA with light and dark themes (light is the default).
 
 ## Quick start (Docker)
 

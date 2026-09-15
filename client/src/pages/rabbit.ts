@@ -12,13 +12,17 @@ import type {
   CheckLogDto,
   CheckLogTypeDto,
   ChecklistSectionDto,
+  BreedNormDto,
   DrugDto,
   FoodProductDto,
+  GrowthStageDto,
   HealthCheckDto,
   JournalEntryDto,
   LookupDto,
   MedicationLogDto,
   RabbitDto,
+  RabbitStageCompletionDto,
+  SettingsDto,
   TaskCompletionDto,
   TaskDto,
   TreatmentDto,
@@ -27,6 +31,13 @@ import type {
 } from "../../../shared/types.ts";
 import { formatDrugAmount, stockLevel, stockTotalMilliUnits } from "../../../shared/drugs.ts";
 import { formatFoodAmount } from "../../../shared/food.ts";
+import {
+  ageInDays,
+  expectedWeightRange,
+  rangeLevel,
+  stagePhase,
+} from "../../../shared/growth.ts";
+import { summarizeBowlByDay } from "../../../shared/bowls.ts";
 import {
   ageLabel,
   careDueStatus,
@@ -57,6 +68,7 @@ import { toast } from "../components/toast.ts";
 import { optionButtons } from "../components/toggle.ts";
 import { openTreatmentModal } from "../components/treatmentModal.ts";
 import { slotChips, slotTimeBadge } from "../components/slotChips.ts";
+import { openStageCompleteModal } from "../components/stageModal.ts";
 import { openVaccinationModal } from "../components/vaccinationModal.ts";
 import { renderWeightChart } from "../components/weightChart.ts";
 import { openWeightModal } from "../components/weightModal.ts";
@@ -69,6 +81,7 @@ type RabbitBundle = {
   rabbit: RabbitDto;
   carers: UserDto[];
   bonds: RabbitDto[];
+  stageCompletions: RabbitStageCompletionDto[];
   checks: HealthCheckDto[];
   treatments: TreatmentDto[];
   vaccinations: VaccinationDto[];
@@ -97,6 +110,9 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
         bowlResponse,
         taskResponse,
         foodResponse,
+        normsResponse,
+        settingsResponse,
+        stagesResponse,
       ] = await Promise.all([
         api.get<RabbitBundle>(`/api/rabbits/${id}`),
         api.get<{ drugs: DrugDto[] }>("/api/drugs"),
@@ -108,15 +124,27 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
         api.get<{ bowls: BowlDto[] }>(`/api/bowls?rabbitId=${id}`),
         api.get<{ tasks: TaskDto[]; completions: TaskCompletionDto[] }>(`/api/tasks?rabbitId=${id}`),
         api.get<{ products: FoodProductDto[] }>("/api/food-products"),
+        api.get<{ norms: BreedNormDto[] }>("/api/breed-norms"),
+        api.get<{ settings: SettingsDto }>("/api/settings"),
+        api.get<{ stages: GrowthStageDto[] }>("/api/growth-stages"),
       ]);
       const careTypes = lookups.filter((lookup) => lookup.kind === "care_type");
       const sections: (HTMLElement | null)[] = [
         header(bundle.rabbit, bundle.checks, load, canEdit),
+        stagesCard(bundle.rabbit, stagesResponse.stages, bundle.stageCompletions, load, canRecord),
         dailyChecksCard(bundle.rabbit, logTypes, checkLogResponse.logs, load, canRecord),
-        bowlsCard(bundle.rabbit, bowlResponse.bowls, foodResponse.products, load, canRecord),
+        bowlsCard(
+          bundle.rabbit,
+          bowlResponse.bowls,
+          foodResponse.products,
+          settingsResponse.settings,
+          bundle.checks,
+          load,
+          canRecord,
+        ),
         quickLogCard(bundle.rabbit, checklistSections, load, canRecord),
         tasksCard(bundle.rabbit, taskResponse.tasks, taskResponse.completions, load, canRecord),
-        weightCard(bundle.rabbit, bundle.checks, load, canRecord),
+        weightCard(bundle.rabbit, bundle.checks, normsResponse.norms, load, canRecord),
         checksCard(bundle.rabbit, bundle.checks, checklistSections, logTypes, load, canRecord),
         vaccinationsCard(bundle.rabbit, bundle.vaccinations, load, canRecord),
         careCard(bundle.rabbit, bundle.careSchedules, bundle.careRecords, careTypes, load, canRecord),
@@ -293,6 +321,7 @@ function header(
 function weightCard(
   rabbit: RabbitDto,
   checks: HealthCheckDto[],
+  norms: BreedNormDto[],
   reload: () => Promise<void>,
   canRecord: boolean,
 ): HTMLElement {
@@ -311,14 +340,41 @@ function weightCard(
     },
     "Log weight",
   );
-  const min = rabbit.targetWeightMinGrams;
-  const max = rabbit.targetWeightMaxGrams;
-  const targetText =
-    min != null || max != null
-      ? `Target: ${min != null ? formatWeight(min) : "?"} – ${max != null ? formatWeight(max) : "?"}`
+
+  const manual =
+    rabbit.targetWeightMinGrams != null || rabbit.targetWeightMaxGrams != null
+      ? {
+          minGrams: rabbit.targetWeightMinGrams ?? 0,
+          maxGrams: rabbit.targetWeightMaxGrams ?? 1_000_000,
+        }
       : null;
-  const outside =
-    latestWeight != null && ((min != null && latestWeight < min) || (max != null && latestWeight > max));
+  const adult =
+    norms.find((norm) => norm.breed.trim().toLowerCase() === rabbit.breed.trim().toLowerCase()) ??
+    null;
+  const ageDays = rabbit.dateOfBirth ? ageInDays(rabbit.dateOfBirth, new Date()) : null;
+  const expected = adult && ageDays != null ? expectedWeightRange(adult, ageDays) : null;
+  const range = manual ?? expected;
+  const level = latestWeight != null && range ? rangeLevel(latestWeight, range) : null;
+
+  const rangeText = manual
+    ? `Target ${formatWeight(manual.minGrams)} – ${formatWeight(manual.maxGrams)}`
+    : expected
+      ? `Expected ${formatWeight(expected.minGrams)} – ${formatWeight(expected.maxGrams)} (${[
+          rabbit.dateOfBirth ? ageLabel(rabbit.dateOfBirth) : null,
+          rabbit.breed || null,
+        ]
+          .filter(Boolean)
+          .join(" · ")})`
+      : null;
+  const levelBadge =
+    level === "ok"
+      ? h("span", { class: "badge ok" }, "In range")
+      : level === "watch"
+        ? h("span", { class: "badge watch" }, "Watch")
+        : level === "alert"
+          ? h("span", { class: "badge danger" }, "Alert")
+          : null;
+
   return h(
     "div",
     { class: "card" },
@@ -330,15 +386,142 @@ function weightCard(
       canRecord ? logWeight : null,
     ),
     renderWeightChart(checks),
-    targetText
+    rangeText
       ? h(
           "p",
           { class: "dim small", style: { margin: "0.5rem 0 0" } },
-          targetText,
-          outside ? h("span", { class: "badge watch", style: { marginLeft: "0.5rem" } }, "Outside target") : null,
+          rangeText,
+          levelBadge ? h("span", { style: { marginLeft: "0.5rem" } }, levelBadge) : null,
         )
       : null,
   );
+}
+
+function stagesCard(
+  rabbit: RabbitDto,
+  stages: GrowthStageDto[],
+  completions: RabbitStageCompletionDto[],
+  reload: () => Promise<void>,
+  canRecord: boolean,
+): HTMLElement | null {
+  if (stages.length === 0) return null;
+  const ageDays = rabbit.dateOfBirth ? ageInDays(rabbit.dateOfBirth, new Date()) : null;
+  const completionByStage = new Map(
+    completions.map((completion) => [completion.stageId, completion]),
+  );
+  const relevant = stages
+    .filter((stage) => stage.sex === "any" || stage.sex === rabbit.sex)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const entries = relevant.map((stage) => ({
+    stage,
+    completion: completionByStage.get(stage.id) ?? null,
+    phase: stagePhase(stage, ageDays ?? 0, completionByStage.has(stage.id)),
+  }));
+  const ordered = [
+    ...entries.filter((entry) => entry.phase === "current" || entry.phase === "overdue"),
+    ...entries.filter((entry) => entry.phase === "upcoming").slice(0, 2),
+    ...entries.filter((entry) => entry.phase === "done"),
+  ];
+  const list = h("div", { class: "stack", style: { gap: "0" } });
+  for (const entry of ordered) list.append(stageRow(rabbit, entry, reload, canRecord));
+  return h(
+    "div",
+    { class: "card" },
+    h(
+      "div",
+      { class: "card-title" },
+      h("h2", null, "Growing up"),
+      h("span", { class: "spacer" }),
+      rabbit.dateOfBirth ? h("span", { class: "dim small" }, ageLabel(rabbit.dateOfBirth)) : null,
+    ),
+    rabbit.dateOfBirth
+      ? null
+      : h("p", { class: "dim small" }, "Add a date of birth to see the age-based stages."),
+    list,
+  );
+}
+
+function stageRow(
+  rabbit: RabbitDto,
+  entry: {
+    stage: GrowthStageDto;
+    completion: RabbitStageCompletionDto | null;
+    phase: ReturnType<typeof stagePhase>;
+  },
+  reload: () => Promise<void>,
+  canRecord: boolean,
+): HTMLElement {
+  const { stage, completion, phase } = entry;
+  const badge =
+    phase === "done"
+      ? h("span", { class: "badge ok" }, "Done")
+      : phase === "current"
+        ? h("span", { class: "badge accent" }, "Current")
+        : phase === "overdue"
+          ? h("span", { class: "badge watch" }, "Overdue")
+          : h("span", { class: "badge" }, "Upcoming");
+  return h(
+    "div",
+    { class: "list-row" },
+    h(
+      "div",
+      { class: "stack", style: { gap: "0.15rem" } },
+      h("div", { class: "row wrap", style: { gap: "0.35rem" } }, h("strong", null, stage.label), badge),
+      h("span", { class: "dim small" }, ageWindowLabel(stage)),
+      stage.guidance ? h("span", { class: "dim small" }, stage.guidance) : null,
+      completion
+        ? h(
+            "span",
+            { class: "dim small" },
+            `Done ${fmtCalendarDate(completion.completedAt)}${completion.notes ? ` · ${completion.notes}` : ""}`,
+          )
+        : null,
+    ),
+    h("span", { class: "spacer" }),
+    canRecord
+      ? completion
+        ? h(
+            "button",
+            { class: "btn ghost small", type: "button", onClick: () => void undoStage(rabbit, stage, reload) },
+            "Undo",
+          )
+        : h(
+            "button",
+            {
+              class: "btn outline small",
+              type: "button",
+              onClick: () =>
+                openStageCompleteModal({ rabbitId: rabbit.id, stage, onSaved: () => void reload() }),
+            },
+            "Mark done",
+          )
+      : null,
+  );
+}
+
+function ageWindowLabel(stage: GrowthStageDto): string {
+  const months = (days: number) => {
+    const value = days / 30;
+    return value >= 12 ? `${Number((value / 12).toFixed(1))} yr` : `${Number(value.toFixed(1))} mo`;
+  };
+  return `${months(stage.startDays)} – ${stage.endDays >= 20_000 ? "onwards" : months(stage.endDays)}`;
+}
+
+async function undoStage(
+  rabbit: RabbitDto,
+  stage: GrowthStageDto,
+  reload: () => Promise<void>,
+): Promise<void> {
+  const confirmed = await confirmDialog({
+    title: `Undo ${stage.label}?`,
+    message: "The stage becomes due again.",
+    confirmLabel: "Undo",
+    danger: true,
+  });
+  if (!confirmed) return;
+  await api.del(`/api/rabbits/${rabbit.id}/stages/${stage.id}`);
+  toast("Stage reopened");
+  await reload();
 }
 
 function feedingCard(
@@ -654,6 +837,8 @@ function bowlsCard(
   rabbit: RabbitDto,
   bowls: BowlDto[],
   products: FoodProductDto[],
+  settings: SettingsDto,
+  checks: HealthCheckDto[],
   reload: () => Promise<void>,
   canRecord: boolean,
 ): HTMLElement {
@@ -676,11 +861,60 @@ function bowlsCard(
     h(
       "p",
       { class: "dim small" },
-      "Track consumption by weighing the bowl. Each weigh-in rolls the baseline forward, top-ups can add to the current weight or set a new total, and refresh starts a new period.",
+      "Track consumption by weighing the bowl. Each weigh-in rolls the baseline forward, top-ups can add to the current weight or set a new total, and refresh starts a new period. Use Weigh & top up to record the weigh-in and the amount added in one go.",
     ),
+    consumptionNorms(bowls, settings, checks),
     renderBowlsChart(bowls),
     list,
   );
+}
+
+function consumptionNorms(
+  bowls: BowlDto[],
+  settings: SettingsDto,
+  checks: HealthCheckDto[],
+): HTMLElement | null {
+  const weightGrams = checks.find((check) => check.weightGrams !== null)?.weightGrams ?? null;
+  if (weightGrams == null) return null;
+  const kg = weightGrams / 1000;
+  const rows: HTMLElement[] = [];
+  for (const kind of ["water", "food"] as const) {
+    const kindBowls = bowls.filter((bowl) => bowl.kind === kind && bowl.readings.length >= 2);
+    if (kindBowls.length === 0) continue;
+    const average = kindBowls.reduce(
+      (sum, bowl) => sum + summarizeBowlByDay(bowl.readings).averageConsumptionGrams,
+      0,
+    );
+    const min = Math.round(
+      (kind === "water" ? settings.waterMinMilliLitresPerKg : settings.foodMinGramsPerKg) * kg,
+    );
+    const max = Math.round(
+      (kind === "water" ? settings.waterMaxMilliLitresPerKg : settings.foodMaxGramsPerKg) * kg,
+    );
+    const level = rangeLevel(average, { minGrams: min, maxGrams: max });
+    const badge =
+      level === "ok"
+        ? h("span", { class: "badge ok" }, "In range")
+        : level === "watch"
+          ? h("span", { class: "badge watch" }, "Watch")
+          : h("span", { class: "badge danger" }, "Alert");
+    rows.push(
+      h(
+        "div",
+        { class: "row wrap", style: { gap: "0.4rem" } },
+        h("strong", null, kind === "water" ? "Water" : "Food"),
+        h(
+          "span",
+          { class: "mono small" },
+          `${average} ${kind === "water" ? "ml" : "g"}/day`,
+        ),
+        h("span", { class: "dim small" }, `norm ${min}–${max} ${kind === "water" ? "ml" : "g"}`),
+        badge,
+      ),
+    );
+  }
+  if (rows.length === 0) return null;
+  return h("div", { class: "calc-box" }, ...rows);
 }
 
 function bowlPanel(
@@ -735,6 +969,37 @@ function bowlPanel(
               openBowlReadingModal({ bowl, mode: "weigh", product: product ?? undefined, onSaved: () => void reload() }),
           },
           "Weigh",
+        ),
+        h(
+          "button",
+          {
+            class: "btn outline small",
+            type: "button",
+            onClick: () =>
+              openBowlReadingModal({
+                bowl,
+                mode: "consume",
+                product: product ?? undefined,
+                onSaved: () => void reload(),
+              }),
+          },
+          "Consumption",
+        ),
+        h(
+          "button",
+          {
+            class: "btn outline small",
+            type: "button",
+            onClick: () =>
+              openBowlReadingModal({
+                bowl,
+                mode: "refill",
+                weighFirst: true,
+                product: product ?? undefined,
+                onSaved: () => void reload(),
+              }),
+          },
+          "Weigh & top up",
         ),
         h(
           "button",
@@ -815,11 +1080,11 @@ function bowlReadingRow(
   reload: () => Promise<void>,
   canRecord: boolean,
 ): HTMLElement {
-  const delta =
-    reading.consumptionGrams > 0
-      ? `-${reading.consumptionGrams} g`
-      : reading.refillGrams > 0
-        ? `+${reading.refillGrams} g`
+  const movement =
+    reading.kind === "refill" && reading.refillGrams > 0
+      ? `topped up ${reading.refillGrams} g`
+      : reading.consumptionGrams > 0
+        ? `consumed ${reading.consumptionGrams} g`
         : null;
   return h(
     "div",
@@ -835,14 +1100,23 @@ function bowlReadingRow(
           null,
           bowlReadingKindLabel(reading.kind),
           reading.slot ? h("span", { class: "dim small" }, ` · ${DAY_SLOT_LABELS[reading.slot]}`) : null,
-          delta ? h("span", { class: "dim small" }, ` ${delta}`) : null,
         ),
         slotTimeBadge(reading.slot, reading.readAt),
       ),
       reading.notes ? h("span", { class: "dim small" }, reading.notes) : null,
     ),
     h("span", { class: "spacer" }),
-    h("span", { class: "dim small" }, `${fmtDate(reading.readAt)} ${fmtTime(reading.readAt)} · ${reading.weightGrams} g`),
+    h(
+      "div",
+      { class: "stack", style: { gap: "0.1rem", alignItems: "flex-end", textAlign: "right" } },
+      h("span", { class: "dim small" }, `${fmtDate(reading.readAt)} ${fmtTime(reading.readAt)}`),
+      h(
+        "span",
+        { class: "mono small" },
+        `${reading.weightGrams} g total`,
+        movement ? h("span", { class: "dim" }, ` · ${movement}`) : null,
+      ),
+    ),
     canRecord
       ? h(
           "button",
@@ -1116,8 +1390,9 @@ function medicationLogRow(
   canRecord: boolean,
 ): HTMLElement {
   const drug = drugs.find((item) => item.id === entry.drugId);
-  const amount =
-    entry.amountMilliUnits != null
+  const amount = entry.skipped
+    ? "Missed"
+    : entry.amountMilliUnits != null
       ? formatDrugAmount(entry.amountMilliUnits, drug?.unit ?? "dose")
       : "";
   const detail = [entry.slot ? DAY_SLOT_LABELS[entry.slot] : null, amount]
@@ -1133,7 +1408,10 @@ function medicationLogRow(
       h(
         "div",
         { class: "row wrap", style: { gap: "0.35rem" } },
-        detail ? h("span", { class: "dim small" }, detail) : null,
+        detail
+          ? h("span", { class: entry.skipped ? "small" : "dim small" }, detail)
+          : null,
+        entry.skipped ? h("span", { class: "badge watch" }, "Missed") : null,
         slotTimeBadge(entry.slot, entry.givenAt),
       ),
       entry.notes ? h("span", { class: "dim small" }, entry.notes) : null,
@@ -1608,7 +1886,11 @@ function treatmentRow(
     treatment.status === "active"
       ? slotChips({
           slots: treatment.slots,
-          logs: todayLogs.map((entry) => ({ slot: entry.slot, at: entry.givenAt })),
+          logs: todayLogs.map((entry) => ({
+            slot: entry.slot,
+            at: entry.givenAt,
+            skipped: entry.skipped,
+          })),
           canRecord,
           onLog: (slot) =>
             openMedicationLogModal({

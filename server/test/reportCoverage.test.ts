@@ -14,6 +14,7 @@ const REPORTED_TABLES = new Set([
   "medication_logs",
   "rabbit_bonds",
   "rabbit_carers",
+  "rabbit_stage_completions",
   "rabbit_tasks",
   "treatments",
   "vaccinations",

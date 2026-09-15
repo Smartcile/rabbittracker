@@ -25,6 +25,8 @@ const BUSINESS_TABLES = [
   "drugs",
   "drug_batches",
   "food_products",
+  "breed_norms",
+  "growth_stages",
 ].join(", ");
 
 async function ensureTestDatabase(): Promise<void> {

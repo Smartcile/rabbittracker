@@ -45,11 +45,12 @@ medicationLogsRouter.post("/", requireAuth, requirePermission("canRecordHealth")
   if (input.treatmentId != null) {
     const treatment = await findTreatment(input.treatmentId, input.rabbitId);
     if (drugId === null) drugId = treatment.drugId;
-    if (amountMilliUnits === null) amountMilliUnits = treatment.doseMilliUnits;
+    if (amountMilliUnits === null && !input.skipped) amountMilliUnits = treatment.doseMilliUnits;
     if (slot === null && treatment.slots.length === 1) slot = treatment.slots[0] as DaySlot;
   } else if (slot !== null) {
     throw new HttpError(400, "A time of day needs a linked treatment");
   }
+  if (input.skipped) amountMilliUnits = null;
 
   const [row] = await db.transaction(async (tx) => {
     let deducted = 0;
@@ -64,6 +65,7 @@ medicationLogsRouter.post("/", requireAuth, requirePermission("canRecordHealth")
         drugId,
         givenAt: input.givenAt,
         slot,
+        skipped: input.skipped,
         amountMilliUnits,
         stockDeductedMilliUnits: deducted,
         notes: input.notes,
@@ -89,8 +91,10 @@ medicationLogsRouter.patch("/:id", requireAuth, requirePermission("canRecordHeal
       : treatmentChanged
         ? (treatment?.drugId ?? null)
         : existing.drugId;
-  const amountMilliUnits =
-    input.amountMilliUnits !== undefined
+  const skipped = input.skipped !== undefined ? input.skipped : existing.skipped;
+  const amountMilliUnits = skipped
+    ? null
+    : input.amountMilliUnits !== undefined
       ? input.amountMilliUnits
       : treatmentChanged
         ? (treatment?.doseMilliUnits ?? null)
@@ -105,7 +109,7 @@ medicationLogsRouter.patch("/:id", requireAuth, requirePermission("canRecordHeal
       await restoreDrugStock(tx, existing.drugId, existing.stockDeductedMilliUnits);
     }
     let deducted = 0;
-    if (drugId !== null && amountMilliUnits !== null && amountMilliUnits > 0) {
+    if (!skipped && drugId !== null && amountMilliUnits !== null && amountMilliUnits > 0) {
       deducted = await deductDrugStock(tx, drugId, amountMilliUnits);
     }
     return tx
@@ -115,6 +119,7 @@ medicationLogsRouter.patch("/:id", requireAuth, requirePermission("canRecordHeal
         drugId,
         givenAt: input.givenAt ?? existing.givenAt,
         slot,
+        skipped,
         amountMilliUnits,
         stockDeductedMilliUnits: deducted,
         notes: input.notes ?? existing.notes,

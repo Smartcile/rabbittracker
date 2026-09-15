@@ -22,6 +22,8 @@ export function renderSettingsPage(ctx: PageContext): HTMLElement {
     renderListsCard(),
     renderChecklistCard(),
     renderDailyChecksCard(),
+    renderNormsCard(),
+    renderStagesCard(),
     renderSubscribeCard(),
     renderSubscriptionsCard(),
     renderShareCard(),
@@ -57,6 +59,34 @@ function renderDailyChecksCard(): HTMLElement {
       "Define the daily checks you log for each bunny — poo, water, food and anything else.",
     ),
     h("div", { class: "row" }, h("a", { class: "btn outline small", href: "#/dailychecks" }, "Edit check types")),
+  );
+}
+
+function renderNormsCard(): HTMLElement {
+  return h(
+    "div",
+    { class: "card" },
+    h("h2", null, "Growth norms"),
+    h(
+      "p",
+      { class: "dim small" },
+      "Expected weight ranges per breed and expected daily food and water intake, used to flag when a bunny drifts into a warning range.",
+    ),
+    h("div", { class: "row" }, h("a", { class: "btn outline small", href: "#/norms" }, "Edit norms")),
+  );
+}
+
+function renderStagesCard(): HTMLElement {
+  return h(
+    "div",
+    { class: "card" },
+    h("h2", null, "Growth stages"),
+    h(
+      "p",
+      { class: "dim small" },
+      "The age-based care stages shown on each bunny's Growing up card — diet changes, desexing windows and routine care.",
+    ),
+    h("div", { class: "row" }, h("a", { class: "btn outline small", href: "#/stages" }, "Edit stages")),
   );
 }
 

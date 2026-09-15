@@ -15,7 +15,7 @@ export function slotTimeBadge(slot: string | null, at: string | Date): HTMLEleme
 
 export function slotChips(options: {
   slots: DaySlot[];
-  logs: { slot: string | null; at?: string | Date }[];
+  logs: { slot: string | null; at?: string | Date; skipped?: boolean }[];
   canRecord: boolean;
   onLog: (slot: DaySlot) => void;
 }): HTMLElement | null {
@@ -29,15 +29,21 @@ export function slotChips(options: {
           (slot): slot is DaySlot => slot !== null && !options.slots.includes(slot as DaySlot),
         ),
     ),
-  ];
-  const chips = [...statuses, ...extras.map((slot) => ({ slot, done: true, status: null }))];
+  ].map((slot) => {
+    const log = options.logs.find((entry) => entry.slot === slot);
+    return { slot, done: true, missed: log?.skipped === true, status: null };
+  });
+  const chips = [...statuses, ...extras];
   return h(
     "div",
     { class: "row wrap", style: { gap: "0.3rem" } },
     chips.map((entry) => {
       const late = entry.status === "late";
-      const label = `${DAY_SLOT_LABELS[entry.slot]}${entry.done ? (late ? " !" : " ✓") : ""}`;
-      const classes = `slot-chip${entry.done ? " done" : ""}${late ? " late" : ""}`;
+      const mark = entry.missed ? " ✗" : late ? " !" : " ✓";
+      const label = `${DAY_SLOT_LABELS[entry.slot]}${entry.done ? mark : ""}`;
+      const classes = `slot-chip${entry.done ? " done" : ""}${late ? " late" : ""}${
+        entry.missed ? " missed" : ""
+      }`;
       return options.canRecord
         ? h(
             "button",

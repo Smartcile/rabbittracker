@@ -6,7 +6,7 @@ const MOON_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg>';
 
 export function currentTheme(): "dark" | "light" {
-  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
 }
 
 function paintTheme(theme: "dark" | "light"): void {
@@ -31,7 +31,7 @@ export function applyStoredTheme(): void {
   } catch {
     stored = null;
   }
-  paintTheme(stored === "light" ? "light" : "dark");
+  paintTheme(stored === "dark" ? "dark" : "light");
 }
 
 export function themeToggle(): HTMLButtonElement {
