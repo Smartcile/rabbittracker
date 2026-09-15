@@ -3,6 +3,7 @@ import { api } from "../api.ts";
 import { h } from "../dom.ts";
 import { openModal } from "./modal.ts";
 import { toast } from "./toast.ts";
+import { optionButtons } from "./toggle.ts";
 
 export type BowlReadingMode = "weigh" | "refill" | "refresh";
 
@@ -104,6 +105,7 @@ export function openBowlReadingModal(options: {
 }): void {
   const { bowl, mode } = options;
   const current = bowl.currentWeightGrams;
+  let topUpTotal = false;
   const amount = h("input", {
     inputmode: "decimal",
     required: true,
@@ -120,22 +122,59 @@ export function openBowlReadingModal(options: {
   error.style.display = "none";
 
   const title =
-    mode === "weigh" ? "Weigh bowl" : mode === "refill" ? "Refill bowl" : "Refresh bowl";
-  const amountLabel =
-    mode === "refill" ? "Amount added (g)" : mode === "refresh" ? "New starting weight (g)" : "Weight (g)";
-  const hint =
-    current != null
-      ? mode === "refill"
-        ? `Current weight ${current} g — enter how much you added.`
-        : mode === "refresh"
+    mode === "weigh" ? "Weigh bowl" : mode === "refill" ? "Top up bowl" : "Refresh bowl";
+  const amountLabel = h("label");
+  const hint = h("span", { class: "dim small" });
+  const save = h("button", { class: "btn primary", type: "submit" });
+
+  const topUpOptions =
+    mode === "refill"
+      ? optionButtons(
+          [
+            { value: "add", label: "I added this much" },
+            { value: "total", label: "This is the new total" },
+          ],
+          ["add"],
+          false,
+          (values) => {
+            topUpTotal = values[0] === "total";
+            renderLabels();
+          },
+        )
+      : null;
+
+  function renderLabels(): void {
+    if (mode === "weigh") {
+      amountLabel.textContent = "Weight (g)";
+      hint.textContent = current != null ? `Current weight ${current} g.` : "Weigh the bowl and enter the number.";
+      save.textContent = "Log weight";
+      return;
+    }
+    if (mode === "refresh") {
+      amountLabel.textContent = "New starting weight (g)";
+      hint.textContent =
+        current != null
           ? `Current weight ${current} g. Optionally record it as the final weight, then enter the new starting weight.`
-          : `Current weight ${current} g.`
-      : "Weigh the bowl and enter the number.";
-  const save = h(
-    "button",
-    { class: "btn primary", type: "submit" },
-    mode === "weigh" ? "Log weight" : mode === "refill" ? "Log refill" : "Refresh",
-  );
+          : "Weigh the bowl and enter the number.";
+      save.textContent = "Refresh";
+      return;
+    }
+    amountLabel.textContent = topUpTotal ? "New total weight (g)" : "Amount added (g)";
+    amount.placeholder = topUpTotal
+      ? current != null
+        ? String(current)
+        : "e.g. 850"
+      : "e.g. 250";
+    hint.textContent = topUpTotal
+      ? current != null
+        ? `Current weight ${current} g — enter the weight after topping up.`
+        : "Weigh the bowl after topping up and enter the number."
+      : current != null
+        ? `Current weight ${current} g — enter how much you added.`
+        : "Enter how much you added.";
+    save.textContent = topUpTotal ? "Log weight" : "Log top-up";
+  }
+  renderLabels();
 
   const modal = openModal({
     title: `${title} — ${bowl.label}`,
@@ -157,7 +196,7 @@ export function openBowlReadingModal(options: {
             error.style.display = "";
             return;
           }
-          if (mode === "refill" && amountGrams <= 0) {
+          if (mode === "refill" && !topUpTotal && amountGrams <= 0) {
             error.textContent = "Enter how much you added.";
             error.style.display = "";
             return;
@@ -168,17 +207,24 @@ export function openBowlReadingModal(options: {
             error.style.display = "";
             return;
           }
+          const asNewTotal = mode === "refill" && topUpTotal;
           save.disabled = true;
           try {
             await api.post(`/api/bowls/${bowl.id}/readings`, {
-              kind: mode,
+              kind: asNewTotal ? "weigh" : mode,
               readAt: readAt.toISOString(),
-              weightGrams: mode === "refill" ? undefined : amountGrams,
-              refillGrams: mode === "refill" ? amountGrams : undefined,
+              weightGrams: mode === "weigh" || asNewTotal ? amountGrams : undefined,
+              refillGrams: mode === "refill" && !asNewTotal ? amountGrams : undefined,
               finalWeightGrams: finalGrams ?? undefined,
               notes: notes.value.trim(),
             });
-            toast(mode === "weigh" ? "Weight logged" : mode === "refill" ? "Refill logged" : "Bowl refreshed");
+            toast(
+              mode === "weigh" || asNewTotal
+                ? "Weight logged"
+                : mode === "refill"
+                  ? "Top-up logged"
+                  : "Bowl refreshed",
+            );
             options.onSaved();
             modal.close();
           } catch (err) {
@@ -190,7 +236,10 @@ export function openBowlReadingModal(options: {
         },
       },
       error,
-      h("div", { class: "field" }, h("label", null, amountLabel), amount, h("span", { class: "dim small" }, hint)),
+      topUpOptions
+        ? h("div", { class: "field" }, h("label", null, "Record as"), topUpOptions.root)
+        : null,
+      h("div", { class: "field" }, amountLabel, amount, hint),
       mode === "refresh"
         ? h(
             "div",

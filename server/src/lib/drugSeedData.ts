@@ -16,6 +16,16 @@ export type SeedDrug = {
   reorderLevelMilliUnits: number;
 };
 
+export function drugSeedKey(
+  drug: Pick<SeedDrug, "activeIngredient" | "concentrationMicrogramsPerUnit"> & { form: string },
+): string {
+  return [
+    drug.activeIngredient.trim().toLowerCase(),
+    drug.form,
+    drug.concentrationMicrogramsPerUnit ?? "",
+  ].join("|");
+}
+
 export const DRUG_SEED: SeedDrug[] = [
   {
     name: "Meloxicam oral suspension (Metacam)",
@@ -131,7 +141,7 @@ export const DRUG_SEED: SeedDrug[] = [
     reorderLevelMilliUnits: 0,
   },
   {
-    name: "Trimethoprim Sulfa (48 mg/ml)",
+    name: "Trimethoprim Sulfa 240 mg/5 ml (Deprim)",
     activeIngredient: "trimethoprim + sulfamethoxazole",
     form: "liquid",
     unit: "ml",
@@ -142,9 +152,9 @@ export const DRUG_SEED: SeedDrug[] = [
     frequency: "every 12 hours",
     durationDays: null,
     howToUse:
-      "Give directly into the mouth with a syringe. Give with food and keep fresh water available.",
+      "Deprim 240 mg/5 ml (48 mg/ml): 0.5 ml per kg twice daily. Give directly into the mouth with a syringe. Give with food and keep fresh water available.",
     warnings:
-      "Common 48 mg/ml suspension (trimethoprim 8 mg/ml + sulfamethoxazole 40 mg/ml) — 0.5 ml per kg twice daily. Typical range 15–30 mg/kg twice daily; confirm dose and course length with your vet.",
+      "Trimethoprim 8 mg/ml + sulfamethoxazole 40 mg/ml — 0.5 ml per kg twice daily. Typical range 15–30 mg/kg twice daily; confirm dose and course length with your vet.",
     reorderLevelMilliUnits: 10000,
   },
   {

@@ -73,7 +73,7 @@ export function summarizeBowl(readings: BowlReadingInput[]): BowlSummary {
 
 export function bowlReadingKindLabel(kind: BowlReadingKind): string {
   if (kind === "start") return "Start";
-  if (kind === "refill") return "Refill";
+  if (kind === "refill") return "Top up";
   if (kind === "refresh") return "Refresh";
   return "Weigh-in";
 }

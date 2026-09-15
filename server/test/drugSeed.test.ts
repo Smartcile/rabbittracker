@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { DRUG_FORMS } from "../../shared/drugs.ts";
-import { DRUG_SEED } from "../src/lib/drugSeedData.ts";
+import { DRUG_SEED, drugSeedKey } from "../src/lib/drugSeedData.ts";
 
 describe("drug seed data", () => {
   it("has unique names", () => {
     const names = DRUG_SEED.map((drug) => drug.name);
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("has unique seed keys", () => {
+    const keys = DRUG_SEED.map((drug) => drugSeedKey(drug));
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
   it("uses valid forms, units and dose frequency", () => {
@@ -43,5 +48,30 @@ describe("drug seed data", () => {
       expect(Number.isInteger(drug.reorderLevelMilliUnits)).toBe(true);
       expect(drug.reorderLevelMilliUnits).toBeGreaterThanOrEqual(0);
     }
+  });
+});
+
+describe("drugSeedKey", () => {
+  const base = {
+    activeIngredient: "meloxicam",
+    form: "liquid" as const,
+    concentrationMicrogramsPerUnit: 1500,
+  };
+
+  it("ignores name casing and whitespace in the ingredient", () => {
+    expect(drugSeedKey({ ...base, activeIngredient: " Meloxicam " })).toBe(drugSeedKey(base));
+  });
+
+  it("separates different concentrations and forms", () => {
+    expect(drugSeedKey({ ...base, concentrationMicrogramsPerUnit: 10000 })).not.toBe(
+      drugSeedKey(base),
+    );
+    expect(drugSeedKey({ ...base, form: "paste" })).not.toBe(drugSeedKey(base));
+  });
+
+  it("distinguishes a missing concentration from a numeric one", () => {
+    expect(drugSeedKey({ ...base, concentrationMicrogramsPerUnit: null })).not.toBe(
+      drugSeedKey(base),
+    );
   });
 });

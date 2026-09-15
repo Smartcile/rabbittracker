@@ -177,7 +177,8 @@ a:hover {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.6rem 1rem;
+  padding: calc(0.6rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right)) 0.6rem
+    calc(1rem + env(safe-area-inset-left));
   background: var(--topbar-bg);
   border-bottom: 1px solid var(--border);
   position: sticky;

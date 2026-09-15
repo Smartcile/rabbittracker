@@ -7,6 +7,7 @@ import { drugBatches, drugs } from "../db/schema.ts";
 import type { DrugBatchRow, DrugRow } from "../db/schema.ts";
 import { requirePermission } from "../lib/access.ts";
 import { requireAuth } from "../lib/auth.ts";
+import { addMissingDefaultDrugs } from "../lib/drugSeed.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
 import {
   drugBatchCreateSchema,
@@ -19,6 +20,10 @@ export const drugsRouter = Router();
 
 drugsRouter.get("/", requireAuth, async (_req, res) => {
   res.json({ drugs: await listDrugs() });
+});
+
+drugsRouter.post("/defaults", requireAuth, requirePermission("canRecordHealth"), async (_req, res) => {
+  res.json({ added: await addMissingDefaultDrugs() });
 });
 
 drugsRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {

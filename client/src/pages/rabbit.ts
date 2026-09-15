@@ -747,7 +747,7 @@ function bowlsCard(
     h(
       "p",
       { class: "dim small" },
-      "Track consumption by weighing the bowl. Each weigh-in rolls the baseline forward, top-ups count as refills, and refresh starts a new period.",
+      "Track consumption by weighing the bowl. Each weigh-in rolls the baseline forward, top-ups can add to the current weight or set a new total, and refresh starts a new period.",
     ),
     list,
   );
@@ -763,7 +763,7 @@ function bowlPanel(
     bowl.periodStartAt ? `Since ${fmtDate(bowl.periodStartAt)}` : null,
     bowl.currentWeightGrams != null ? `${bowl.currentWeightGrams} g now` : null,
     `${bowl.periodConsumptionGrams} g consumed`,
-    bowl.periodRefillGrams > 0 ? `${bowl.periodRefillGrams} g refilled` : null,
+    bowl.periodRefillGrams > 0 ? `${bowl.periodRefillGrams} g topped up` : null,
   ].filter(Boolean);
   const actions = canRecord
     ? h(
@@ -777,7 +777,7 @@ function bowlPanel(
         h(
           "button",
           { class: "btn outline small", type: "button", onClick: () => openBowlReadingModal({ bowl, mode: "refill", onSaved: () => void reload() }) },
-          "Refill",
+          "Top up",
         ),
         h(
           "button",

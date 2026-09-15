@@ -50,8 +50,8 @@
       Bunny details), daily check types can be multi-select, logs can carry photos, and a one-tap
       type bar logs poo, water, food or behaviour without opening the full form.
 - [x] **Bowl scale tracking.** Per-bunny food/water bowls with a starting weight, rolling weigh-ins
-      that calculate consumption since the last reading, automatic refill detection (or an entered
-      refill amount), and a refresh action that starts a new period with an optional final weight.
+      that calculate consumption since the last reading, top-ups recorded as the amount added or the
+      bowl's new total, and a refresh action that starts a new period with an optional final weight.
 - [x] **Daily routine tasks.** Repeating chores and medication rounds per bunny with
       morning/afternoon/evening/anytime slots and an every-N-days repeat, one-tap completion from
       the bunny profile or the home Today list, and automatic dose logging with FEFO stock
@@ -59,6 +59,9 @@
 - [x] **Sunday check with daily observations.** The full health check form can switch on any
       configured daily check type (poo, water, food, behaviour, …) as an optional section for that
       check; amounts and text are stored on the check and shown in the history table.
+- [x] **Starter drug defaults.** An Add defaults button in the drug cabinet pulls in any missing
+      starter medicines without touching edited or custom ones, so upgraded installs get new
+      starters like Doxy 100 paste and Trimethoprim Sulfa (Deprim).
 
 ## Planned features (agreed but not built)
 

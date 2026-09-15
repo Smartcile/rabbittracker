@@ -7,6 +7,7 @@ import {
 } from "../../../shared/drugs.ts";
 import { api } from "../api.ts";
 import { openDrugModal } from "../components/drugModal.ts";
+import { toast } from "../components/toast.ts";
 import type { PageContext } from "../context.ts";
 import { fmtCalendarDate, h } from "../dom.ts";
 import { can } from "../permissions.ts";
@@ -28,15 +29,40 @@ export function renderDrugsPage(ctx: PageContext): HTMLElement {
     { class: "btn primary", onClick: () => openDrugModal({ onSaved: () => void load() }) },
     "Add drug",
   );
+  const addDefaults = h(
+    "button",
+    {
+      class: "btn outline small",
+      type: "button",
+      onClick: async () => {
+        addDefaults.disabled = true;
+        try {
+          const { added } = await api.post<{ added: string[] }>("/api/drugs/defaults");
+          if (added.length === 0) {
+            toast("All starter drugs are already in the cabinet");
+          } else {
+            toast(`Added ${added.join(", ")}`);
+            await load();
+          }
+        } catch (err) {
+          toast(err instanceof Error ? err.message : "Something went wrong", "error");
+        } finally {
+          addDefaults.disabled = false;
+        }
+      },
+    },
+    "Add defaults",
+  );
 
   const container = h(
     "section",
     { class: "stack" },
     h(
       "div",
-      { class: "card-title" },
+      { class: "card-title", style: { flexWrap: "wrap" } },
       h("h1", null, "Drug cabinet"),
       h("span", { class: "spacer" }),
+      canEdit ? addDefaults : null,
       canEdit ? add : null,
     ),
     h(

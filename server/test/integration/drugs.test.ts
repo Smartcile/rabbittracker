@@ -6,6 +6,7 @@ import type {
   RabbitDto,
   TreatmentDto,
 } from "../../../shared/types.ts";
+import { DRUG_SEED } from "../../src/lib/drugSeedData.ts";
 import { api, resetBusinessData, startTestServer } from "./helpers.ts";
 import type { TestContext } from "./helpers.ts";
 
@@ -108,6 +109,31 @@ describe("drug stock integration", () => {
   it("requires authentication", async () => {
     const response = await fetch(`${ctx.baseUrl}/api/drugs`);
     expect(response.status).toBe(401);
+  });
+
+  it("adds missing starter drugs on demand without duplicating them", async () => {
+    const { added } = await api<{ added: string[] }>(ctx, "/api/drugs/defaults", { method: "POST" });
+    expect(added).toContain("Doxy 100 paste (100 mg/ml)");
+    expect(added).toContain("Trimethoprim Sulfa 240 mg/5 ml (Deprim)");
+    const { drugs } = await api<{ drugs: DrugDto[] }>(ctx, "/api/drugs");
+    const names = drugs.map((drug) => drug.name);
+    expect(new Set(names).size).toBe(names.length);
+    const again = await api<{ added: string[] }>(ctx, "/api/drugs/defaults", { method: "POST" });
+    expect(again.added).toEqual([]);
+  });
+
+  it("does not re-add a starter drug that exists under another name", async () => {
+    await createDrug({
+      name: "My meloxicam",
+      activeIngredient: "meloxicam",
+      form: "liquid",
+      unit: "ml",
+      concentrationMicrogramsPerUnit: 1500,
+      doseMicrogramsPerKg: 500,
+    });
+    const { added } = await api<{ added: string[] }>(ctx, "/api/drugs/defaults", { method: "POST" });
+    expect(added).not.toContain("Meloxicam oral suspension (Metacam)");
+    expect(added).toHaveLength(DRUG_SEED.length - 1);
   });
 
   it("does not deduct stock when a treatment is created", async () => {

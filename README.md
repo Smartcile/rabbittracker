@@ -48,9 +48,9 @@ Desktop:
   log. A one-tap bar on the bunny profile logs a type in seconds. An **Add defaults** button in the
   editor pulls in any missing starter types (including multi-select Behaviour) on upgraded installs.
 - **Food & water bowl tracking** — set a starting weight for a bowl, then log scale readings as you
-  go: consumption is calculated since the last reading and the baseline rolls forward. Top-ups count
-  as refills (or enter the amount added), and refresh starts a new period with an optional final
-  weight. Plain ml/g daily checks still work alongside.
+  go: consumption is calculated since the last reading and the baseline rolls forward. Top up by
+  entering the amount added or the bowl's new total, and refresh starts a new period with an
+  optional final weight. Plain ml/g daily checks still work alongside.
 - **Daily routine tasks** — repeating chores and medication rounds per bunny with morning, afternoon,
   evening or anytime slots and an every-N-days repeat. Tick them off from the bunny page or the home
   Today list; completing a task linked to a treatment logs the dose and deducts drug stock, and undo
@@ -67,7 +67,9 @@ Desktop:
 
 **Care & treatment**
 - Treatments with dose, route, frequency, reason, dates and status, plus a drug cabinet with stock
-  batches, expiry, reorder levels and automatic FEFO stock deduction.
+  batches, expiry, reorder levels and automatic FEFO stock deduction. An **Add defaults** button
+  pulls in any missing starter drugs (Doxy 100 paste, Trimethoprim Sulfa/Deprim, …) on upgraded
+  installs.
 - Vaccinations with next-due tracking (default booster intervals from the vaccine-type list).
 - Routine care schedules (nails, teeth, grooming, or your own care types) with dated records and
   due/overdue badges.

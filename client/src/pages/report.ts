@@ -460,7 +460,7 @@ function bowlsSection(
           bowl.periodStartAt ? `Since ${fmtDate(bowl.periodStartAt, timezone)}` : null,
           bowl.currentWeightGrams != null ? `${bowl.currentWeightGrams} g now` : null,
           `${bowl.periodConsumptionGrams} g consumed`,
-          bowl.periodRefillGrams > 0 ? `${bowl.periodRefillGrams} g refilled` : null,
+          bowl.periodRefillGrams > 0 ? `${bowl.periodRefillGrams} g topped up` : null,
         ].filter(Boolean);
         const readings = bowl.readings.filter((reading) => isWithinRange(reading.readAt, range));
         return h(
