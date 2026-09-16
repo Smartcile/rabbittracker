@@ -10,6 +10,7 @@ import {
   unique,
 } from "drizzle-orm/pg-core";
 import type { HealthChecklistDto } from "../../../shared/checklist.ts";
+import type { TaskProductInput } from "../../../shared/types.ts";
 
 export const settings = pgTable("settings", {
   id: integer("id").primaryKey().default(1),
@@ -157,6 +158,7 @@ export const bowls = pgTable("bowls", {
   slots: text("slots").array().notNull().default([]),
   tareGrams: integer("tare_grams"),
   productId: integer("product_id").references(() => foodProducts.id, { onDelete: "set null" }),
+  productIds: jsonb("product_ids").$type<number[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -393,6 +395,7 @@ export const rabbitTasks = pgTable("rabbit_tasks", {
   startDate: date("start_date"),
   productId: integer("product_id").references(() => foodProducts.id, { onDelete: "set null" }),
   amountGrams: integer("amount_grams").notNull().default(0),
+  products: jsonb("products").$type<TaskProductInput[]>().notNull().default([]),
   notes: text("notes").notNull().default(""),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -407,6 +410,7 @@ export const taskTemplates = pgTable("task_templates", {
   startDate: date("start_date"),
   productId: integer("product_id").references(() => foodProducts.id, { onDelete: "set null" }),
   amountGrams: integer("amount_grams").notNull().default(0),
+  products: jsonb("products").$type<TaskProductInput[]>().notNull().default([]),
   notes: text("notes").notNull().default(""),
   active: boolean("active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),

@@ -14,11 +14,11 @@ taskTemplatesRouter.get("/", requireAuth, async (_req, res) => {
     .select()
     .from(taskTemplates)
     .orderBy(asc(taskTemplates.sortOrder), asc(taskTemplates.id));
-  const names = await productNames(rows.map((row) => row.productId));
+  const names = await productNames(
+    rows.flatMap((row) => (row.products ?? []).map((product) => product.productId)),
+  );
   res.json({
-    templates: rows.map((row) =>
-      taskTemplateToDto(row, row.productId !== null ? (names.get(row.productId) ?? null) : null),
-    ),
+    templates: rows.map((row) => taskTemplateToDto(row, names)),
   });
 });
 
@@ -34,14 +34,13 @@ taskTemplatesRouter.post("/", requireAuth, requireAdmin, async (req, res) => {
       slot: input.slot,
       intervalDays: input.intervalDays,
       startDate: input.startDate ?? null,
-      productId: input.productId ?? null,
-      amountGrams: input.amountGrams,
+      products: input.products,
       notes: input.notes,
       active: input.active,
       sortOrder: (highest ?? -1) + 1,
     })
     .returning();
-  res.status(201).json({ template: taskTemplateToDto(row, await productName(row.productId)) });
+  res.status(201).json({ template: taskTemplateToDto(row, await productNamesFor(input.products)) });
 });
 
 taskTemplatesRouter.patch("/:id", requireAuth, requireAdmin, async (req, res) => {
@@ -54,15 +53,14 @@ taskTemplatesRouter.patch("/:id", requireAuth, requireAdmin, async (req, res) =>
       slot: input.slot ?? template.slot,
       intervalDays: input.intervalDays ?? template.intervalDays,
       startDate: input.startDate !== undefined ? input.startDate : template.startDate,
-      productId: input.productId !== undefined ? input.productId : template.productId,
-      amountGrams: input.amountGrams ?? template.amountGrams,
+      products: input.products ?? template.products,
       notes: input.notes !== undefined ? input.notes : template.notes,
       active: input.active !== undefined ? input.active : template.active,
       updatedAt: new Date(),
     })
     .where(eq(taskTemplates.id, template.id))
     .returning();
-  res.json({ template: taskTemplateToDto(row, await productName(row.productId)) });
+  res.json({ template: taskTemplateToDto(row, await productNamesFor(row.products ?? [])) });
 });
 
 taskTemplatesRouter.delete("/:id", requireAuth, requireAdmin, async (req, res) => {
@@ -71,24 +69,18 @@ taskTemplatesRouter.delete("/:id", requireAuth, requireAdmin, async (req, res) =
   res.json({ ok: true });
 });
 
-async function productName(productId: number | null): Promise<string | null> {
-  if (productId === null) return null;
-  const rows = await db
-    .select({ name: foodProducts.name })
-    .from(foodProducts)
-    .where(eq(foodProducts.id, productId))
-    .limit(1);
-  return rows[0]?.name ?? null;
-}
-
-async function productNames(ids: (number | null)[]): Promise<Map<number, string>> {
-  const unique = [...new Set(ids.filter((id): id is number => id !== null))];
+async function productNames(ids: number[]): Promise<Map<number, string>> {
+  const unique = [...new Set(ids)];
   if (unique.length === 0) return new Map();
   const rows = await db
     .select({ id: foodProducts.id, name: foodProducts.name })
     .from(foodProducts)
     .where(inArray(foodProducts.id, unique));
   return new Map(rows.map((row) => [row.id, row.name]));
+}
+
+async function productNamesFor(products: { productId: number }[]): Promise<Map<number, string>> {
+  return productNames(products.map((product) => product.productId));
 }
 
 async function findTemplate(id: number) {

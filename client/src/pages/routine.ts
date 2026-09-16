@@ -2,10 +2,19 @@ import type { FoodProductDto, TaskSlot, TaskTemplateDto } from "../../../shared/
 import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
 import { api } from "../api.ts";
 import { confirmDialog, openModal } from "../components/modal.ts";
+import { taskProductRows } from "../components/taskProductRows.ts";
 import { toast } from "../components/toast.ts";
 import { optionButtons, toggleButton } from "../components/toggle.ts";
 import type { PageContext } from "../context.ts";
 import { h } from "../dom.ts";
+
+type RepeatMode = "daily" | "weekly" | "monthly" | "custom";
+
+const REPEAT_DAYS: Record<Exclude<RepeatMode, "custom">, number> = {
+  daily: 1,
+  weekly: 7,
+  monthly: 30,
+};
 
 export function renderRoutinePage(_ctx: PageContext): HTMLElement {
   const list = h("div", { class: "stack" });
@@ -29,7 +38,7 @@ export function renderRoutinePage(_ctx: PageContext): HTMLElement {
     h(
       "p",
       { class: "dim small" },
-      "Reusable routine tasks (change litter box, clean water bottles, …). Add one to a bunny from its Daily routine card, and link a stock item so completing the task draws it down.",
+      "Reusable routine tasks (change litter box, clean water bottles, …). Add one to a bunny from its Daily routine card, and link stock items so completing the task draws them down.",
     ),
     list,
   );
@@ -50,12 +59,16 @@ export function renderRoutinePage(_ctx: PageContext): HTMLElement {
   }
 
   function card(template: TaskTemplateDto): HTMLElement {
+    const productsText = template.products
+      .map(
+        (product) =>
+          `${product.productName}${product.amountGrams > 0 ? ` · ${product.amountGrams} g` : ""}`,
+      )
+      .join(", ");
     const bits = [
       TASK_SLOT_LABELS[template.slot],
       template.intervalDays === 1 ? "Every day" : `Every ${template.intervalDays} days`,
-      template.productName
-        ? `${template.productName}${template.amountGrams > 0 ? ` · ${template.amountGrams} g` : ""}`
-        : null,
+      productsText ? productsText : null,
       template.active ? null : "Inactive",
     ].filter(Boolean);
     return h(
@@ -114,40 +127,47 @@ function openTemplateModal(
       slot = (values[0] as TaskSlot | undefined) ?? "anytime";
     },
   );
+  const repeat = h(
+    "select",
+    null,
+    h("option", { value: "daily" }, "Daily"),
+    h("option", { value: "weekly" }, "Weekly"),
+    h("option", { value: "monthly" }, "Monthly"),
+    h("option", { value: "custom" }, "Custom (every N days)"),
+  );
+  repeat.value = repeatMode(template?.intervalDays ?? 1);
   const interval = h("input", {
     type: "number",
     min: "1",
     max: "3650",
     value: String(template?.intervalDays ?? 1),
   });
-  const start = h("input", { type: "date", value: template?.startDate ?? "" });
-  const productSelect = h("select", null, h("option", { value: "" }, "— No stock item —"));
-  for (const product of products) {
-    productSelect.append(h("option", { value: String(product.id) }, product.name));
-  }
-  productSelect.value = template?.productId != null ? String(template.productId) : "";
-  const amount = h("input", {
-    inputmode: "decimal",
-    placeholder: "e.g. 500",
-    value: template && template.amountGrams > 0 ? String(template.amountGrams) : "",
-  });
-  const amountField = h(
+  const customField = h(
     "div",
     { class: "field" },
-    h("label", null, "Amount used (g)"),
-    amount,
-    h("span", { class: "dim small" }, "Deducted from the product's stock each time a task is completed."),
+    h("label", null, "Every N days"),
+    interval,
+    h("span", { class: "dim small" }, "1 means every day."),
   );
-  const renderAmount = (): void => {
-    amountField.style.display = productSelect.value ? "" : "none";
-  };
-  productSelect.addEventListener("change", renderAmount);
-  renderAmount();
+  const start = h("input", { type: "date", value: template?.startDate ?? "" });
+  const productRows = taskProductRows(template?.products ?? []);
+  productRows.setProducts(products);
+  const addProduct = h(
+    "button",
+    { class: "btn outline small", type: "button", onClick: () => productRows.add() },
+    "Add product",
+  );
   const notes = h("textarea", null, template?.notes ?? "");
   const active = toggleButton({ label: "Active", checked: template?.active ?? true });
   const error = h("p", { class: "form-error" });
   error.style.display = "none";
   const save = h("button", { class: "btn primary", type: "submit" }, template ? "Save" : "Add");
+
+  const syncRepeat = (): void => {
+    customField.style.display = repeat.value === "custom" ? "" : "none";
+  };
+  repeat.addEventListener("change", syncRepeat);
+  syncRepeat();
 
   const modal = openModal({
     guardUnsaved: true,
@@ -164,17 +184,18 @@ function openTemplateModal(
             error.style.display = "";
             return;
           }
-          const intervalDays = Number(interval.value);
+          const intervalDays =
+            repeat.value === "custom"
+              ? Number(interval.value)
+              : REPEAT_DAYS[repeat.value as Exclude<RepeatMode, "custom">];
           if (!Number.isInteger(intervalDays) || intervalDays < 1 || intervalDays > 3650) {
             error.textContent = "Repeat every 1–3650 days.";
             error.style.display = "";
             return;
           }
-          const productId = productSelect.value ? Number(productSelect.value) : null;
-          const amountText = amount.value.trim();
-          const amountGrams = productId !== null && amountText ? Math.round(Number(amountText)) : 0;
-          if (productId !== null && amountText && (!Number.isFinite(amountGrams) || amountGrams < 0)) {
-            error.textContent = "Enter the amount used in grams.";
+          const rows = productRows.collect();
+          if (rows === null) {
+            error.textContent = "Enter each product amount in grams.";
             error.style.display = "";
             return;
           }
@@ -184,8 +205,7 @@ function openTemplateModal(
             slot,
             intervalDays,
             startDate: start.value || null,
-            productId,
-            amountGrams,
+            products: rows,
             notes: notes.value.trim(),
             active: active.checked(),
           };
@@ -209,13 +229,8 @@ function openTemplateModal(
       error,
       h("div", { class: "field" }, h("label", null, "Name"), label),
       h("div", { class: "field" }, h("label", null, "Time of day"), slotGroup.root),
-      h(
-        "div",
-        { class: "field" },
-        h("label", null, "Repeat"),
-        interval,
-        h("span", { class: "dim small" }, "Every N days — 1 means every day."),
-      ),
+      h("div", { class: "field" }, h("label", null, "Repeats"), repeat),
+      customField,
       h(
         "div",
         { class: "field" },
@@ -226,11 +241,15 @@ function openTemplateModal(
       h(
         "div",
         { class: "field" },
-        h("label", null, "Uses stock item (optional)"),
-        productSelect,
-        h("span", { class: "dim small" }, "Completing a task added from this template draws the product down."),
+        h("label", null, "Stock items (optional)"),
+        h(
+          "span",
+          { class: "dim small" },
+          "Completing a task added from this template draws each product down.",
+        ),
+        productRows.root,
+        addProduct,
       ),
-      amountField,
       h("div", { class: "field" }, h("label", null, "Status"), h("div", { class: "row wrap" }, active.root)),
       h("div", { class: "field" }, h("label", null, "Notes"), notes),
       h(
@@ -241,4 +260,11 @@ function openTemplateModal(
       ),
     ),
   });
+}
+
+function repeatMode(days: number): RepeatMode {
+  if (days === 1) return "daily";
+  if (days === 7) return "weekly";
+  if (days === 30) return "monthly";
+  return "custom";
 }

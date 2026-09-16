@@ -37,6 +37,7 @@ const appRoot = requireRoot();
 
 let me: AuthMeDto | null = null;
 let lastActivity = Date.now();
+let pinLoginAvailable = false;
 
 const icons = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
@@ -76,6 +77,7 @@ setUnauthorizedHandler(() => {
 
 async function refreshMe(): Promise<void> {
   me = await api.get<AuthMeDto>("/api/auth/me");
+  pinLoginAvailable = me.pinLogin;
 }
 
 async function logout(): Promise<void> {
@@ -145,7 +147,7 @@ function render(): void {
       appRoot,
       renderAuthPage({
         needsSetup: me?.needsSetup ?? false,
-        pinLogin: me?.pinLogin ?? false,
+        pinLogin: me?.pinLogin ?? pinLoginAvailable,
         onDone: async () => {
           await refreshMe();
           if (!location.hash || location.hash === "#/login") location.hash = "#/";

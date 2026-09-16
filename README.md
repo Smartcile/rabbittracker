@@ -11,17 +11,35 @@ SPA on the client. Ships as a two-container Docker Compose stack with persistent
 | --- | --- | --- |
 | ![Home dashboard](docs/screenshots/home.jpg) | ![Bunny list](docs/screenshots/bunnies.jpg) | ![Bunny profile](docs/screenshots/rabbit.jpg) |
 
-| Calendar | Settings | Health checklist editor |
+| Calendar | History | Daily routine |
 | --- | --- | --- |
-| ![Calendar](docs/screenshots/calendar.jpg) | ![Settings](docs/screenshots/settings.jpg) | ![Checklist editor](docs/screenshots/checklist.jpg) |
+| ![Calendar](docs/screenshots/calendar.jpg) | ![History](docs/screenshots/history.jpg) | ![Daily routine tasks](docs/screenshots/routine.jpg) |
 
-| Vets & clinics | Lists | Sign in |
+| Drug cabinet | Food & supplies | Growth norms |
 | --- | --- | --- |
-| ![Vets and clinics](docs/screenshots/vets.jpg) | ![Managed lists](docs/screenshots/lookups.jpg) | ![PIN sign in](docs/screenshots/login.jpg) |
+| ![Drug cabinet](docs/screenshots/drugs.jpg) | ![Food and supplies](docs/screenshots/food.jpg) | ![Growth norms](docs/screenshots/norms.jpg) |
+
+| Growth stages | Health checklist editor | Checklists |
+| --- | --- | --- |
+| ![Growth stages](docs/screenshots/stages.jpg) | ![Health checklist editor](docs/screenshots/checklist.jpg) | ![Checklists](docs/screenshots/checklists.jpg) |
+
+| Daily checks | Vets & clinics | Managed lists |
+| --- | --- | --- |
+| ![Daily checks](docs/screenshots/dailychecks.jpg) | ![Vets and clinics](docs/screenshots/vets.jpg) | ![Managed lists](docs/screenshots/lookups.jpg) |
+
+| Users | Settings | FAQ |
+| --- | --- | --- |
+| ![Users](docs/screenshots/users.jpg) | ![Settings](docs/screenshots/settings.jpg) | ![FAQ](docs/screenshots/faq.jpg) |
+
+| Bunny report | Share link | Sign in |
+| --- | --- | --- |
+| ![Printable bunny report](docs/screenshots/report.jpg) | ![Public share page](docs/screenshots/share.jpg) | ![PIN sign in](docs/screenshots/login.jpg) |
 
 Desktop:
 
-![Home dashboard on desktop](docs/screenshots/desktop-home.jpg)
+| Home | Bunny profile |
+| --- | --- |
+| ![Home dashboard on desktop](docs/screenshots/desktop-home.jpg) | ![Bunny profile on desktop](docs/screenshots/desktop-rabbit.jpg) |
 
 ## Features
 
@@ -54,20 +72,26 @@ Desktop:
   go: consumption is calculated since the last reading and the baseline rolls forward. One pop-out
   logs a whole session: pick weigh-in, consumption, top-up or refresh, add each reading, then save
   them together. Refresh starts a new period with an optional final weight. One daily consumption
-  chart at the top of the card overlays every bowl with its day-by-day average, readings can be
+  chart at the top of the card overlays every bowl with its day-by-day average (water bowls are
+  drawn in blue), readings can be
   edited or deleted, and bowls can be scheduled with times of day: the calendar shows a chip per
-  bowl per time and tapping it logs a reading for that slot. Record the bowl's empty weight to see
-  how much is actually in it, link a food product so top-ups draw from its stock, and enter
-  consumption directly for greens and treats (the new weight is calculated).
+  bowl per time from the bowl's start date onward, and tapping it logs a reading for that slot.
+  Record the bowl's empty weight to see
+  how much is actually in it, link one or more food products so top-ups draw from the chosen
+  product's stock, and enter consumption directly for greens and treats (the new weight is
+  calculated).
 - **Food & supplies** — a catalog for hay, pellets, greens and treats with a running stock total
-  (add or remove amounts), a low-stock level and a type list. Link a product to a bowl and every
-  top-up draws the amount added from its stock; editing or deleting the top-up puts it back.
+  (add or remove amounts), a low-stock level and a type list. Link products to a bowl and every
+  top-up draws the amount added from the chosen product's stock; editing or deleting the top-up puts
+  it back.
 - **Daily routine tasks** — repeating chores per bunny with morning, afternoon, evening or anytime
-  slots, an every-N-days repeat and an optional start date that sets the first due date. Define
-  reusable templates in Settings → Daily routine and add one to a bunny in a tap; link a stock item
-  (product + amount) so completing a task draws it down automatically. Tick them off from the bunny
-  page or the home Today list (choosing the date it was done), and their schedule shows on the
-  calendar with a tick once completed.
+  slots, a daily/weekly/monthly (or custom every-N-days) repeat and an optional start date that sets
+  the first due date. Define reusable templates in Settings → Daily routine and add one to a bunny
+  in a tap; link one or more stock items (product + amount) so completing a task draws each down
+  automatically. Tick them off from the bunny page, the home Today list or the calendar (choosing
+  the date it was done; tap a completed day to undo), and create or edit a task straight from the
+  calendar with **+ New task** or the chip's **Edit task** button. A never-started task with no start
+  date appears on the calendar from today, and due dates follow the timezone in Settings.
 - **Treatments & medication** — courses with dose, route and frequency plus the times of day each
   dose is given, each with a window (early morning 05:00–08:00, morning 08:00–12:00, afternoon
   12:00–17:00, evening 17:00–21:00, night 21:00–05:00). Logging preselects the slot for the current
@@ -110,7 +134,7 @@ Desktop:
 - **Calendar events** — add your own events (hay collection, volunteer runs, fundraisers, cleaning)
   with a type list, all-day option, location, optional bunny link and simple repeating schedules
   (daily, weekly, monthly). The calendar also shows logged daily checks and active medication
-  courses.
+  courses, has a filter bar to focus on one bunny or hide item types, and highlights today.
 - Vets and clinics directory, with inline "add new" popups in the appointment and vaccination
   forms so you never leave the form.
 - Managed lists for breeds, colours, visit types, locations, vaccine types, treatment
@@ -222,7 +246,9 @@ bunny's report page — viewers see only the report screen, never the app.
 
 - **Admins** sign in with username and password and see every bunny. They manage users, lists, the
   checklist, vets/clinics and exports. An admin can set a personal PIN in **Settings → Account**
-  for quick sign-in on a shared device.
+  for quick sign-in on a shared device. The sign-in screen always opens on the PIN pad — including
+  after the idle lock — with an **Email/Password** button to reach the username-and-password form
+  and a **Use PIN** button to switch back.
 - **Workers** sign in with a personal 4–8 digit PIN and only see bunnies assigned to them (assign
   carers from a bunny's page). Their permissions are ticked per worker in **Users**: record health
   data, edit bunny profiles, add their own bunnies, view costs, manage calendar sync, edit the FAQ.

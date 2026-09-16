@@ -349,9 +349,10 @@ export type BowlDto = {
   kind: "food" | "water";
   slots: DaySlot[];
   tareGrams: number | null;
-  productId: number | null;
+  productIds: number[];
   currentWeightGrams: number | null;
   periodStartAt: string | null;
+  startedAt: string | null;
   periodConsumptionGrams: number;
   periodRefillGrams: number;
   totalConsumptionGrams: number;
@@ -365,6 +366,17 @@ export type BowlDto = {
 
 export type TaskSlot = "morning" | "afternoon" | "evening" | "anytime";
 
+export type TaskProductInput = {
+  productId: number;
+  amountGrams: number;
+};
+
+export type TaskProductDto = {
+  productId: number;
+  productName: string;
+  amountGrams: number;
+};
+
 export type TaskDto = {
   id: number;
   rabbitId: number;
@@ -372,9 +384,7 @@ export type TaskDto = {
   slot: TaskSlot;
   intervalDays: number;
   startDate: string | null;
-  productId: number | null;
-  productName: string | null;
-  amountGrams: number;
+  products: TaskProductDto[];
   notes: string;
   active: boolean;
   lastCompletedAt: string | null;
@@ -388,9 +398,7 @@ export type TaskTemplateDto = {
   slot: TaskSlot;
   intervalDays: number;
   startDate: string | null;
-  productId: number | null;
-  productName: string | null;
-  amountGrams: number;
+  products: TaskProductDto[];
   notes: string;
   active: boolean;
   sortOrder: number;

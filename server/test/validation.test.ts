@@ -629,7 +629,7 @@ describe("bowl validation", () => {
         startWeightGrams: 500,
         startedAt: "2026-09-01T08:00:00.000Z",
         tareGrams: 120,
-        productId: 3,
+        productIds: [3],
       }).success,
     ).toBe(true);
     expect(
@@ -740,6 +740,25 @@ describe("task validation", () => {
   it("requires changes on update", () => {
     expect(taskUpdateSchema.safeParse({}).success).toBe(false);
     expect(taskUpdateSchema.safeParse({ active: false }).success).toBe(true);
+  });
+
+  it("accepts several linked stock products", () => {
+    const result = taskCreateSchema.parse({
+      rabbitId: 1,
+      label: "Change litter box",
+      products: [
+        { productId: 1, amountGrams: 800 },
+        { productId: 2, amountGrams: 50 },
+      ],
+    });
+    expect(result.products).toHaveLength(2);
+    expect(
+      taskCreateSchema.safeParse({
+        rabbitId: 1,
+        label: "X",
+        products: [{ productId: 1, amountGrams: -5 }],
+      }).success,
+    ).toBe(false);
   });
 
   it("requires a completion time", () => {

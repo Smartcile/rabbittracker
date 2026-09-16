@@ -301,29 +301,36 @@ describe("taskDueStatus", () => {
   const now = new Date("2026-06-15T12:00:00.000Z");
 
   it("treats a never-completed task with no start date as due", () => {
-    expect(taskDueStatus(null, null, 1, now)).toBe("due");
-    expect(taskNextDueOn(null, null, 1)).toBeNull();
+    expect(taskDueStatus(null, null, 1, now, "UTC")).toBe("due");
+    expect(taskNextDueOn(null, null, 1, "UTC")).toBeNull();
   });
 
   it("uses the start date as the first due date", () => {
-    expect(taskDueStatus("2026-06-20", null, 1, now)).toBe("upcoming");
-    expect(taskNextDueOn("2026-06-20", null, 1)).toBe("2026-06-20");
-    expect(taskDueStatus("2026-06-10", null, 1, now)).toBe("due");
+    expect(taskDueStatus("2026-06-20", null, 1, now, "UTC")).toBe("upcoming");
+    expect(taskNextDueOn("2026-06-20", null, 1, "UTC")).toBe("2026-06-20");
+    expect(taskDueStatus("2026-06-10", null, 1, now, "UTC")).toBe("due");
   });
 
   it("is upcoming once completed today for a daily task", () => {
-    expect(taskDueStatus(null, "2026-06-15T08:00:00.000Z", 1, now)).toBe("upcoming");
-    expect(taskNextDueOn(null, "2026-06-15T08:00:00.000Z", 1)).toBe("2026-06-16");
+    expect(taskDueStatus(null, "2026-06-15T08:00:00.000Z", 1, now, "UTC")).toBe("upcoming");
+    expect(taskNextDueOn(null, "2026-06-15T08:00:00.000Z", 1, "UTC")).toBe("2026-06-16");
   });
 
   it("is due when the interval has elapsed", () => {
-    expect(taskDueStatus(null, "2026-06-13T08:00:00.000Z", 2, now)).toBe("due");
-    expect(taskDueStatus(null, "2026-06-13T08:00:00.000Z", 1, now)).toBe("due");
+    expect(taskDueStatus(null, "2026-06-13T08:00:00.000Z", 2, now, "UTC")).toBe("due");
+    expect(taskDueStatus(null, "2026-06-13T08:00:00.000Z", 1, now, "UTC")).toBe("due");
   });
 
   it("stays upcoming for a longer interval", () => {
-    expect(taskDueStatus(null, "2026-06-14T08:00:00.000Z", 3, now)).toBe("upcoming");
-    expect(taskNextDueOn(null, "2026-06-14T08:00:00.000Z", 3)).toBe("2026-06-17");
+    expect(taskDueStatus(null, "2026-06-14T08:00:00.000Z", 3, now, "UTC")).toBe("upcoming");
+    expect(taskNextDueOn(null, "2026-06-14T08:00:00.000Z", 3, "UTC")).toBe("2026-06-17");
+  });
+
+  it("uses the requested time zone for the current day", () => {
+    expect(taskDueStatus("2026-06-16", null, 1, now, "UTC")).toBe("upcoming");
+    expect(taskDueStatus("2026-06-16", null, 1, now, "Pacific/Auckland")).toBe("due");
+    expect(taskDueStatus(null, "2026-06-15T08:00:00.000Z", 1, now, "UTC")).toBe("upcoming");
+    expect(taskDueStatus(null, "2026-06-15T08:00:00.000Z", 1, now, "Pacific/Auckland")).toBe("due");
   });
 });
 

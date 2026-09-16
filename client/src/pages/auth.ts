@@ -11,7 +11,7 @@ type AuthPageProps = {
 export function renderAuthPage(props: AuthPageProps): HTMLElement {
   const subtitle = h("p", { class: "dim small" });
   const body = h("div");
-  let mode: "pin" | "password" = props.needsSetup || !props.pinLogin ? "password" : "pin";
+  let mode: "pin" | "password" = props.needsSetup ? "password" : "pin";
 
   const setMode = (next: "pin" | "password") => {
     mode = next;
@@ -22,14 +22,16 @@ export function renderAuthPage(props: AuthPageProps): HTMLElement {
     if (props.needsSetup) {
       subtitle.textContent = "Create the first admin account for your household.";
     } else if (mode === "pin") {
-      subtitle.textContent = "Enter your PIN to continue.";
+      subtitle.textContent = props.pinLogin
+        ? "Enter your PIN to continue."
+        : "Enter your PIN, or use Email/Password.";
     } else {
       subtitle.textContent = "Sign in with your admin username and password.";
     }
     body.replaceChildren(
       mode === "pin"
         ? pinForm(props, () => setMode("password"))
-        : passwordForm(props, props.pinLogin ? () => setMode("pin") : undefined),
+        : passwordForm(props, props.needsSetup ? undefined : () => setMode("pin")),
     );
   };
 
@@ -131,7 +133,7 @@ function pinForm(props: AuthPageProps, onSwitch: () => void): HTMLElement {
     h(
       "button",
       { class: "btn ghost small", type: "button", onClick: onSwitch },
-      "Use username and password",
+      "Email/Password",
     ),
   );
 }

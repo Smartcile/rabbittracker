@@ -144,7 +144,14 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
           canRecord,
         ),
         quickLogCard(bundle.rabbit, checklistSections, load, canRecord),
-        tasksCard(bundle.rabbit, taskResponse.tasks, taskResponse.completions, load, canRecord),
+        tasksCard(
+          bundle.rabbit,
+          taskResponse.tasks,
+          taskResponse.completions,
+          load,
+          canRecord,
+          settingsResponse.settings.timezone,
+        ),
         weightCard(bundle.rabbit, bundle.checks, normsResponse.norms, load, canRecord),
         checksCard(bundle.rabbit, bundle.checks, checklistSections, logTypes, load, canRecord),
         vaccinationsCard(bundle.rabbit, bundle.vaccinations, load, canRecord),
@@ -925,7 +932,9 @@ function bowlPanel(
   reload: () => Promise<void>,
   canRecord: boolean,
 ): HTMLElement {
-  const product = products.find((item) => item.id === bowl.productId) ?? null;
+  const linkedProducts = bowl.productIds
+    .map((id) => products.find((item) => item.id === id))
+    .filter((item): item is FoodProductDto => item !== undefined);
   const content =
     bowl.currentWeightGrams != null && bowl.tareGrams != null
       ? bowl.currentWeightGrams - bowl.tareGrams
@@ -952,7 +961,7 @@ function bowlPanel(
         bowl,
         date: new Date(),
         slot,
-        product: product ?? undefined,
+        products: linkedProducts,
         onSaved: () => void reload(),
       }),
   });
@@ -966,7 +975,7 @@ function bowlPanel(
             class: "btn outline small",
             type: "button",
             onClick: () =>
-              openBowlReadingModal({ bowl, product: product ?? undefined, onSaved: () => void reload() }),
+              openBowlReadingModal({ bowl, products: linkedProducts, onSaved: () => void reload() }),
           },
           "Log reading",
         ),
@@ -1007,12 +1016,13 @@ function bowlPanel(
       h("strong", null, bowl.label),
       h("span", { class: "dim small" }, parts.join(" · ")),
     ),
-    product
+    linkedProducts.length > 0
       ? h(
           "div",
           { class: "row wrap", style: { gap: "0.35rem" } },
-          h("span", { class: "badge" }, product.name),
-          h("span", { class: "dim small" }, `${formatFoodAmount(product.stockGrams)} in stock`),
+          linkedProducts.map((item) =>
+            h("span", { class: "badge" }, `${item.name} · ${formatFoodAmount(item.stockGrams)}`),
+          ),
         )
       : null,
     schedule,
@@ -1137,12 +1147,16 @@ function tasksCard(
   completions: TaskCompletionDto[],
   reload: () => Promise<void>,
   canRecord: boolean,
+  timezone: string,
 ): HTMLElement {
   const now = new Date();
   const taskById = new Map(tasks.map((task) => [task.id, task]));
   const due = tasks
     .filter(
-      (task) => task.active && taskDueStatus(task.startDate, task.lastCompletedAt, task.intervalDays, now) === "due",
+      (task) =>
+        task.active &&
+        taskDueStatus(task.startDate, task.lastCompletedAt, task.intervalDays, now, timezone) ===
+          "due",
     )
     .sort((a, b) => TASK_SLOTS.indexOf(a.slot) - TASK_SLOTS.indexOf(b.slot) || a.id - b.id);
 
@@ -1159,8 +1173,13 @@ function tasksCard(
     const detail = [
       task.intervalDays === 1 ? "every day" : `every ${task.intervalDays} days`,
       task.lastCompletedAt ? `last done ${fmtDate(task.lastCompletedAt)}` : "not done yet",
-      task.productName
-        ? `uses ${task.productName}${task.amountGrams > 0 ? ` (${task.amountGrams} g)` : ""}`
+      task.products.length > 0
+        ? `uses ${task.products
+            .map(
+              (product) =>
+                `${product.productName}${product.amountGrams > 0 ? ` (${product.amountGrams} g)` : ""}`,
+            )
+            .join(", ")}`
         : null,
     ]
       .filter(Boolean)

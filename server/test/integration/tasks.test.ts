@@ -159,16 +159,27 @@ describe("task integration", () => {
 
   it("draws stock when completing a linked task and restores it when undone", async () => {
     const rabbit = await createRabbit();
-    const productId = await createProduct("Litter", 5000);
-    const task = await createTask(rabbit.id, { productId, amountGrams: 800 });
-    expect(task.productId).toBe(productId);
-    expect(task.productName).toBe("Litter");
-    expect(task.amountGrams).toBe(800);
+    const litterId = await createProduct("Litter", 5000);
+    const deodoriserId = await createProduct("Deodoriser", 1000);
+    const task = await createTask(rabbit.id, {
+      products: [
+        { productId: litterId, amountGrams: 800 },
+        { productId: deodoriserId, amountGrams: 50 },
+      ],
+    });
+    expect(task.products).toHaveLength(2);
+    expect(task.products[0]).toMatchObject({
+      productId: litterId,
+      productName: "Litter",
+      amountGrams: 800,
+    });
 
     const completion = await completeTask(task.id);
-    expect((await getProduct(productId)).stockGrams).toBe(4200);
+    expect((await getProduct(litterId)).stockGrams).toBe(4200);
+    expect((await getProduct(deodoriserId)).stockGrams).toBe(950);
 
     await api(ctx, `/api/tasks/completions/${completion.id}`, { method: "DELETE" });
-    expect((await getProduct(productId)).stockGrams).toBe(5000);
+    expect((await getProduct(litterId)).stockGrams).toBe(5000);
+    expect((await getProduct(deodoriserId)).stockGrams).toBe(1000);
   });
 });

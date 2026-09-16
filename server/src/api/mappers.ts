@@ -389,9 +389,21 @@ export function checkLogToDto(
   };
 }
 
-export function bowlToDto(row: BowlRow, readings: BowlReadingRow[]): BowlDto {
+export function bowlToDto(
+  row: BowlRow,
+  readings: BowlReadingRow[],
+  startedAt?: Date | null,
+): BowlDto {
   const summary = summarizeBowl(readings);
   const computedById = new Map(summary.readings.map((item) => [item.id, item]));
+  const start =
+    startedAt ??
+    (readings.length > 0
+      ? readings.reduce(
+          (earliest, reading) => (reading.readAt < earliest ? reading.readAt : earliest),
+          readings[0].readAt,
+        )
+      : null);
   return {
     id: row.id,
     rabbitId: row.rabbitId,
@@ -399,9 +411,10 @@ export function bowlToDto(row: BowlRow, readings: BowlReadingRow[]): BowlDto {
     kind: row.kind === "water" ? "water" : "food",
     slots: daySlots(row.slots),
     tareGrams: row.tareGrams,
-    productId: row.productId,
+    productIds: row.productIds ?? [],
     currentWeightGrams: summary.currentWeightGrams,
     periodStartAt: summary.periodStartAt ? summary.periodStartAt.toISOString() : null,
+    startedAt: start ? start.toISOString() : null,
     periodConsumptionGrams: summary.periodConsumptionGrams,
     periodRefillGrams: summary.periodRefillGrams,
     totalConsumptionGrams: summary.totalConsumptionGrams,
@@ -465,7 +478,7 @@ export function foodProductToDto(
 export function taskToDto(
   row: RabbitTaskRow,
   lastCompletedAt: Date | null,
-  productName: string | null = null,
+  productNames: Map<number, string> = new Map(),
 ): TaskDto {
   return {
     id: row.id,
@@ -474,9 +487,11 @@ export function taskToDto(
     slot: taskSlot(row.slot),
     intervalDays: row.intervalDays,
     startDate: row.startDate,
-    productId: row.productId,
-    productName,
-    amountGrams: row.amountGrams,
+    products: (row.products ?? []).map((product) => ({
+      productId: product.productId,
+      productName: productNames.get(product.productId) ?? "",
+      amountGrams: product.amountGrams,
+    })),
     notes: row.notes,
     active: row.active,
     lastCompletedAt: lastCompletedAt ? lastCompletedAt.toISOString() : null,
@@ -487,7 +502,7 @@ export function taskToDto(
 
 export function taskTemplateToDto(
   row: TaskTemplateRow,
-  productName: string | null,
+  productNames: Map<number, string> = new Map(),
 ): TaskTemplateDto {
   return {
     id: row.id,
@@ -495,9 +510,11 @@ export function taskTemplateToDto(
     slot: taskSlot(row.slot),
     intervalDays: row.intervalDays,
     startDate: row.startDate,
-    productId: row.productId,
-    productName,
-    amountGrams: row.amountGrams,
+    products: (row.products ?? []).map((product) => ({
+      productId: product.productId,
+      productName: productNames.get(product.productId) ?? "",
+      amountGrams: product.amountGrams,
+    })),
     notes: row.notes,
     active: row.active,
     sortOrder: row.sortOrder,

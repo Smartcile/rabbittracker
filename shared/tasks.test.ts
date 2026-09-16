@@ -35,6 +35,18 @@ describe("taskScheduleDays", () => {
     expect(taskScheduleDays({ startDate: null, intervalDays: 1 }, [], "2026-09-01", "2026-09-05")).toEqual([]);
   });
 
+  it("falls back to the supplied day when there is no start date or completion", () => {
+    expect(
+      taskScheduleDays(
+        { startDate: null, intervalDays: 2 },
+        [],
+        "2026-09-01",
+        "2026-09-07",
+        "2026-09-03",
+      ),
+    ).toEqual(["2026-09-03", "2026-09-05", "2026-09-07"]);
+  });
+
   it("returns nothing when the range ends before the anchor", () => {
     expect(
       taskScheduleDays({ startDate: "2026-10-01", intervalDays: 1 }, [], "2026-09-01", "2026-09-05"),

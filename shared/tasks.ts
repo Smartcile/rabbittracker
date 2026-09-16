@@ -19,9 +19,11 @@ export function taskScheduleDays(
   completionDays: readonly string[],
   fromKey: string,
   toKey: string,
+  fallbackStartKey?: string | null,
 ): string[] {
   const interval = Math.max(1, Math.floor(task.intervalDays));
-  const anchorKey = task.startDate ?? [...completionDays].sort()[0] ?? null;
+  const anchorKey =
+    task.startDate ?? [...completionDays].sort()[0] ?? fallbackStartKey ?? null;
   if (!anchorKey) return [];
   const anchor = dayToMs(anchorKey);
   const from = dayToMs(fromKey);

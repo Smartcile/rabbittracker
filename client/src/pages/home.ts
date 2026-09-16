@@ -6,6 +6,7 @@ import type {
   HealthCheckDto,
   MedicationLogDto,
   RabbitSummaryDto,
+  SettingsDto,
   TaskDto,
   TreatmentDto,
 } from "../../../shared/types.ts";
@@ -82,6 +83,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
       { tasks },
       { logs: medLogs },
       { logs: checkLogs },
+      { settings },
     ] = await Promise.all([
       api.get<{ rabbits: RabbitSummaryDto[] }>("/api/rabbits"),
       api.get<{ appointments: AppointmentDto[] }>("/api/appointments"),
@@ -91,12 +93,23 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
       api.get<{ tasks: TaskDto[] }>("/api/tasks"),
       api.get<{ logs: MedicationLogDto[] }>("/api/medication-logs"),
       api.get<{ logs: CheckLogDto[] }>("/api/check-logs"),
+      api.get<{ settings: SettingsDto }>("/api/settings"),
     ]);
     const hasActive = rabbits.some((rabbit) => rabbit.status === "active");
     quickLog.disabled = !hasActive;
     fab.disabled = !hasActive;
     renderStats(rabbits, appointments, treatments);
-    renderToday(rabbits, appointments, treatments, drugs, logTypes, tasks, medLogs, checkLogs);
+    renderToday(
+      rabbits,
+      appointments,
+      treatments,
+      drugs,
+      logTypes,
+      tasks,
+      medLogs,
+      checkLogs,
+      settings.timezone,
+    );
     renderAttention(rabbits);
     renderUpcoming(appointments, rabbits);
     if (rabbits.length === 0) {
@@ -148,6 +161,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
     tasks: TaskDto[],
     medLogs: MedicationLogDto[],
     checkLogs: CheckLogDto[],
+    timezone: string,
   ): void {
     const activeRabbits = rabbits.filter((rabbit) => rabbit.status === "active");
     const byId = new Map(activeRabbits.map((rabbit) => [rabbit.id, rabbit]));
@@ -179,18 +193,28 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
         (task) =>
           task.active &&
           byId.has(task.rabbitId) &&
-          taskDueStatus(task.startDate, task.lastCompletedAt, task.intervalDays, new Date()) === "due",
+          taskDueStatus(
+            task.startDate,
+            task.lastCompletedAt,
+            task.intervalDays,
+            new Date(),
+            timezone,
+          ) === "due",
       )
       .sort(
         (a, b) => TASK_SLOTS.indexOf(a.slot) - TASK_SLOTS.indexOf(b.slot) || a.id - b.id,
       );
     for (const task of dueTasks) {
       const rabbit = byId.get(task.rabbitId)!;
+      const productsText = task.products
+        .map(
+          (product) =>
+            `${product.productName}${product.amountGrams > 0 ? ` (${product.amountGrams} g)` : ""}`,
+        )
+        .join(", ");
       const detail = [
         TASK_SLOT_LABELS[task.slot],
-        task.productName
-          ? `uses ${task.productName}${task.amountGrams > 0 ? ` (${task.amountGrams} g)` : ""}`
-          : null,
+        productsText ? `uses ${productsText}` : null,
       ]
         .filter(Boolean)
         .join(" · ");

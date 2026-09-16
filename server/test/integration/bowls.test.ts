@@ -210,6 +210,27 @@ describe("bowl integration", () => {
     );
   });
 
+  it("reports the bowl's start date even when it falls outside the requested range", async () => {
+    const rabbit = await createRabbit();
+    const bowl = await createBowl(rabbit.id, 900, ["morning"]);
+    await addReading(bowl.id, {
+      kind: "weigh",
+      readAt: "2026-09-10T08:00:00.000Z",
+      weightGrams: 800,
+      slot: "morning",
+    });
+
+    const { bowls } = await api<{ bowls: BowlDto[] }>(
+      ctx,
+      "/api/bowls/schedule?from=2026-09-05T00:00:00.000Z&to=2026-09-30T23:59:59.999Z",
+    );
+    expect(bowls).toHaveLength(1);
+    expect(bowls[0]?.startedAt).toBe("2026-09-01T08:00:00.000Z");
+    expect(
+      bowls[0]?.readings.some((reading) => reading.readAt.startsWith("2026-09-01")),
+    ).toBe(false);
+  });
+
   it("assigns the only scheduled time when a reading omits it", async () => {
     const rabbit = await createRabbit();
     const bowl = await createBowl(rabbit.id, 900, ["morning"]);
@@ -361,7 +382,7 @@ describe("bowl integration", () => {
       body: {
         rabbitId: rabbit.id,
         label: "Hay bowl",
-        productId: product.id,
+        productIds: [product.id],
         startWeightGrams: 500,
         startedAt: "2026-09-01T08:00:00.000Z",
       },

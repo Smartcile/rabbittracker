@@ -98,6 +98,7 @@ export const DEFAULT_LOOKUPS: Record<LookupKind, LookupDefault[]> = {
     { value: "every_other_day", label: "Every other day" },
     { value: "every_10_14_days", label: "Every 10–14 days" },
     { value: "once_weekly", label: "Once weekly" },
+    { value: "twice_weekly", label: "Twice weekly" },
     { value: "monthly", label: "Monthly" },
     { value: "as_needed", label: "As needed" },
     { value: "every_6_hours_as_needed", label: "Every 6 hours as needed" },

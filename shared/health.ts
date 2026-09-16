@@ -173,21 +173,45 @@ export function careDueStatus(
   return "ok";
 }
 
+export function dayKeyInZone(date: Date, timeZone?: string): string | null {
+  if (Number.isNaN(date.getTime())) return null;
+  if (!timeZone) {
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  if (!year || !month || !day) return null;
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysToKey(key: string, days: number): string | null {
+  const [year, month, day] = key.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(Date.UTC(year, month - 1, day) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
 export function taskNextDueOn(
   startDate: string | null | undefined,
   lastCompletedAt: string | null | undefined,
   intervalDays: number,
+  timeZone?: string,
 ): string | null {
   if (lastCompletedAt) {
     if (!Number.isFinite(intervalDays) || intervalDays <= 0) return null;
-    const last = utcDay(lastCompletedAt);
-    if (last === null) return null;
-    return new Date(last + intervalDays * 86_400_000).toISOString().slice(0, 10);
+    const key = dayKeyInZone(new Date(lastCompletedAt), timeZone);
+    if (key === null) return null;
+    return addDaysToKey(key, intervalDays);
   }
   if (!startDate) return null;
-  const start = utcDay(`${startDate}T00:00:00.000Z`);
-  if (start === null) return null;
-  return new Date(start).toISOString().slice(0, 10);
+  return startDate;
 }
 
 export function taskDueStatus(
@@ -195,18 +219,17 @@ export function taskDueStatus(
   lastCompletedAt: string | null | undefined,
   intervalDays: number,
   now: Date,
+  timeZone?: string,
 ): "due" | "upcoming" {
+  const today = dayKeyInZone(now, timeZone);
+  if (today === null) return "due";
   if (!lastCompletedAt) {
     if (!startDate) return "due";
-    const start = utcDay(`${startDate}T00:00:00.000Z`);
-    if (start === null) return "due";
-    return start <= todayUtc(now) ? "due" : "upcoming";
+    return startDate <= today ? "due" : "upcoming";
   }
-  const dueOn = taskNextDueOn(startDate, lastCompletedAt, intervalDays);
+  const dueOn = taskNextDueOn(startDate, lastCompletedAt, intervalDays, timeZone);
   if (!dueOn) return "due";
-  const due = utcDay(`${dueOn}T00:00:00.000Z`);
-  if (due === null) return "due";
-  return due <= todayUtc(now) ? "due" : "upcoming";
+  return dueOn <= today ? "due" : "upcoming";
 }
 
 export type TreatmentScheduleState = "completed" | "up-to-date" | "due" | "missed" | "not-started";

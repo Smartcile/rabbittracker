@@ -51,7 +51,7 @@ describe("food product integration", () => {
         label: "Hay bowl",
         startWeightGrams: 500,
         startedAt: "2026-09-01T08:00:00.000Z",
-        productId,
+        productIds: productId !== undefined ? [productId] : [],
       },
     });
     return bowl;
@@ -141,7 +141,7 @@ describe("food product integration", () => {
           label: "Hay bowl",
           startWeightGrams: 500,
           startedAt: "2026-09-01T08:00:00.000Z",
-          productId: 9999,
+          productIds: [9999],
         },
       }),
     ).rejects.toThrow("Product not found");

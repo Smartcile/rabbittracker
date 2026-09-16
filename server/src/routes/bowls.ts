@@ -1,11 +1,11 @@
-import { and, asc, desc, eq, gte, inArray, lt, lte, ne, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, lte, min, ne, or } from "drizzle-orm";
 import { Router } from "express";
 import { summarizeBowl } from "../../../shared/bowls.ts";
 import type { DaySlot } from "../../../shared/slots.ts";
 import { bowlToDto } from "../api/mappers.ts";
 import { db } from "../db/index.ts";
 import { bowlReadings, bowls, foodProducts, foodStockEntries } from "../db/schema.ts";
-import type { BowlReadingRow, BowlRow, FoodProductRow } from "../db/schema.ts";
+import type { BowlReadingRow, BowlRow } from "../db/schema.ts";
 import { findVisibleRabbit, requirePermission, visibleRabbitIds } from "../lib/access.ts";
 import { requireAuth } from "../lib/auth.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
@@ -84,11 +84,26 @@ bowlsRouter.get("/schedule", requireAuth, async (req, res) => {
           )
           .orderBy(asc(bowlReadings.readAt), asc(bowlReadings.id))
       : [];
+  const startRows =
+    scheduled.length > 0
+      ? await db
+          .select({ bowlId: bowlReadings.bowlId, startedAt: min(bowlReadings.readAt) })
+          .from(bowlReadings)
+          .where(
+            inArray(
+              bowlReadings.bowlId,
+              scheduled.map((row) => row.id),
+            ),
+          )
+          .groupBy(bowlReadings.bowlId)
+      : [];
+  const startByBowl = new Map(startRows.map((row) => [row.bowlId, row.startedAt]));
   res.json({
     bowls: scheduled.map((row) =>
       bowlToDto(
         row,
         readings.filter((reading) => reading.bowlId === row.id),
+        startByBowl.get(row.id) ?? null,
       ),
     ),
   });
@@ -97,7 +112,7 @@ bowlsRouter.get("/schedule", requireAuth, async (req, res) => {
 bowlsRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {
   const input = parseInput(bowlCreateSchema, req.body);
   await findVisibleRabbit(req.user!, input.rabbitId);
-  if (input.productId != null) await findProduct(input.productId);
+  await findProducts(input.productIds);
   const [bowl] = await db
     .insert(bowls)
     .values({
@@ -106,7 +121,7 @@ bowlsRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (
       kind: input.kind,
       slots: input.slots,
       tareGrams: input.tareGrams ?? null,
-      productId: input.productId ?? null,
+      productIds: input.productIds,
     })
     .returning();
   const [reading] = await db
@@ -126,7 +141,7 @@ bowlsRouter.patch("/:id", requireAuth, requirePermission("canRecordHealth"), asy
   const bowl = await findBowl(parseId(String(req.params.id)));
   await findVisibleRabbit(req.user!, bowl.rabbitId);
   const input = parseInput(bowlUpdateSchema, req.body);
-  if (input.productId != null) await findProduct(input.productId);
+  if (input.productIds !== undefined) await findProducts(input.productIds);
   const [row] = await db
     .update(bowls)
     .set({
@@ -134,7 +149,7 @@ bowlsRouter.patch("/:id", requireAuth, requirePermission("canRecordHealth"), asy
       kind: input.kind ?? bowl.kind,
       slots: input.slots ?? bowl.slots,
       tareGrams: input.tareGrams !== undefined ? input.tareGrams : bowl.tareGrams,
-      productId: input.productId !== undefined ? input.productId : bowl.productId,
+      productIds: input.productIds ?? bowl.productIds,
       updatedAt: new Date(),
     })
     .where(eq(bowls.id, bowl.id))
@@ -207,24 +222,32 @@ bowlsRouter.patch(
           notes: input.notes ?? reading.notes,
         })
         .where(eq(bowlReadings.id, reading.id));
-      if (reading.kind === "refill" && input.refillGrams !== undefined) {
+      if (reading.kind === "refill") {
         const entries = await tx
           .select()
           .from(foodStockEntries)
           .where(eq(foodStockEntries.bowlReadingId, reading.id))
           .limit(1);
         if (entries[0]) {
-          await tx
-            .update(foodStockEntries)
-            .set({ amountGrams: -input.refillGrams })
-            .where(eq(foodStockEntries.id, entries[0].id));
-        } else if (bowl.productId !== null) {
-          await tx.insert(foodStockEntries).values({
-            productId: bowl.productId,
-            bowlReadingId: reading.id,
-            amountGrams: -input.refillGrams,
-            note: `Bowl top-up: ${bowl.label}`,
-          });
+          const patch: { amountGrams?: number; productId?: number } = {};
+          if (input.refillGrams !== undefined) patch.amountGrams = -input.refillGrams;
+          if (input.productId) patch.productId = input.productId;
+          if (Object.keys(patch).length > 0) {
+            await tx
+              .update(foodStockEntries)
+              .set(patch)
+              .where(eq(foodStockEntries.id, entries[0].id));
+          }
+        } else if (input.refillGrams !== undefined) {
+          const productId = input.productId ?? bowl.productIds[0] ?? null;
+          if (productId !== null) {
+            await tx.insert(foodStockEntries).values({
+              productId,
+              bowlReadingId: reading.id,
+              amountGrams: -input.refillGrams,
+              note: `Bowl top-up: ${bowl.label}`,
+            });
+          }
         }
       }
     });
@@ -309,9 +332,10 @@ async function applyReading(
     })
     .returning();
   rows.push(reading);
-  if (input.kind === "refill" && bowl.productId !== null && (input.refillGrams ?? 0) > 0) {
+  const stockProductId = input.productId ?? bowl.productIds[0] ?? null;
+  if (input.kind === "refill" && stockProductId !== null && (input.refillGrams ?? 0) > 0) {
     await tx.insert(foodStockEntries).values({
-      productId: bowl.productId,
+      productId: stockProductId,
       bowlReadingId: reading.id,
       amountGrams: -(input.refillGrams ?? 0),
       note: `Bowl top-up: ${bowl.label}`,
@@ -337,10 +361,13 @@ async function findBowl(id: number): Promise<BowlRow> {
   return rows[0];
 }
 
-async function findProduct(id: number): Promise<FoodProductRow> {
-  const rows = await db.select().from(foodProducts).where(eq(foodProducts.id, id)).limit(1);
-  if (!rows[0]) throw new HttpError(400, "Product not found");
-  return rows[0];
+async function findProducts(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+  const rows = await db
+    .select({ id: foodProducts.id })
+    .from(foodProducts)
+    .where(inArray(foodProducts.id, ids));
+  if (rows.length !== new Set(ids).size) throw new HttpError(400, "Product not found");
 }
 
 async function findReading(id: number): Promise<BowlReadingRow> {

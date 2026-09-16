@@ -355,7 +355,7 @@ export const bowlCreateSchema = z.object({
   kind: z.enum(["food", "water"]).default("food"),
   slots: z.array(z.enum(DAY_SLOTS)).max(DAY_SLOTS.length).default([]),
   tareGrams: z.number().int().min(0).max(1_000_000).nullable().optional(),
-  productId: z.number().int().positive().nullable().optional(),
+  productIds: z.array(z.number().int().positive()).max(50).default([]),
   startWeightGrams: z.number().int().min(0).max(1_000_000),
   startedAt: z.coerce.date(),
   notes: z.string().trim().max(2000).default(""),
@@ -367,7 +367,7 @@ export const bowlUpdateSchema = z
     kind: z.enum(["food", "water"]).optional(),
     slots: z.array(z.enum(DAY_SLOTS)).max(DAY_SLOTS.length).optional(),
     tareGrams: z.number().int().min(0).max(1_000_000).nullable().optional(),
-    productId: z.number().int().positive().nullable().optional(),
+    productIds: z.array(z.number().int().positive()).max(50).optional(),
   })
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: "No changes provided",
@@ -378,6 +378,7 @@ export const bowlReadingCreateSchema = z
     kind: z.enum(["weigh", "consume", "refill", "refresh"]),
     readAt: z.coerce.date(),
     slot: z.enum(DAY_SLOTS).nullable().optional(),
+    productId: z.number().int().positive().nullable().optional(),
     weightGrams: z.number().int().min(0).max(1_000_000).optional(),
     consumedGrams: z.number().int().min(1).max(1_000_000).optional(),
     refillGrams: z.number().int().min(1).max(1_000_000).optional(),
@@ -405,6 +406,7 @@ export const bowlReadingUpdateSchema = z
   .object({
     readAt: z.coerce.date().optional(),
     slot: z.enum(DAY_SLOTS).nullable().optional(),
+    productId: z.number().int().positive().nullable().optional(),
     weightGrams: z.number().int().min(0).max(1_000_000).optional(),
     refillGrams: z.number().int().min(1).max(1_000_000).optional(),
     notes: z.string().trim().max(2000).optional(),
@@ -491,6 +493,11 @@ export const stageCompletionSchema = z.object({
   notes: z.string().trim().max(2000).default(""),
 });
 
+const taskProductSchema = z.object({
+  productId: z.number().int().positive(),
+  amountGrams: z.number().int().min(0).max(1_000_000),
+});
+
 export const taskCreateSchema = z.object({
   rabbitId: z.number().int().positive(),
   templateId: z.number().int().positive().nullable().optional(),
@@ -498,8 +505,7 @@ export const taskCreateSchema = z.object({
   slot: z.enum(TASK_SLOTS).default("anytime"),
   intervalDays: z.number().int().min(1).max(3650).default(1),
   startDate: optionalDate,
-  productId: z.number().int().positive().nullable().optional(),
-  amountGrams: z.number().int().min(0).max(1_000_000).default(0),
+  products: z.array(taskProductSchema).max(50).default([]),
   notes: z.string().trim().max(2000).default(""),
   active: z.boolean().default(true),
 });
@@ -510,8 +516,7 @@ export const taskUpdateSchema = z
     slot: z.enum(TASK_SLOTS).optional(),
     intervalDays: z.number().int().min(1).max(3650).optional(),
     startDate: optionalDate,
-    productId: z.number().int().positive().nullable().optional(),
-    amountGrams: z.number().int().min(0).max(1_000_000).optional(),
+    products: z.array(taskProductSchema).max(50).optional(),
     notes: z.string().trim().max(2000).optional(),
     active: z.boolean().optional(),
   })
@@ -524,8 +529,7 @@ export const taskTemplateCreateSchema = z.object({
   slot: z.enum(TASK_SLOTS).default("anytime"),
   intervalDays: z.number().int().min(1).max(3650).default(1),
   startDate: optionalDate,
-  productId: z.number().int().positive().nullable().optional(),
-  amountGrams: z.number().int().min(0).max(1_000_000).default(0),
+  products: z.array(taskProductSchema).max(50).default([]),
   notes: z.string().trim().max(2000).default(""),
   active: z.boolean().default(true),
 });
@@ -536,8 +540,7 @@ export const taskTemplateUpdateSchema = z
     slot: z.enum(TASK_SLOTS).optional(),
     intervalDays: z.number().int().min(1).max(3650).optional(),
     startDate: optionalDate,
-    productId: z.number().int().positive().nullable().optional(),
-    amountGrams: z.number().int().min(0).max(1_000_000).optional(),
+    products: z.array(taskProductSchema).max(50).optional(),
     notes: z.string().trim().max(2000).optional(),
     active: z.boolean().optional(),
   })

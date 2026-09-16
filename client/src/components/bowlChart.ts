@@ -16,7 +16,7 @@ const SERIES_COUNT = 5;
 
 type BowlSeries = {
   label: string;
-  color: number;
+  color: string;
   values: (number | null)[];
   average: number;
 };
@@ -33,7 +33,7 @@ export function renderBowlsChart(bowls: BowlDto[], range?: ReportRange): HTMLEle
     const byDay = new Map(summary.days.map((day) => [day.day, day.consumptionGrams]));
     return {
       label: bowl.label,
-      color: (index % SERIES_COUNT) + 1,
+      color: bowl.kind === "water" ? "water" : String((index % SERIES_COUNT) + 1),
       values: window.map((day) => byDay.get(day) ?? null),
       average: summary.averageConsumptionGrams,
     };

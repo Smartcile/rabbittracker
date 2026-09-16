@@ -42,15 +42,11 @@ tasksRouter.get("/", requireAuth, async (req, res) => {
       : [[], []];
   const lastByTask = new Map(lastRows.map((row) => [row.taskId, row.last]));
   const rabbitByTask = new Map(rows.map((row) => [row.id, row.rabbitId]));
-  const names = await productNames(rows.map((row) => row.productId));
+  const names = await productNames(
+    rows.flatMap((row) => (row.products ?? []).map((product) => product.productId)),
+  );
   res.json({
-    tasks: rows.map((row) =>
-      taskToDto(
-        row,
-        lastByTask.get(row.id) ?? null,
-        row.productId !== null ? (names.get(row.productId) ?? null) : null,
-      ),
-    ),
+    tasks: rows.map((row) => taskToDto(row, lastByTask.get(row.id) ?? null, names)),
     completions: recent.map((row) => taskCompletionToDto(row, rabbitByTask.get(row.taskId) ?? 0)),
   });
 });
@@ -67,13 +63,12 @@ tasksRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (
       slot: input.slot,
       intervalDays: input.intervalDays,
       startDate: input.startDate ?? null,
-      productId: input.productId ?? null,
-      amountGrams: input.amountGrams,
+      products: input.products,
       notes: input.notes,
       active: input.active,
     })
     .returning();
-  res.status(201).json({ task: taskToDto(row, null, await productName(row.productId)) });
+  res.status(201).json({ task: taskToDto(row, null, await productNamesFor(input.products)) });
 });
 
 tasksRouter.patch("/:id", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {
@@ -87,15 +82,16 @@ tasksRouter.patch("/:id", requireAuth, requirePermission("canRecordHealth"), asy
       slot: input.slot ?? task.slot,
       intervalDays: input.intervalDays ?? task.intervalDays,
       startDate: input.startDate !== undefined ? input.startDate : task.startDate,
-      productId: input.productId !== undefined ? input.productId : task.productId,
-      amountGrams: input.amountGrams ?? task.amountGrams,
+      products: input.products ?? task.products,
       notes: input.notes !== undefined ? input.notes : task.notes,
       active: input.active !== undefined ? input.active : task.active,
       updatedAt: new Date(),
     })
     .where(eq(rabbitTasks.id, task.id))
     .returning();
-  res.json({ task: taskToDto(row, await lastCompletion(task.id), await productName(row.productId)) });
+  res.json({
+    task: taskToDto(row, await lastCompletion(task.id), await productNamesFor(row.products ?? [])),
+  });
 });
 
 tasksRouter.delete("/:id", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {
@@ -119,19 +115,22 @@ tasksRouter.post("/:id/complete", requireAuth, requirePermission("canRecordHealt
         notes: input.notes,
       })
       .returning();
-    if (task.productId !== null && task.amountGrams > 0) {
-      await tx.insert(foodStockEntries).values({
-        productId: task.productId,
-        taskCompletionId: row.id,
-        amountGrams: -task.amountGrams,
-        note: `Task: ${task.label}`,
-      });
+    if ((task.products ?? []).length > 0) {
+      const entries = task.products
+        .filter((product) => product.amountGrams > 0)
+        .map((product) => ({
+          productId: product.productId,
+          taskCompletionId: row.id,
+          amountGrams: -product.amountGrams,
+          note: `Task: ${task.label}`,
+        }));
+      if (entries.length > 0) await tx.insert(foodStockEntries).values(entries);
     }
     return row;
   });
   res.status(201).json({
     completion: taskCompletionToDto(completion, task.rabbitId),
-    task: taskToDto(task, completion.completedAt, await productName(task.productId)),
+    task: taskToDto(task, completion.completedAt, await productNamesFor(task.products ?? [])),
   });
 });
 
@@ -176,22 +175,16 @@ async function lastCompletion(taskId: number): Promise<Date | null> {
   return rows[0]?.completedAt ?? null;
 }
 
-async function productName(productId: number | null): Promise<string | null> {
-  if (productId === null) return null;
-  const rows = await db
-    .select({ name: foodProducts.name })
-    .from(foodProducts)
-    .where(eq(foodProducts.id, productId))
-    .limit(1);
-  return rows[0]?.name ?? null;
-}
-
-async function productNames(ids: (number | null)[]): Promise<Map<number, string>> {
-  const unique = [...new Set(ids.filter((id): id is number => id !== null))];
+async function productNames(ids: number[]): Promise<Map<number, string>> {
+  const unique = [...new Set(ids)];
   if (unique.length === 0) return new Map();
   const rows = await db
     .select({ id: foodProducts.id, name: foodProducts.name })
     .from(foodProducts)
     .where(inArray(foodProducts.id, unique));
   return new Map(rows.map((row) => [row.id, row.name]));
+}
+
+async function productNamesFor(products: { productId: number }[]): Promise<Map<number, string>> {
+  return productNames(products.map((product) => product.productId));
 }

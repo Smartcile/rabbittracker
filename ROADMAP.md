@@ -105,6 +105,22 @@
       deleting the completion puts it back. Tasks take an optional start date, completions can be
       dated, and the calendar shows each task's schedule with ticks for the days it was completed.
 
+- [x] **Calendar polish.** A filter bar narrows the month to one bunny or hides item types
+      (appointments, medication, bowls, tasks, events, check logs, external), task chips are tappable
+      to complete or undo a day, scheduled bowls only appear from their start date, today is
+      highlighted in both themes, water bowls are drawn in blue, and routine-task due dates follow
+      the Settings timezone instead of UTC.
+
+- [x] **PIN-first sign-in.** The login screen always opens on the PIN pad — including after the idle
+      lock — with an Email/Password button to reach the username-and-password form and a Use PIN
+      button to switch back.
+
+- [x] **Calendar tasks + multiple stock links.** Daily tasks use the same repeat choices as events
+      (daily/weekly/monthly/custom), can be created and edited from the calendar, and a
+      never-started task with no start date appears from today. Tasks, routine templates and bowls
+      can each link several food/supply products, and completing a task (or topping up a bowl) draws
+      from each linked product's stock.
+
 ## Planned features (agreed but not built)
 
 These are queued from the "bunny powerhouse" list; pick them up in any order.

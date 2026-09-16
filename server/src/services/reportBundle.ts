@@ -28,6 +28,7 @@ import {
   checkLogPhotos,
   checkLogs,
   drugs,
+  foodProducts,
   growthStages,
   medicationLogs,
   rabbitBonds,
@@ -142,6 +143,23 @@ export async function buildReportBundle(
     : [];
   const typeById = new Map(logTypes.map((type) => [type.id, type]));
 
+  const taskProductIds = [
+    ...new Set(
+      taskRows.flatMap((row) => (row.products ?? []).map((product) => product.productId)),
+    ),
+  ];
+  const taskProductNames =
+    taskProductIds.length > 0
+      ? new Map(
+          (
+            await db
+              .select({ id: foodProducts.id, name: foodProducts.name })
+              .from(foodProducts)
+              .where(inArray(foodProducts.id, taskProductIds))
+          ).map((row) => [row.id, row.name]),
+        )
+      : new Map<number, string>();
+
   const readings = bowlRows.length
     ? await db
         .select()
@@ -194,7 +212,7 @@ export async function buildReportBundle(
         readings.filter((reading) => reading.bowlId === bowl.id),
       ),
     ),
-    tasks: taskRows.map((row) => taskToDto(row, lastByTask.get(row.id) ?? null)),
+    tasks: taskRows.map((row) => taskToDto(row, lastByTask.get(row.id) ?? null, taskProductNames)),
     taskCompletions: completionRows.map((row) => taskCompletionToDto(row, rabbitId)),
     growthStages: stageConfig.map(growthStageToDto),
     stageCompletions: stageRows.map((row) => stageCompletionToDto(row, rabbitId)),

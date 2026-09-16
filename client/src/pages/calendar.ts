@@ -24,12 +24,28 @@ import { openAppointmentModal } from "../components/appointmentModal.ts";
 import { openBowlReadingModal } from "../components/bowlModal.ts";
 import { openCalendarEntryModal } from "../components/calendarEntryModal.ts";
 import { openMedicationLogModal } from "../components/medicationLogModal.ts";
+import { confirmDialog } from "../components/modal.ts";
+import { openTaskCompleteModal } from "../components/taskCompleteModal.ts";
+import { openTaskModal } from "../components/taskModal.ts";
 import { toast } from "../components/toast.ts";
+import { toggleButton } from "../components/toggle.ts";
 import type { PageContext } from "../context.ts";
 import { fmtDate, fmtTime, h } from "../dom.ts";
 import { can } from "../permissions.ts";
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+
+const CALENDAR_FILTERS = [
+  { value: "appointments", label: "Appointments" },
+  { value: "medication", label: "Medication" },
+  { value: "bowls", label: "Bowls" },
+  { value: "tasks", label: "Tasks" },
+  { value: "events", label: "Events" },
+  { value: "checks", label: "Check logs" },
+  { value: "external", label: "External" },
+] as const;
+
+type CalendarFilter = (typeof CALENDAR_FILTERS)[number]["value"];
 
 export function renderCalendarPage(ctx: PageContext): HTMLElement {
   const view = new Date();
@@ -41,6 +57,54 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
   const canManage = can(ctx.user, "canManageCalendar");
   const canRecord = can(ctx.user, "canRecordHealth");
   const showCost = can(ctx.user, "canViewCosts");
+
+  let eventsData: CalendarEventDto[] = [];
+  let appointmentsData: AppointmentDto[] = [];
+  let treatmentsData: TreatmentDto[] = [];
+  let occurrencesData: { entry: CalendarEntryDto; at: Date }[] = [];
+  let logsData: CheckLogDto[] = [];
+  let medLogsData: MedicationLogDto[] = [];
+  let bowlsData: BowlDto[] = [];
+  let tasksData: TaskDto[] = [];
+  let completionsData: TaskCompletionDto[] = [];
+
+  const shownFilters = new Set<CalendarFilter>(CALENDAR_FILTERS.map((item) => item.value));
+  let rabbitFilterId: number | null = null;
+  const rabbitMatch = (rabbitId: number | null): boolean =>
+    rabbitFilterId === null || rabbitId === rabbitFilterId;
+  const bunnyFilter = h(
+    "select",
+    { class: "filter-select" },
+    h("option", { value: "" }, "All bunnies"),
+  );
+  bunnyFilter.addEventListener("change", () => {
+    rabbitFilterId = bunnyFilter.value ? Number(bunnyFilter.value) : null;
+    renderGrid();
+  });
+  const typeFilters = h(
+    "div",
+    { class: "option-buttons" },
+    CALENDAR_FILTERS.map(
+      (item) =>
+        toggleButton({
+          label: item.label,
+          checked: true,
+          onChange: (checked) => {
+            if (checked) shownFilters.add(item.value);
+            else shownFilters.delete(item.value);
+            renderGrid();
+          },
+        }).root,
+    ),
+  );
+  const filters = h(
+    "div",
+    { class: "row wrap cal-filters" },
+    h("label", { class: "dim small" }, "Bunny"),
+    bunnyFilter,
+    h("span", { class: "spacer" }),
+    typeFilters,
+  );
 
   const title = h("h2", { style: { margin: 0 } }, "");
   const info = h("p", { class: "dim small" });
@@ -61,6 +125,14 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
       onClick: () => openCalendarEntryModal({ rabbits, onSaved: () => void refresh() }),
     },
     "+ New event",
+  );
+  const newTask = h(
+    "button",
+    {
+      class: "btn outline small",
+      onClick: () => openTaskModal({ rabbits, onSaved: () => void refresh() }),
+    },
+    "+ New task",
   );
 
   async function runSync(): Promise<void> {
@@ -153,39 +225,67 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
     foodProducts = foodRes.products;
     const monthStart = dayKey(from);
     const monthEnd = dayKey(to);
-    const monthTreatments = treatmentsRes.treatments.filter(
+    eventsData = eventsRes.events;
+    appointmentsData = appointmentsRes.appointments;
+    treatmentsData = treatmentsRes.treatments.filter(
       (treatment) =>
         treatment.status === "active" &&
         treatment.startDate <= monthEnd &&
         (treatment.endDate === null || treatment.endDate >= monthStart),
     );
-    const occurrences = entriesRes.entries.flatMap((entry) =>
+    occurrencesData = entriesRes.entries.flatMap((entry) =>
       expandEntryStart(entry, from, to).map((at) => ({ entry, at })),
     );
-    renderGrid(
-      eventsRes.events,
-      appointmentsRes.appointments,
-      monthTreatments,
-      occurrences,
-      logsRes.logs,
-      medLogsRes.logs,
-      bowlScheduleRes.bowls,
-      tasksRes.tasks,
-      tasksRes.completions,
-    );
+    logsData = logsRes.logs;
+    medLogsData = medLogsRes.logs;
+    bowlsData = bowlScheduleRes.bowls;
+    tasksData = tasksRes.tasks;
+    completionsData = tasksRes.completions;
+    renderGrid();
   }
 
-  function renderGrid(
-    events: CalendarEventDto[],
-    appointments: AppointmentDto[],
-    treatments: TreatmentDto[],
-    occurrences: { entry: CalendarEntryDto; at: Date }[],
-    logs: CheckLogDto[],
-    medLogs: MedicationLogDto[],
-    bowls: BowlDto[],
-    tasks: TaskDto[],
-    completions: TaskCompletionDto[],
-  ): void {
+  async function undoTaskCompletion(
+    completion: TaskCompletionDto,
+    label: string,
+  ): Promise<void> {
+    const confirmed = await confirmDialog({
+      title: "Undo completion?",
+      message: `${label} becomes due again.`,
+      confirmLabel: "Undo",
+      danger: true,
+    });
+    if (!confirmed) return;
+    try {
+      await api.del(`/api/tasks/completions/${completion.id}`);
+      toast("Completion removed");
+      await refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not undo", "error");
+    }
+  }
+
+  function renderGrid(): void {
+    const events = shownFilters.has("external") ? eventsData : [];
+    const appointments = appointmentsData.filter(
+      (appointment) => shownFilters.has("appointments") && rabbitMatch(appointment.rabbitId),
+    );
+    const treatments = treatmentsData.filter(
+      (treatment) => shownFilters.has("medication") && rabbitMatch(treatment.rabbitId),
+    );
+    const occurrences = occurrencesData.filter(
+      (item) =>
+        shownFilters.has("events") &&
+        (item.entry.rabbitId === null || rabbitMatch(item.entry.rabbitId)),
+    );
+    const logs = logsData.filter((log) => shownFilters.has("checks") && rabbitMatch(log.rabbitId));
+    const medLogs = medLogsData.filter(
+      (log) => shownFilters.has("medication") && rabbitMatch(log.rabbitId),
+    );
+    const bowls = bowlsData.filter(
+      (bowl) => shownFilters.has("bowls") && rabbitMatch(bowl.rabbitId),
+    );
+    const tasks = tasksData.filter((task) => shownFilters.has("tasks") && rabbitMatch(task.rabbitId));
+    const completions = completionsData;
     const eventsByDay = groupByDay(events, (event) => event.startAt);
     const appointmentsByDay = groupByDay(appointments, (appointment) => appointment.scheduledAt);
     const entriesByDay = groupByDay(occurrences, (item) => item.at.toISOString());
@@ -206,12 +306,18 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
     const rabbitById = new Map(rabbits.map((rabbit) => [rabbit.id, rabbit]));
     const monthStartKey = dayKey(new Date(view.getFullYear(), view.getMonth(), 1));
     const monthEndKey = dayKey(new Date(view.getFullYear(), view.getMonth() + 1, 0));
+    const todayKey = dayKey(new Date());
     const completedByTask = new Map<number, Set<string>>();
+    const completionByTaskDay = new Map<number, Map<string, TaskCompletionDto>>();
     for (const completion of completions) {
       const completionKey = dayKey(new Date(completion.completedAt));
       const set = completedByTask.get(completion.taskId) ?? new Set<string>();
       set.add(completionKey);
       completedByTask.set(completion.taskId, set);
+      const byDay =
+        completionByTaskDay.get(completion.taskId) ?? new Map<string, TaskCompletionDto>();
+      if (!byDay.has(completionKey)) byDay.set(completionKey, completion);
+      completionByTaskDay.set(completion.taskId, byDay);
     }
     const scheduledByTask = new Map<number, Set<string>>();
     for (const task of tasks) {
@@ -219,7 +325,13 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
       scheduledByTask.set(
         task.id,
         new Set(
-          taskScheduleDays(task, [...(completedByTask.get(task.id) ?? [])], monthStartKey, monthEndKey),
+          taskScheduleDays(
+            task,
+            [...(completedByTask.get(task.id) ?? [])],
+            monthStartKey,
+            monthEndKey,
+            todayKey,
+          ),
         ),
       );
     }
@@ -228,7 +340,6 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
     const offset = (new Date(view.getFullYear(), view.getMonth(), 1).getDay() + 6) % 7;
     const daysInMonth = new Date(view.getFullYear(), view.getMonth() + 1, 0).getDate();
     const totalCells = Math.ceil((offset + daysInMonth) / 7) * 7;
-    const todayKey = dayKey(new Date());
     for (let index = 0; index < totalCells; index += 1) {
       const date = new Date(view.getFullYear(), view.getMonth(), 1 - offset + index);
       const key = dayKey(date);
@@ -323,6 +434,8 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
       for (const bowl of bowls) {
         const rabbit = rabbitById.get(bowl.rabbitId);
         const rabbitName = rabbitNames.get(bowl.rabbitId) ?? "Bunny";
+        const startKey = bowl.startedAt ? dayKey(new Date(bowl.startedAt)) : null;
+        if (startKey !== null && key < startKey) continue;
         const dayReadings = bowlReadingsByDay.get(key)?.get(bowl.id) ?? [];
         const statuses = slotStatus(
           bowl.slots,
@@ -359,7 +472,9 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
                 openBowlReadingModal({
                   bowl,
                   date: new Date(date),
-                  product: foodProducts.find((item) => item.id === bowl.productId),
+                  products: bowl.productIds
+                    .map((id) => foodProducts.find((item) => item.id === id))
+                    .filter((item): item is FoodProductDto => item !== undefined),
                   onSaved: () => void refresh(),
                 })
             : null;
@@ -371,7 +486,22 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         const scheduled = scheduledByTask.get(task.id)?.has(key) ?? false;
         if (!completed && !scheduled) continue;
         const rabbitName = rabbitNames.get(task.rabbitId) ?? "Bunny";
-        cell.append(calendarChip([`${rabbitName}: ${task.label}`], null, completed, "task"));
+        const rabbit = rabbitById.get(task.rabbitId);
+        const completion = completionByTaskDay.get(task.id)?.get(key) ?? null;
+        const open = !canRecord
+          ? null
+          : completed && completion
+            ? () => void undoTaskCompletion(completion, task.label)
+            : () =>
+                openTaskCompleteModal({
+                  task,
+                  date: new Date(date),
+                  onEdit: rabbit
+                    ? () => openTaskModal({ rabbit, task, onSaved: () => void refresh() })
+                    : undefined,
+                  onDone: () => void refresh(),
+                });
+        cell.append(calendarChip([`${rabbitName}: ${task.label}`], open, completed, "task"));
       }
       for (const { entry } of entriesByDay.get(key) ?? []) {
         const label = entry.allDay ? entry.title : `${fmtTime(entry.startAt, timezone)} ${entry.title}`;
@@ -467,9 +597,11 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         canManage ? sync : null,
         canManage ? h("a", { class: "btn ghost small", href: "#/settings" }, "Subscribe") : null,
         canManage ? newEvent : null,
+        canRecord ? newTask : null,
         canRecord ? newAppointment : null,
       ),
       info,
+      filters,
       grid,
     ),
   );
@@ -478,6 +610,9 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
     const { rabbits: rows } = await api.get<{ rabbits: RabbitDto[] }>("/api/rabbits");
     rabbits = rows;
     newAppointment.disabled = rows.length === 0;
+    for (const rabbit of rows) {
+      bunnyFilter.append(h("option", { value: String(rabbit.id) }, rabbit.name));
+    }
     await loadSettings();
     await refresh();
   })();

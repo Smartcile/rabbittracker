@@ -22,6 +22,7 @@ export type BowlReadingMode = "weigh" | "consume" | "refill" | "refresh";
 type SessionReading = {
   kind: BowlReadingMode;
   slot: DaySlot | null;
+  productId: number | null;
   weightGrams?: number;
   consumedGrams?: number;
   refillGrams?: number;
@@ -42,7 +43,8 @@ export function openBowlModal(options: {
     placeholder: "e.g. 120",
     value: editing?.tareGrams != null ? String(editing.tareGrams) : "",
   });
-  const productSelect = h("select", null, h("option", { value: "" }, "— No linked product —"));
+  const productField = h("div", { class: "field" });
+  let productIds: number[] = [...(editing?.productIds ?? [])];
   const when = h("input", { type: "datetime-local" });
   when.value = toLocalInputValue(new Date());
   const notes = h("textarea");
@@ -50,16 +52,33 @@ export function openBowlModal(options: {
   error.style.display = "none";
   const save = h("button", { class: "btn primary", type: "submit" }, editing ? "Save" : "Add bowl");
 
+  const renderProducts = (items: FoodProductDto[]): void => {
+    const group = optionButtons(
+      items.map((product) => ({ value: String(product.id), label: product.name })),
+      productIds.map(String),
+      true,
+      (values) => {
+        productIds = values.map(Number);
+      },
+    );
+    productField.replaceChildren(
+      h("label", null, "Linked food products (optional)"),
+      items.length > 0
+        ? group.root
+        : h("span", { class: "dim small" }, "Add a food product first to link stock."),
+      h("span", { class: "dim small" }, "Topping up this bowl draws from a linked product's stock."),
+    );
+  };
+  renderProducts([]);
+
   void api
-    .get<{ products: { id: number; name: string }[] }>("/api/food-products")
-    .then(({ products }) => {
-      for (const product of products) {
-        productSelect.append(h("option", { value: String(product.id) }, product.name));
-      }
-      productSelect.value = editing?.productId != null ? String(editing.productId) : "";
-    })
+    .get<{ products: FoodProductDto[] }>("/api/food-products")
+    .then(({ products }) => renderProducts(products))
     .catch(() => {
-      productSelect.disabled = true;
+      productField.replaceChildren(
+        h("label", null, "Linked food products (optional)"),
+        h("span", { class: "dim small" }, "Could not load food products."),
+      );
     });
 
   let slots: DaySlot[] = [...(editing?.slots ?? [])];
@@ -120,11 +139,11 @@ export function openBowlModal(options: {
             error.style.display = "";
             return;
           }
-          const productId = productSelect.value ? Number(productSelect.value) : null;
+          const productIdList = productIds;
           save.disabled = true;
           try {
             if (editing) {
-              await api.patch(`/api/bowls/${editing.id}`, { label: name, kind, slots, tareGrams, productId });
+              await api.patch(`/api/bowls/${editing.id}`, { label: name, kind, slots, tareGrams, productIds: productIdList });
             } else {
               await api.post("/api/bowls", {
                 rabbitId: options.rabbit.id,
@@ -132,7 +151,7 @@ export function openBowlModal(options: {
                 kind,
                 slots,
                 tareGrams,
-                productId,
+                productIds: productIdList,
                 startWeightGrams,
                 startedAt: startedAt.toISOString(),
                 notes: notes.value.trim(),
@@ -180,13 +199,7 @@ export function openBowlModal(options: {
           "Weigh the empty bowl so the app can show how much food or water is in it.",
         ),
       ),
-      h(
-        "div",
-        { class: "field" },
-        h("label", null, "Linked food product (optional)"),
-        productSelect,
-        h("span", { class: "dim small" }, "Topping up this bowl draws the amount from the product's stock."),
-      ),
+      productField,
       editing
         ? null
         : h(
@@ -213,10 +226,11 @@ export function openBowlReadingModal(options: {
   date?: Date;
   slot?: DaySlot;
   editing?: BowlReadingDto;
-  product?: FoodProductDto;
+  products?: FoodProductDto[];
   onSaved: () => void;
 }): void {
-  const { bowl, product } = options;
+  const { bowl } = options;
+  const linkedProducts = options.products ?? [];
   const editing = options.editing;
   const current = bowl.currentWeightGrams;
   const session = editing === undefined;
@@ -255,14 +269,35 @@ export function openBowlReadingModal(options: {
   const contents = (grams: number | null): string =>
     grams != null && bowl.tareGrams != null ? ` (${formatFoodAmount(grams - bowl.tareGrams)} in bowl)` : "";
 
-  const updateProductHint = (): void => {
+  const stockProduct = h(
+    "select",
+    null,
+    linkedProducts.map((item) => h("option", { value: String(item.id) }, item.name)),
+  );
+  if (linkedProducts.length > 0) stockProduct.value = String(linkedProducts[0].id);
+  const stockProductField = h(
+    "div",
+    { class: "field" },
+    h("label", null, "Draw from"),
+    stockProduct,
+    h("span", { class: "dim small" }, "Which linked product's stock to deduct."),
+  );
+  stockProduct.addEventListener("change", updateProductHint);
+
+  const selectedProduct = (): FoodProductDto | null =>
+    linkedProducts.find((item) => String(item.id) === stockProduct.value) ??
+    linkedProducts[0] ??
+    null;
+
+  function updateProductHint(): void {
     const grams = parseGrams(amount.value);
-    const show = product !== undefined && mode === "refill" && grams !== null && grams > 0;
+    const chosen = selectedProduct();
+    const show = chosen !== null && mode === "refill" && grams !== null && grams > 0;
     productHint.style.display = show ? "" : "none";
-    if (show && product) {
-      productHint.textContent = `Deducts ${formatFoodAmount(grams)} from ${product.name} stock.`;
+    if (show && chosen) {
+      productHint.textContent = `Deducts ${formatFoodAmount(grams)} from ${chosen.name} stock.`;
     }
-  };
+  }
 
   const updateBreakdown = (): void => {
     if (editing) {
@@ -369,6 +404,7 @@ export function openBowlReadingModal(options: {
   function renderLabels(): void {
     modeOptions?.setValues([mode]);
     finalField.style.display = mode === "refresh" && !editing ? "" : "none";
+    stockProductField.style.display = mode === "refill" && linkedProducts.length > 0 ? "" : "none";
     updateProductHint();
     updateBreakdown();
     if (editing) {
@@ -598,7 +634,12 @@ export function openBowlReadingModal(options: {
       error.style.display = "";
       return null;
     }
-    const reading: SessionReading = { kind: mode, slot, notes: notes.value.trim() };
+    const reading: SessionReading = {
+      kind: mode,
+      slot,
+      productId: mode === "refill" ? (selectedProduct()?.id ?? null) : null,
+      notes: notes.value.trim(),
+    };
     if (mode === "weigh" || mode === "refresh") reading.weightGrams = amountGrams;
     else if (mode === "consume") reading.consumedGrams = amountGrams;
     else reading.refillGrams = amountGrams;
@@ -653,6 +694,7 @@ export function openBowlReadingModal(options: {
         await api.patch(`/api/bowls/${bowl.id}/readings/${editing.id}`, {
           readAt: readAt.toISOString(),
           slot: reading.slot,
+          productId: reading.productId,
           weightGrams: reading.kind === "refill" ? undefined : reading.weightGrams,
           refillGrams: reading.kind === "refill" ? reading.refillGrams : undefined,
           notes: reading.notes,
@@ -664,6 +706,7 @@ export function openBowlReadingModal(options: {
             kind: reading.kind,
             readAt: readAt.toISOString(),
             slot: reading.slot,
+            productId: reading.productId,
             weightGrams: reading.weightGrams,
             consumedGrams: reading.consumedGrams,
             refillGrams: reading.refillGrams,
@@ -738,6 +781,7 @@ export function openBowlReadingModal(options: {
       error,
       modeField,
       slotField,
+      stockProductField,
       h("div", { class: "field" }, amountLabel, amount, hint, productHint),
       breakdown,
       finalField,
