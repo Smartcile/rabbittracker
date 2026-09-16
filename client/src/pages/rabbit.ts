@@ -60,6 +60,7 @@ import { renderChecksTable } from "../components/checksTable.ts";
 import { openCheckModal } from "../components/checkModal.ts";
 import { renderChecklistPhotos } from "../components/checklistPhotos.ts";
 import { openDrugModal } from "../components/drugModal.ts";
+import { expandableList } from "../components/expandable.ts";
 import { confirmDialog, openModal } from "../components/modal.ts";
 import { openLightbox, photoPicker } from "../components/photoPicker.ts";
 import { openRabbitModal } from "../components/rabbitModal.ts";
@@ -738,12 +739,8 @@ function dailyChecksCard(
         )
       : null;
 
-  const list = h("div", { class: "stack", style: { gap: "0" } });
-  const recent = logs.slice(0, 10);
-  if (recent.length === 0) {
-    list.append(h("p", { class: "dim small", style: { margin: 0 } }, "No daily checks logged yet."));
-  }
-  for (const entry of recent) {
+  const rows: HTMLElement[] = [];
+  for (const entry of logs) {
     const value = checkLogValueParts(entry).join(" · ");
     const photos =
       entry.photos.length > 0
@@ -764,7 +761,7 @@ function dailyChecksCard(
             }),
           )
         : null;
-    list.append(
+    rows.push(
       h(
         "div",
         { class: "list-row" },
@@ -799,6 +796,10 @@ function dailyChecksCard(
       ),
     );
   }
+  const list =
+    rows.length === 0
+      ? h("p", { class: "dim small", style: { margin: 0 } }, "No daily checks logged yet.")
+      : expandableList(rows, { initial: 5 });
   const log = h(
     "button",
     {
@@ -1218,41 +1219,43 @@ function tasksCard(
     );
   }
 
-  const recent = completions.slice(0, 5);
-  if (recent.length > 0) {
+  if (completions.length > 0) {
     list.append(h("p", { class: "task-slot dim small" }, "Recently completed"));
-    for (const completion of recent) {
-      const task = taskById.get(completion.taskId);
-      list.append(
-        h(
-          "div",
-          { class: "list-row" },
-          h("span", { class: "badge ok" }, "Done"),
-          h(
+    list.append(
+      expandableList(
+        completions.map((completion) => {
+          const task = taskById.get(completion.taskId);
+          return h(
             "div",
-            { class: "stack", style: { gap: "0.15rem" } },
-            h("strong", null, task?.label ?? "Task"),
+            { class: "list-row" },
+            h("span", { class: "badge ok" }, "Done"),
             h(
-              "span",
-              { class: "dim small" },
-              `${fmtDate(completion.completedAt)} ${fmtTime(completion.completedAt)}`,
+              "div",
+              { class: "stack", style: { gap: "0.15rem" } },
+              h("strong", null, task?.label ?? "Task"),
+              h(
+                "span",
+                { class: "dim small" },
+                `${fmtDate(completion.completedAt)} ${fmtTime(completion.completedAt)}`,
+              ),
             ),
-          ),
-          h("span", { class: "spacer" }),
-          canRecord
-            ? h(
-                "button",
-                {
-                  class: "btn ghost small",
-                  type: "button",
-                  onClick: () => void undoCompletion(completion),
-                },
-                "Undo",
-              )
-            : null,
-        ),
-      );
-    }
+            h("span", { class: "spacer" }),
+            canRecord
+              ? h(
+                  "button",
+                  {
+                    class: "btn ghost small",
+                    type: "button",
+                    onClick: () => void undoCompletion(completion),
+                  },
+                  "Undo",
+                )
+              : null,
+          );
+        }),
+        { initial: 5 },
+      ),
+    );
   }
 
   const add = canRecord
@@ -1305,14 +1308,16 @@ function medicationCard(
   reload: () => Promise<void>,
   canRecord: boolean,
 ): HTMLElement {
-  const list = h("div", { class: "stack", style: { gap: "0" } });
   const oneOff = logs.filter((entry) => entry.treatmentId === null);
-  if (oneOff.length === 0) {
-    list.append(h("p", { class: "dim small", style: { margin: 0 } }, "No one-off doses logged yet."));
-  }
-  for (const entry of oneOff.slice(0, 10)) {
-    list.append(medicationLogRow(rabbit, entry, treatments, drugs, logs, reload, canRecord));
-  }
+  const list =
+    oneOff.length === 0
+      ? h("p", { class: "dim small", style: { margin: 0 } }, "No one-off doses logged yet.")
+      : expandableList(
+          oneOff.map((entry) =>
+            medicationLogRow(rabbit, entry, treatments, drugs, logs, reload, canRecord),
+          ),
+          { initial: 5 },
+        );
   const log = h(
     "button",
     {
@@ -1768,15 +1773,42 @@ function checksCard(
     ),
     checks.length === 0
       ? h("div", { class: "empty" }, "No health checks yet.")
-      : renderChecksTable({
-          checks,
-          rabbits: [rabbit],
-          sections,
-          logTypes,
-          onChanged: reload,
-          canEdit: canRecord,
-        }),
+      : checksBody(rabbit, checks, sections, logTypes, reload, canRecord),
   );
+}
+
+function checksBody(
+  rabbit: RabbitDto,
+  checks: HealthCheckDto[],
+  sections: ChecklistSectionDto[],
+  logTypes: CheckLogTypeDto[],
+  reload: () => Promise<void>,
+  canRecord: boolean,
+): HTMLElement {
+  const initial = 5;
+  let expanded = false;
+  const body = h("div");
+  const toggle = h("button", { class: "btn ghost small expand-toggle", type: "button" });
+  const render = (): void => {
+    body.replaceChildren(
+      renderChecksTable({
+        checks: expanded ? checks : checks.slice(0, initial),
+        rabbits: [rabbit],
+        sections,
+        logTypes,
+        onChanged: reload,
+        canEdit: canRecord,
+      }),
+    );
+    toggle.textContent = expanded ? "Show less" : `Show all (${checks.length})`;
+    toggle.style.display = checks.length > initial ? "" : "none";
+  };
+  toggle.addEventListener("click", () => {
+    expanded = !expanded;
+    render();
+  });
+  render();
+  return h("div", { class: "stack", style: { gap: "0.3rem" } }, body, toggle);
 }
 
 function treatmentsCard(

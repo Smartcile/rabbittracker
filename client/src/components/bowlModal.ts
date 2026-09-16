@@ -609,29 +609,31 @@ export function openBowlReadingModal(options: {
     );
   }
 
+  function showError(message: string): void {
+    error.textContent = message;
+    error.style.display = "";
+    error.scrollIntoView({ block: "nearest" });
+  }
+
   function collect(): SessionReading | null {
     error.style.display = "none";
     const amountGrams = parseGrams(amount.value);
     if (amountGrams === null || amountGrams < 0) {
-      error.textContent = "Enter a number in grams.";
-      error.style.display = "";
+      showError("Enter a number in grams.");
       return null;
     }
     if (mode === "refill" && amountGrams <= 0) {
-      error.textContent = "Enter how much you added.";
-      error.style.display = "";
+      showError("Enter how much you added.");
       return null;
     }
     const finalGrams = mode === "refresh" && finalWeight.value.trim() ? parseGrams(finalWeight.value) : null;
     if (mode === "refresh" && finalWeight.value.trim() && (finalGrams === null || finalGrams < 0)) {
-      error.textContent = "Enter the final weight in grams.";
-      error.style.display = "";
+      showError("Enter the final weight in grams.");
       return null;
     }
     const base = baseline();
     if (mode === "consume" && base != null && amountGrams > base) {
-      error.textContent = "That is more than the bowl holds.";
-      error.style.display = "";
+      showError("That is more than the bowl holds.");
       return null;
     }
     const reading: SessionReading = {
@@ -657,6 +659,8 @@ export function openBowlReadingModal(options: {
     renderLabels();
     renderQueue();
     renderDayList();
+    toast("Added to session");
+    queueHeader.scrollIntoView({ block: "nearest" });
     amount.focus();
   }
 
@@ -664,8 +668,7 @@ export function openBowlReadingModal(options: {
     error.style.display = "none";
     const readAt = new Date(when.value);
     if (Number.isNaN(readAt.getTime())) {
-      error.textContent = "Pick a valid date and time.";
-      error.style.display = "";
+      showError("Pick a valid date and time.");
       return;
     }
     let readings: SessionReading[];
@@ -681,8 +684,7 @@ export function openBowlReadingModal(options: {
         readings.push(reading);
       }
       if (readings.length === 0) {
-        error.textContent = "Add a reading to log.";
-        error.style.display = "";
+        showError("Add a reading to log.");
         return;
       }
     }
@@ -785,10 +787,10 @@ export function openBowlReadingModal(options: {
       h("div", { class: "field" }, amountLabel, amount, hint, productHint),
       breakdown,
       finalField,
-      h("div", { class: "field" }, h("label", null, "When"), when),
-      h("div", { class: "field" }, h("label", null, "Notes"), notes),
       queueHeader,
       queueList,
+      h("div", { class: "field" }, h("label", null, "When"), when),
+      h("div", { class: "field" }, h("label", null, "Notes"), notes),
       dayListLabel,
       dayList,
       h(

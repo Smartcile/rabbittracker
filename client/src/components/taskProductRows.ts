@@ -9,23 +9,34 @@ export type TaskProductRowList = {
   collect: () => TaskProductInput[] | null;
 };
 
+type ProductRow = {
+  root: HTMLElement;
+  select: HTMLSelectElement;
+  amount: HTMLInputElement;
+  productId: number | null;
+};
+
 export function taskProductRows(initial: TaskProductInput[] = []): TaskProductRowList {
   let products: FoodProductDto[] = [];
-  const rows: { root: HTMLElement; select: HTMLSelectElement; amount: HTMLInputElement }[] = [];
+  const rows: ProductRow[] = [];
   const list = h("div", { class: "stack", style: { gap: "0.5rem" } });
 
+  const optionsFor = (): HTMLElement[] => [
+    h("option", { value: "" }, "— Choose product —"),
+    ...products.map((product) => h("option", { value: String(product.id) }, product.name)),
+  ];
+
   const add = (productId: number | null, amountGrams: number): void => {
-    const select = h(
-      "select",
-      null,
-      h("option", { value: "" }, "— Choose product —"),
-      products.map((product) => h("option", { value: String(product.id) }, product.name)),
-    );
-    select.value = productId !== null ? String(productId) : "";
+    const select = h("select", null, ...optionsFor());
     const amount = h("input", {
       inputmode: "decimal",
       placeholder: "e.g. 500",
       value: amountGrams > 0 ? String(amountGrams) : "",
+    });
+    const row: ProductRow = { root: null as unknown as HTMLElement, select, amount, productId };
+    select.value = productId !== null ? String(productId) : "";
+    select.addEventListener("change", () => {
+      row.productId = select.value ? Number(select.value) : null;
     });
     const root = h(
       "div",
@@ -48,7 +59,7 @@ export function taskProductRows(initial: TaskProductInput[] = []): TaskProductRo
           class: "btn ghost small",
           type: "button",
           onClick: () => {
-            const index = rows.findIndex((row) => row.root === root);
+            const index = rows.findIndex((item) => item.root === root);
             if (index >= 0) rows.splice(index, 1);
             root.remove();
           },
@@ -56,7 +67,8 @@ export function taskProductRows(initial: TaskProductInput[] = []): TaskProductRo
         "Remove",
       ),
     );
-    rows.push({ root, select, amount });
+    row.root = root;
+    rows.push(row);
     list.append(root);
   };
 
@@ -74,12 +86,8 @@ export function taskProductRows(initial: TaskProductInput[] = []): TaskProductRo
     setProducts: (next) => {
       products = next;
       for (const row of rows) {
-        const current = row.select.value;
-        row.select.replaceChildren(
-          h("option", { value: "" }, "— Choose product —"),
-          ...products.map((product) => h("option", { value: String(product.id) }, product.name)),
-        );
-        row.select.value = current;
+        row.select.replaceChildren(...optionsFor());
+        row.select.value = row.productId !== null ? String(row.productId) : "";
       }
     },
     setValues,

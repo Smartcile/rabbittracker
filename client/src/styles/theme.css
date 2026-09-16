@@ -1365,6 +1365,10 @@ span.slot-chip {
   border-bottom: none;
 }
 
+.expand-toggle {
+  justify-self: start;
+}
+
 .user-row {
   display: flex;
   align-items: center;
@@ -1941,6 +1945,10 @@ span.slot-chip {
   .list-row {
     flex-wrap: wrap;
     row-gap: 0.4rem;
+  }
+
+  .list-row > .stack:first-child {
+    flex: 1 1 100%;
   }
 
   .list-row > .spacer {
