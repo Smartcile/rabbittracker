@@ -133,6 +133,19 @@
       edited and saved (via `PATCH /api/tasks/completions/:id`) or deleted, and the calendar
       refreshes behind the pop-up.
 
+- [x] **Pop-up and calendar polish.** Every pop-up now warns before discarding unsaved changes
+      (including the task complete and task history pop-ups, which had none), the bowl editor picks
+      its linked food products from dropdown rows instead of toggle buttons, completed calendar
+      chips stay green whether they were logged on time or late, and the calendar fetches bowl
+      readings for the whole visible grid so an entry on a leading/trailing day ticks too.
+
+- [x] **Completion ticks everywhere.** Completed calendar chips are now green across the board:
+  routine tasks (✓, or `!` when the completion time is outside the task's slot window), completed
+  appointments, and daily-check logs. Tapping a done task opens just that day's completion for
+  editing rather than the whole history. On the bunny profile, **Mark done** on a routine-care item
+  now asks for the date and optional notes, shows a green ✓ badge when not yet due, and the Health
+  checks card ticks when a check was logged today.
+
 ## Planned features (agreed but not built)
 
 These are queued from the "bunny powerhouse" list; pick them up in any order.

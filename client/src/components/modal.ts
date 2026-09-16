@@ -2,6 +2,7 @@ import { h } from "../dom.ts";
 
 export type ModalHandle = {
   close: () => void;
+  markClean: () => void;
   root: HTMLElement;
 };
 
@@ -22,23 +23,18 @@ export function openModal(options: {
 
   let dirty = false;
   if (options.guardUnsaved) {
-    const form =
-      options.body instanceof HTMLFormElement
-        ? options.body
-        : (options.body as HTMLElement).querySelector?.("form");
-    if (form) {
-      const markDirty = () => {
-        dirty = true;
-      };
-      form.addEventListener("input", markDirty);
-      form.addEventListener("change", markDirty);
-      form.addEventListener("click", (event) => {
-        if ((event.target as HTMLElement | null)?.closest(".toggle-btn")) dirty = true;
-      });
-      form.addEventListener("submit", () => {
-        dirty = false;
-      });
-    }
+    const scope = options.body instanceof HTMLElement ? options.body : panel;
+    const markDirty = () => {
+      dirty = true;
+    };
+    scope.addEventListener("input", markDirty);
+    scope.addEventListener("change", markDirty);
+    scope.addEventListener("click", (event) => {
+      if ((event.target as HTMLElement | null)?.closest(".toggle-btn")) dirty = true;
+    });
+    scope.addEventListener("submit", () => {
+      dirty = false;
+    });
   }
 
   const onKeydown = (event: KeyboardEvent) => {
@@ -68,7 +64,14 @@ export function openModal(options: {
     forceClose();
   };
 
-  const handle: InternalHandle = { close: () => void close(), forceClose, root: panel };
+  const handle: InternalHandle = {
+    close: () => void close(),
+    forceClose,
+    markClean: () => {
+      dirty = false;
+    },
+    root: panel,
+  };
 
   overlay.addEventListener("click", (event) => {
     if (event.target === overlay) void close();

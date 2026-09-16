@@ -1830,6 +1830,21 @@ span.slot-chip {
   color: var(--ok);
 }
 
+.cal-chip.task.done {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.cal-chip.appt.done {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.cal-chip.log.done {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
 .cal-slots {
   display: inline-flex;
   flex-wrap: wrap;

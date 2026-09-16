@@ -19,6 +19,7 @@ export function openTaskCompleteModal(options: {
   const save = h("button", { class: "btn primary", type: "submit" }, "Mark done");
 
   const modal = openModal({
+    guardUnsaved: true,
     title: `Done — ${options.task.label}`,
     body: h(
       "form",

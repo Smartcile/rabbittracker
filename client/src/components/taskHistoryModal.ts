@@ -59,6 +59,7 @@ export function openTaskHistoryModal(options: {
       items.sort((a, b) => b.completedAt.localeCompare(a.completedAt));
       render();
       toast("Saved");
+      modal.markClean();
       options.onChanged();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not save", "error");
@@ -88,7 +89,8 @@ export function openTaskHistoryModal(options: {
 
   render();
 
-  openModal({
+  const modal = openModal({
+    guardUnsaved: true,
     title: `History — ${options.task.label}`,
     body: h(
       "div",
@@ -96,7 +98,9 @@ export function openTaskHistoryModal(options: {
       h(
         "p",
         { class: "dim small" },
-        "Every completion of this task. Change the date, time or notes and save.",
+        items.length > 1
+          ? "Every completion of this task. Change the date, time or notes and save."
+          : "Change the date, time or notes and save, or delete this completion.",
       ),
       empty,
       list,

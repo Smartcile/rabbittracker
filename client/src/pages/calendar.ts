@@ -1,6 +1,6 @@
 import { expandEntryStart } from "../../../shared/calendar.ts";
 import { checkLogValueSummary } from "../../../shared/checkLogs.ts";
-import { DAY_SLOT_SHORT_LABELS, allSlotsDone, slotStatus } from "../../../shared/slots.ts";
+import { DAY_SLOT_SHORT_LABELS, allSlotsDone, slotStatus, slotTimeStatus } from "../../../shared/slots.ts";
 import { taskScheduleDays } from "../../../shared/tasks.ts";
 import type {
   AppointmentDto,
@@ -185,6 +185,19 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
   async function refresh(): Promise<void> {
     const from = new Date(view.getFullYear(), view.getMonth(), 1);
     const to = new Date(view.getFullYear(), view.getMonth() + 1, 0, 23, 59, 59, 999);
+    const offset = (from.getDay() + 6) % 7;
+    const daysInMonth = new Date(view.getFullYear(), view.getMonth() + 1, 0).getDate();
+    const totalCells = Math.ceil((offset + daysInMonth) / 7) * 7;
+    const gridFrom = new Date(view.getFullYear(), view.getMonth(), 1 - offset);
+    const gridTo = new Date(
+      view.getFullYear(),
+      view.getMonth(),
+      1 - offset + totalCells - 1,
+      23,
+      59,
+      59,
+      999,
+    );
     title.textContent = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(view);
     const [
       eventsRes,
@@ -216,7 +229,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
       ),
       api.get<{ drugs: DrugDto[] }>("/api/drugs"),
       api.get<{ bowls: BowlDto[] }>(
-        `/api/bowls/schedule?from=${from.toISOString()}&to=${to.toISOString()}`,
+        `/api/bowls/schedule?from=${gridFrom.toISOString()}&to=${gridTo.toISOString()}`,
       ),
       api.get<{ products: FoodProductDto[] }>("/api/food-products"),
       api.get<{ tasks: TaskDto[]; completions: TaskCompletionDto[] }>("/api/tasks"),
@@ -332,16 +345,17 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         h("div", { class: "day" }, String(date.getDate())),
       );
       for (const appointment of appointmentsByDay.get(key) ?? []) {
+        const completed = appointment.status === "completed";
         cell.append(
           h(
             "button",
             {
-              class: "cal-chip appt",
+              class: `cal-chip appt${completed ? " done" : ""}`,
               type: "button",
               onClick: () =>
                 openAppointmentModal({ rabbits, appointment, showCost, onSaved: () => void refresh() }),
             },
-            `${fmtTime(appointment.scheduledAt, timezone)} ${appointment.title}`,
+            `${completed ? "✓ " : ""}${fmtTime(appointment.scheduledAt, timezone)} ${appointment.title}`,
           ),
         );
       }
@@ -468,13 +482,19 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         const rabbitName = rabbitNames.get(task.rabbitId) ?? "Bunny";
         const rabbit = rabbitById.get(task.rabbitId);
         const completion = completionByTaskDay.get(task.id)?.get(key) ?? null;
+        const late =
+          completed &&
+          completion !== null &&
+          task.slot !== "anytime" &&
+          slotTimeStatus(task.slot, new Date(completion.completedAt)) === "late";
+        const mark = completed ? (late ? "! " : "✓ ") : "";
         const open = !canRecord
           ? null
           : completed && completion
             ? () =>
                 openTaskHistoryModal({
                   task,
-                  completions: completionsData.filter((entry) => entry.taskId === task.id),
+                  completions: [completion],
                   onChanged: () => void refresh(),
                 })
             : () =>
@@ -486,7 +506,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
                     : undefined,
                   onDone: () => void refresh(),
                 });
-        cell.append(calendarChip([`${rabbitName}: ${task.label}`], open, completed, "task"));
+        cell.append(calendarChip([`${mark}${rabbitName}: ${task.label}`], open, completed, "task"));
       }
       for (const { entry } of entriesByDay.get(key) ?? []) {
         const label = entry.allDay ? entry.title : `${fmtTime(entry.startAt, timezone)} ${entry.title}`;
@@ -510,8 +530,8 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         cell.append(
           h(
             "a",
-            { class: "cal-chip log", href: `#/rabbit/${log.rabbitId}` },
-            `${log.typeLabel}${value ? `: ${value}` : ""}`,
+            { class: "cal-chip log done", href: `#/rabbit/${log.rabbitId}` },
+            `✓ ${log.typeLabel}${value ? `: ${value}` : ""}`,
           ),
         );
       }

@@ -1748,6 +1748,15 @@ function checksCard(
   canRecord: boolean,
 ): HTMLElement {
   const latestWeight = checks.find((check) => check.weightGrams !== null)?.weightGrams ?? null;
+  const today = new Date();
+  const doneToday = checks.some((check) => {
+    const at = new Date(check.checkedAt);
+    return (
+      at.getFullYear() === today.getFullYear() &&
+      at.getMonth() === today.getMonth() &&
+      at.getDate() === today.getDate()
+    );
+  });
   const log = h(
     "button",
     {
@@ -1766,13 +1775,14 @@ function checksCard(
   return h(
     "div",
     { class: "card" },
-    h(
-      "div",
-      { class: "card-title" },
-      h("h2", null, "Health checks"),
-      h("span", { class: "spacer" }),
-      canRecord ? log : null,
-    ),
+      h(
+        "div",
+        { class: "card-title" },
+        h("h2", null, "Health checks"),
+        doneToday ? h("span", { class: "badge ok" }, "✓") : null,
+        h("span", { class: "spacer" }),
+        canRecord ? log : null,
+      ),
     checks.length === 0
       ? h("div", { class: "empty" }, "No health checks yet.")
       : checksBody(rabbit, checks, sections, logTypes, reload, canRecord),
@@ -2165,6 +2175,10 @@ function careCard(
         const intervalDays = schedule?.intervalDays ?? 0;
         const status = careDueStatus(last?.doneAt ?? null, intervalDays, now, 7);
         const dueAt = nextDueDate(last?.doneAt ?? null, intervalDays);
+        const statusBadge =
+          status === "ok"
+            ? h("span", { class: "badge ok" }, "✓")
+            : dueBadge(status);
         return h(
           "div",
           { class: "list-row" },
@@ -2181,16 +2195,16 @@ function careCard(
             ),
           ),
           h("span", { class: "spacer" }),
-          dueBadge(status),
+          statusBadge,
           canRecord
             ? h(
                 "button",
                 {
                   class: "btn outline small",
                   type: "button",
-                  onClick: () => void markDone(rabbit, kind, careType.label, reload),
+                  onClick: () => openCareDoneModal(rabbit, kind, careType.label, reload),
                 },
-                "Mark done today",
+                "Mark done",
               )
             : null,
           canRecord
@@ -2218,15 +2232,63 @@ function careCard(
   );
 }
 
-async function markDone(
+function openCareDoneModal(
   rabbit: RabbitDto,
   kind: CareKind,
   label: string,
   reload: () => Promise<void>,
-): Promise<void> {
-  await api.post("/api/care-records", { rabbitId: rabbit.id, kind, doneAt: todayInputValue() });
-  toast(`${label} marked done today`);
-  await reload();
+): void {
+  const when = h("input", { type: "date" });
+  when.value = todayInputValue();
+  const notes = h("textarea");
+  const error = h("p", { class: "form-error" });
+  error.style.display = "none";
+  const save = h("button", { class: "btn primary", type: "submit" }, `Mark ${label} done`);
+
+  const modal = openModal({
+    guardUnsaved: true,
+    title: `Mark ${label} done`,
+    body: h(
+      "form",
+      {
+        onSubmit: async (event: Event) => {
+          event.preventDefault();
+          error.style.display = "none";
+          if (!when.value) {
+            error.textContent = "Pick a date.";
+            error.style.display = "";
+            return;
+          }
+          save.disabled = true;
+          try {
+            await api.post("/api/care-records", {
+              rabbitId: rabbit.id,
+              kind,
+              doneAt: when.value,
+              notes: notes.value.trim(),
+            });
+            toast(`${label} marked done`);
+            await reload();
+            modal.close();
+          } catch (err) {
+            error.textContent = err instanceof Error ? err.message : "Something went wrong";
+            error.style.display = "";
+          } finally {
+            save.disabled = false;
+          }
+        },
+      },
+      error,
+      h("div", { class: "field" }, h("label", null, "When"), when),
+      h("div", { class: "field" }, h("label", null, "Notes (optional)"), notes),
+      h(
+        "div",
+        { class: "modal-actions" },
+        h("button", { class: "btn outline", type: "button", onClick: () => modal.close() }, "Cancel"),
+        save,
+      ),
+    ),
+  });
 }
 
 function openIntervalModal(

@@ -45,7 +45,10 @@ export function openBowlModal(options: {
     value: editing?.tareGrams != null ? String(editing.tareGrams) : "",
   });
   const productField = h("div", { class: "field" });
-  let productIds: number[] = [...(editing?.productIds ?? [])];
+  const initialProductIds: number[] = [...(editing?.productIds ?? [])];
+  const productList = h("div", { class: "stack", style: { gap: "0.5rem" } });
+  let allProducts: FoodProductDto[] = [];
+  const productSelects: HTMLSelectElement[] = [];
   const when = h("input", { type: "datetime-local" });
   when.value = toLocalInputValue(new Date());
   const notes = h("textarea");
@@ -53,19 +56,55 @@ export function openBowlModal(options: {
   error.style.display = "none";
   const save = h("button", { class: "btn primary", type: "submit" }, editing ? "Save" : "Add bowl");
 
-  const renderProducts = (items: FoodProductDto[]): void => {
-    const group = optionButtons(
-      items.map((product) => ({ value: String(product.id), label: product.name })),
-      productIds.map(String),
-      true,
-      (values) => {
-        productIds = values.map(Number);
-      },
+  const productOptions = (): HTMLElement[] => [
+    h("option", { value: "" }, "— No product —"),
+    ...allProducts.map((product) => h("option", { value: String(product.id) }, product.name)),
+  ];
+
+  const addProductRow = (selectedId: number | null): void => {
+    const select = h("select", null, ...productOptions());
+    select.value = selectedId !== null ? String(selectedId) : "";
+    const root = h(
+      "div",
+      { class: "row", style: { gap: "0.4rem", alignItems: "flex-end" } },
+      h("div", { class: "field", style: { flex: "1", margin: 0 } }, select),
+      h(
+        "button",
+        {
+          class: "btn ghost small",
+          type: "button",
+          onClick: () => {
+            const index = productSelects.indexOf(select);
+            if (index >= 0) productSelects.splice(index, 1);
+            root.remove();
+          },
+        },
+        "Remove",
+      ),
     );
+    productSelects.push(select);
+    productList.append(root);
+  };
+
+  const renderProducts = (items: FoodProductDto[]): void => {
+    allProducts = items;
+    productSelects.length = 0;
+    productList.replaceChildren();
+    for (const id of initialProductIds) addProductRow(id);
+    if (items.length > 0 && productSelects.length === 0) addProductRow(null);
     productField.replaceChildren(
       h("label", null, "Linked food products (optional)"),
       items.length > 0
-        ? group.root
+        ? h(
+            "div",
+            { class: "stack", style: { gap: "0.5rem" } },
+            productList,
+            h(
+              "button",
+              { class: "btn outline small", type: "button", onClick: () => addProductRow(null) },
+              "Add product",
+            ),
+          )
         : h("span", { class: "dim small" }, "Add a food product first to link stock."),
       h("span", { class: "dim small" }, "Topping up this bowl draws from a linked product's stock."),
     );
@@ -140,7 +179,13 @@ export function openBowlModal(options: {
             error.style.display = "";
             return;
           }
-          const productIdList = productIds;
+          const productIdList = [
+            ...new Set(
+              productSelects
+                .map((select) => (select.value ? Number(select.value) : null))
+                .filter((id): id is number => id !== null),
+            ),
+          ];
           save.disabled = true;
           try {
             if (editing) {
