@@ -1069,7 +1069,7 @@ input.switch:focus-visible {
   font-weight: 650;
 }
 
-.slot-chip.late {
+.slot-chip.late:not(.done) {
   border-color: var(--warn-border);
   background: var(--warn-soft);
   color: var(--warn);
@@ -1851,8 +1851,7 @@ span.slot-chip {
   font-weight: 650;
 }
 
-.cal-slot.late,
-.cal-slot.done.late {
+.cal-slot.late:not(.done) {
   background: var(--warn-soft);
   color: var(--warn);
 }

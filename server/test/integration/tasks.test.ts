@@ -81,6 +81,36 @@ describe("task integration", () => {
     expect(tasks[0]?.lastCompletedAt).toBeNull();
   });
 
+  it("edits a completion's date and notes", async () => {
+    const rabbit = await createRabbit();
+    const task = await createTask(rabbit.id);
+    const completion = await completeTask(task.id);
+
+    const { completion: edited } = await api<{ completion: TaskCompletionDto }>(
+      ctx,
+      `/api/tasks/completions/${completion.id}`,
+      {
+        method: "PATCH",
+        body: { completedAt: "2026-09-16T09:30:00.000Z", notes: "Done early" },
+      },
+    );
+    expect(edited.completedAt).toBe("2026-09-16T09:30:00.000Z");
+    expect(edited.notes).toBe("Done early");
+
+    const { tasks } = await api<{ tasks: TaskDto[] }>(ctx, `/api/tasks?rabbitId=${rabbit.id}`);
+    expect(tasks[0]?.lastCompletedAt).toBe("2026-09-16T09:30:00.000Z");
+  });
+
+  it("rejects a completion update with no changes", async () => {
+    const rabbit = await createRabbit();
+    const task = await createTask(rabbit.id);
+    const completion = await completeTask(task.id);
+
+    await expect(
+      api(ctx, `/api/tasks/completions/${completion.id}`, { method: "PATCH", body: {} }),
+    ).rejects.toThrow();
+  });
+
   it("deletes a task with its completions", async () => {
     const rabbit = await createRabbit();
     const task = await createTask(rabbit.id);

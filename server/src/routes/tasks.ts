@@ -7,7 +7,7 @@ import type { RabbitTaskRow, TaskCompletionRow } from "../db/schema.ts";
 import { findVisibleRabbit, requirePermission, visibleRabbitIds } from "../lib/access.ts";
 import { requireAuth } from "../lib/auth.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
-import { taskCompleteSchema, taskCreateSchema, taskUpdateSchema } from "../lib/validation.ts";
+import { taskCompleteSchema, taskCompletionUpdateSchema, taskCreateSchema, taskUpdateSchema } from "../lib/validation.ts";
 
 export const tasksRouter = Router();
 
@@ -133,6 +133,27 @@ tasksRouter.post("/:id/complete", requireAuth, requirePermission("canRecordHealt
     task: taskToDto(task, completion.completedAt, await productNamesFor(task.products ?? [])),
   });
 });
+
+tasksRouter.patch(
+  "/completions/:id",
+  requireAuth,
+  requirePermission("canRecordHealth"),
+  async (req, res) => {
+    const completion = await findCompletion(parseId(String(req.params.id)));
+    const task = await findTask(completion.taskId);
+    await findVisibleRabbit(req.user!, task.rabbitId);
+    const input = parseInput(taskCompletionUpdateSchema, req.body);
+    const [row] = await db
+      .update(taskCompletions)
+      .set({
+        completedAt: input.completedAt ?? completion.completedAt,
+        notes: input.notes ?? completion.notes,
+      })
+      .where(eq(taskCompletions.id, completion.id))
+      .returning();
+    res.json({ completion: taskCompletionToDto(row, task.rabbitId) });
+  },
+);
 
 tasksRouter.delete(
   "/completions/:id",

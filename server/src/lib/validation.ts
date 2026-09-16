@@ -553,6 +553,15 @@ export const taskCompleteSchema = z.object({
   notes: z.string().trim().max(2000).default(""),
 });
 
+export const taskCompletionUpdateSchema = z
+  .object({
+    completedAt: z.coerce.date().optional(),
+    notes: z.string().trim().max(2000).optional(),
+  })
+  .refine((value) => value.completedAt !== undefined || value.notes !== undefined, {
+    message: "No changes provided",
+  });
+
 export const medicationLogCreateSchema = z.object({
   rabbitId: z.number().int().positive(),
   treatmentId: z.number().int().positive().nullable().optional(),

@@ -2,12 +2,14 @@ import type { HealthCheckDto, RabbitDto } from "../../../shared/types.ts";
 import { parseWeightInput, weightInputValue } from "../../../shared/health.ts";
 import { api } from "../api.ts";
 import { h } from "../dom.ts";
+import { lastLoggedLine } from "./lastLogged.ts";
 import { openModal } from "./modal.ts";
 import { toast } from "./toast.ts";
 
 export function openWeightModal(options: {
   rabbit: RabbitDto;
   previousWeightGrams?: number | null;
+  previousWeightAt?: string | null;
   onSaved: (check: HealthCheckDto) => void;
 }): void {
   const weight = h("input", {
@@ -77,6 +79,7 @@ export function openWeightModal(options: {
         weight,
         h("span", { class: "dim small" }, hint),
       ),
+      lastLoggedLine("Last weight", options.previousWeightAt),
       h("div", { class: "field" }, h("label", null, "When"), when),
       h(
         "div",

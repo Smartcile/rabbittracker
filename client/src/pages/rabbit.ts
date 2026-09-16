@@ -334,7 +334,8 @@ function weightCard(
   reload: () => Promise<void>,
   canRecord: boolean,
 ): HTMLElement {
-  const latestWeight = checks.find((check) => check.weightGrams !== null)?.weightGrams ?? null;
+  const latestWeightCheck = checks.find((check) => check.weightGrams !== null) ?? null;
+  const latestWeight = latestWeightCheck?.weightGrams ?? null;
   const logWeight = h(
     "button",
     {
@@ -344,6 +345,7 @@ function weightCard(
         openWeightModal({
           rabbit,
           previousWeightGrams: latestWeight,
+          previousWeightAt: latestWeightCheck?.checkedAt ?? null,
           onSaved: () => void reload(),
         }),
     },
@@ -722,7 +724,7 @@ function dailyChecksCard(
   canRecord: boolean,
 ): HTMLElement {
   const openLog = (initialTypeId?: number) =>
-    openCheckLogModal({ rabbit, types, initialTypeId, onSaved: () => void reload() });
+    openCheckLogModal({ rabbit, types, logs, initialTypeId, onSaved: () => void reload() });
 
   const quickButtons =
     canRecord && types.length > 0
@@ -781,7 +783,7 @@ function dailyChecksCard(
               {
                 class: "btn ghost small",
                 type: "button",
-                onClick: () => openCheckLogModal({ rabbit, types, log: entry, onSaved: () => void reload() }),
+                onClick: () => openCheckLogModal({ rabbit, types, logs, log: entry, onSaved: () => void reload() }),
               },
               "Edit",
             )

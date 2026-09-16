@@ -79,7 +79,9 @@ Desktop:
   Record the bowl's empty weight to see
   how much is actually in it, link one or more food products so top-ups draw from the chosen
   product's stock, and enter consumption directly for greens and treats (the new weight is
-  calculated).
+  calculated). **Feed now** records a top-up and the same amount eaten in one go for food that is
+  eaten straight away — weigh the bowl afterwards if anything is left over. The logging pop-ups
+  also show when each item was last logged.
 - **Food & supplies** — a catalog for hay, pellets, greens and treats with a running stock total
   (add or remove amounts), a low-stock level and a type list. Link products to a bowl and every
   top-up draws the amount added from the chosen product's stock; editing or deleting the top-up puts
@@ -89,9 +91,11 @@ Desktop:
   the first due date. Define reusable templates in Settings → Daily routine and add one to a bunny
   in a tap; link one or more stock items (product + amount) so completing a task draws each down
   automatically. Tick them off from the bunny page, the home Today list or the calendar (choosing
-  the date it was done; tap a completed day to undo), and create or edit a task straight from the
-  calendar with **+ New task** or the chip's **Edit task** button. A never-started task with no start
-  date appears on the calendar from today, and due dates follow the timezone in Settings.
+  the date it was done), and create or edit a task straight from the calendar with **+ New task** or
+  the complete pop-up's **Edit task** button. Tapping a completed day opens that task's history,
+  where each completion's date, time and notes can be edited, saved or deleted. A never-started task
+  with no start date appears on the calendar from today, and due dates follow the timezone in
+  Settings.
 - **Treatments & medication** — courses with dose, route and frequency plus the times of day each
   dose is given, each with a window (early morning 05:00–08:00, morning 08:00–12:00, afternoon
   12:00–17:00, evening 17:00–21:00, night 21:00–05:00). Logging preselects the slot for the current

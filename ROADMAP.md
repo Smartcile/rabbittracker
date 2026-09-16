@@ -121,6 +121,18 @@
       can each link several food/supply products, and completing a task (or topping up a bowl) draws
       from each linked product's stock.
 
+- [x] **Feed now + last-logged reminders.** Food bowls gained a **Feed now** action in the reading
+      pop-up: it records a top-up and a matching consumption in one batch, so food eaten straight
+      away (greens, treats) counts as consumed and still draws from stock while the bowl weight
+      stays put — weigh the bowl afterwards if anything is left over. Every logging pop-up (daily
+      checks, bowl readings, task completions, medication doses and weight) now shows when that
+      item was last logged.
+
+- [x] **Task completion history.** Tapping an already-done task on the calendar now opens its
+      completion history instead of prompting to undo. Each completion's date, time and notes can be
+      edited and saved (via `PATCH /api/tasks/completions/:id`) or deleted, and the calendar
+      refreshes behind the pop-up.
+
 ## Planned features (agreed but not built)
 
 These are queued from the "bunny powerhouse" list; pick them up in any order.

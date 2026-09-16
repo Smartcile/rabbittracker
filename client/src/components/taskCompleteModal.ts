@@ -1,6 +1,7 @@
 import type { TaskDto } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { h } from "../dom.ts";
+import { lastLoggedLine } from "./lastLogged.ts";
 import { openModal } from "./modal.ts";
 import { toast } from "./toast.ts";
 
@@ -56,6 +57,7 @@ export function openTaskCompleteModal(options: {
         when,
         h("span", { class: "dim small" }, "Change this to log a task you did earlier."),
       ),
+      lastLoggedLine("Last done", options.task.lastCompletedAt),
       options.task.products.length > 0
         ? h(
             "p",

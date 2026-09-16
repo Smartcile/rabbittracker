@@ -10,7 +10,7 @@ import {
   slotTimeStatus,
 } from "../../../shared/slots.ts";
 import { api } from "../api.ts";
-import { fmtTime, h } from "../dom.ts";
+import { fmtDate, fmtTime, h } from "../dom.ts";
 import { confirmDialog, openModal } from "./modal.ts";
 import { slotTimeBadge } from "./slotChips.ts";
 import { toast } from "./toast.ts";
@@ -50,6 +50,7 @@ export function openMedicationLogModal(options: {
   treatmentSelect.value = String(linkedId ?? selectable[0]?.id ?? "");
 
   const treatmentInfo = h("p", { class: "dim small", style: { margin: "0.35rem 0 0" } });
+  const lastDoseLine = h("p", { class: "dim small", style: { margin: "0.35rem 0 0" } });
   const drugSelect = h(
     "select",
     null,
@@ -150,6 +151,14 @@ export function openMedicationLogModal(options: {
     );
   };
 
+  const lastDoseAt = (treatmentId: number): string | null => {
+    const candidates = (options.logs ?? []).filter(
+      (log) => log.treatmentId === treatmentId && log.id !== editing?.id,
+    );
+    if (candidates.length === 0) return null;
+    return candidates.reduce((a, b) => (a.givenAt >= b.givenAt ? a : b)).givenAt;
+  };
+
   const renderTreatmentInfo = (): void => {
     const treatment = selectedTreatment();
     const parts = treatment
@@ -157,6 +166,11 @@ export function openMedicationLogModal(options: {
       : [];
     treatmentInfo.textContent = parts.join(" · ");
     treatmentInfo.style.display = parts.length > 0 ? "" : "none";
+    const last = treatment ? lastDoseAt(treatment.id) : null;
+    lastDoseLine.textContent = treatment
+      ? `Last dose: ${last ? `${fmtDate(last)} ${fmtTime(last)}` : "never"}`
+      : "";
+    lastDoseLine.style.display = treatment ? "" : "none";
   };
 
   const renderForward = (): void => {
@@ -495,6 +509,7 @@ export function openMedicationLogModal(options: {
       },
       error,
       h("div", { class: "field" }, h("label", null, "Treatment"), treatmentSelect, treatmentInfo),
+      lastDoseLine,
       editTreatmentField,
       h("div", { class: "field" }, h("label", null, "Drug"), drugSelect),
       slotField,

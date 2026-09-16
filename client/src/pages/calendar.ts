@@ -24,8 +24,8 @@ import { openAppointmentModal } from "../components/appointmentModal.ts";
 import { openBowlReadingModal } from "../components/bowlModal.ts";
 import { openCalendarEntryModal } from "../components/calendarEntryModal.ts";
 import { openMedicationLogModal } from "../components/medicationLogModal.ts";
-import { confirmDialog } from "../components/modal.ts";
 import { openTaskCompleteModal } from "../components/taskCompleteModal.ts";
+import { openTaskHistoryModal } from "../components/taskHistoryModal.ts";
 import { openTaskModal } from "../components/taskModal.ts";
 import { toast } from "../components/toast.ts";
 import { toggleButton } from "../components/toggle.ts";
@@ -244,26 +244,6 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
     renderGrid();
   }
 
-  async function undoTaskCompletion(
-    completion: TaskCompletionDto,
-    label: string,
-  ): Promise<void> {
-    const confirmed = await confirmDialog({
-      title: "Undo completion?",
-      message: `${label} becomes due again.`,
-      confirmLabel: "Undo",
-      danger: true,
-    });
-    if (!confirmed) return;
-    try {
-      await api.del(`/api/tasks/completions/${completion.id}`);
-      toast("Completion removed");
-      await refresh();
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not undo", "error");
-    }
-  }
-
   function renderGrid(): void {
     const events = shownFilters.has("external") ? eventsData : [];
     const appointments = appointmentsData.filter(
@@ -441,7 +421,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
           bowl.slots,
           dayReadings.map((reading) => ({ slot: reading.slot, at: reading.readAt })),
         );
-        const done = allSlotsDone(bowl.slots, dayReadings);
+        const done = dayReadings.length > 0;
         const parts: (HTMLElement | string)[] = [`${rabbitName}: ${bowl.label}`];
         if (statuses.length > 0) {
           parts.push(
@@ -491,7 +471,12 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         const open = !canRecord
           ? null
           : completed && completion
-            ? () => void undoTaskCompletion(completion, task.label)
+            ? () =>
+                openTaskHistoryModal({
+                  task,
+                  completions: completionsData.filter((entry) => entry.taskId === task.id),
+                  onChanged: () => void refresh(),
+                })
             : () =>
                 openTaskCompleteModal({
                   task,

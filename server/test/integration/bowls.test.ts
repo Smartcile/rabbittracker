@@ -400,6 +400,43 @@ describe("bowl integration", () => {
     expect(products.find((item) => item.id === product.id)?.stockGrams).toBe(650);
   });
 
+  it("feeds now by topping up and consuming the same amount", async () => {
+    const rabbit = await createRabbit();
+    const { product } = await api<{ product: { id: number } }>(ctx, "/api/food-products", {
+      method: "POST",
+      body: { name: "Fresh greens" },
+    });
+    await api(ctx, `/api/food-products/${product.id}/entries`, {
+      method: "POST",
+      body: { amountGrams: 1000 },
+    });
+    const { bowl } = await api<{ bowl: BowlDto }>(ctx, "/api/bowls", {
+      method: "POST",
+      body: {
+        rabbitId: rabbit.id,
+        label: "Greens bowl",
+        productIds: [product.id],
+        startWeightGrams: 500,
+        startedAt: "2026-09-01T08:00:00.000Z",
+      },
+    });
+
+    const fed = await addReadings(bowl.id, [
+      { kind: "refill", readAt: "2026-09-02T08:00:00.000Z", refillGrams: 50 },
+      { kind: "consume", readAt: "2026-09-02T08:00:00.000Z", consumedGrams: 50 },
+    ]);
+
+    expect(fed.currentWeightGrams).toBe(500);
+    expect(fed.periodConsumptionGrams).toBe(50);
+    expect(fed.periodRefillGrams).toBe(50);
+
+    const { products } = await api<{ products: { id: number; stockGrams: number }[] }>(
+      ctx,
+      "/api/food-products",
+    );
+    expect(products.find((item) => item.id === product.id)?.stockGrams).toBe(950);
+  });
+
   it("rolls back the whole batch when one reading is invalid", async () => {
     const rabbit = await createRabbit();
     const bowl = await createBowl(rabbit.id);

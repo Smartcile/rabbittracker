@@ -344,7 +344,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
                   class: "btn ghost small",
                   type: "button",
                   onClick: () =>
-                    openCheckLogModal({ rabbit, types: logTypes, log, onSaved: () => void load() }),
+                    openCheckLogModal({ rabbit, types: logTypes, logs: checkLogs, log, onSaved: () => void load() }),
                 },
                 "Edit",
               ),
@@ -368,7 +368,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
               {
                 class: "btn outline small",
                 type: "button",
-                onClick: () => openCheckLogModal({ rabbit, types: logTypes, onSaved: () => void load() }),
+                onClick: () => openCheckLogModal({ rabbit, types: logTypes, logs: checkLogs, onSaved: () => void load() }),
               },
               "Log",
             ),

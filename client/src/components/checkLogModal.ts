@@ -1,6 +1,7 @@
 import type { CheckLogDto, CheckLogPhotoDto, CheckLogTypeDto, RabbitDto } from "../../../shared/types.ts";
 import { api } from "../api.ts";
 import { h } from "../dom.ts";
+import { lastLoggedLine } from "./lastLogged.ts";
 import { openModal } from "./modal.ts";
 import { openLightbox, photoPicker } from "./photoPicker.ts";
 import { toast } from "./toast.ts";
@@ -9,6 +10,7 @@ import { optionButtons } from "./toggle.ts";
 export function openCheckLogModal(options: {
   rabbit: RabbitDto;
   types: CheckLogTypeDto[];
+  logs?: CheckLogDto[];
   log?: CheckLogDto;
   initialTypeId?: number;
   onSaved: () => void;
@@ -28,6 +30,14 @@ export function openCheckLogModal(options: {
 
   const selectedType = (): CheckLogTypeDto | null =>
     options.types.find((type) => type.id === selectedTypeId) ?? null;
+
+  const lastLoggedFor = (typeId: number): string | null => {
+    const candidates = (options.logs ?? []).filter(
+      (entry) => entry.typeId === typeId && entry.id !== editing?.id,
+    );
+    if (candidates.length === 0) return null;
+    return candidates.reduce((a, b) => (a.loggedAt >= b.loggedAt ? a : b)).loggedAt;
+  };
 
   const renderList = (): void => {
     list.replaceChildren(
@@ -93,7 +103,11 @@ export function openCheckLogModal(options: {
         ),
       );
     }
-    panel.replaceChildren(h("div", { class: "check-picker-heading" }, type.label), ...parts);
+    panel.replaceChildren(
+      h("div", { class: "check-picker-heading" }, type.label),
+      lastLoggedLine("Last logged", lastLoggedFor(type.id)),
+      ...parts,
+    );
   };
 
   renderList();
