@@ -1,0 +1,6 @@
+ALTER TABLE "bowls" ADD COLUMN "recurrence" jsonb DEFAULT '{"kind":"daily","days":[],"count":1,"intervalDays":1}'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "rabbit_tasks" ADD COLUMN "recurrence" jsonb DEFAULT '{"kind":"daily","days":[],"count":1,"intervalDays":1}'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "task_templates" ADD COLUMN "recurrence" jsonb DEFAULT '{"kind":"daily","days":[],"count":1,"intervalDays":1}'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "treatments" ADD COLUMN "recurrence" jsonb DEFAULT '{"kind":"daily","days":[],"count":1,"intervalDays":1}'::jsonb NOT NULL;--> statement-breakpoint
+UPDATE "rabbit_tasks" SET "recurrence" = jsonb_build_object('kind', 'interval', 'days', jsonb_build_array(), 'count', 1, 'intervalDays', "interval_days") WHERE "interval_days" > 1;--> statement-breakpoint
+UPDATE "task_templates" SET "recurrence" = jsonb_build_object('kind', 'interval', 'days', jsonb_build_array(), 'count', 1, 'intervalDays', "interval_days") WHERE "interval_days" > 1;

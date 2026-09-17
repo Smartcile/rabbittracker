@@ -1,4 +1,5 @@
 import { formatWeight } from "../../../shared/health.ts";
+import { recurrenceLabel, type Recurrence } from "../../../shared/recurrence.ts";
 
 export type FeedEvent = {
   uid: string;
@@ -34,8 +35,15 @@ export type FeedSource = {
     vet: string;
     notes: string;
   }[];
-  careSchedules: { rabbitId: number; kind: string; intervalDays: number }[];
-  careRecords: { rabbitId: number; kind: string; doneAt: string }[];
+  tasks: {
+    id: number;
+    rabbitId: number;
+    label: string;
+    careKind: string | null;
+    recurrence: Recurrence;
+    intervalDays: number;
+    lastCompletedAt: Date | null;
+  }[];
   healthChecks: {
     id: number;
     rabbitId: number;
@@ -53,6 +61,7 @@ export type FeedSource = {
     medication: string;
     dose: string;
     frequency: string;
+    recurrence?: Recurrence;
     reason: string;
     startDate: string;
     endDate: string | null;
@@ -104,21 +113,13 @@ export function buildFeedEvents(source: FeedSource, rabbitId?: number): FeedEven
     });
   }
 
-  const lastCare = new Map<string, string>();
-  for (const record of source.careRecords) {
-    const key = `${record.rabbitId}:${record.kind}`;
-    const existing = lastCare.get(key);
-    if (!existing || record.doneAt > existing) lastCare.set(key, record.doneAt);
-  }
-  for (const schedule of source.careSchedules) {
-    if (!include(schedule.rabbitId)) continue;
-    const last = lastCare.get(`${schedule.rabbitId}:${schedule.kind}`);
-    if (!last) continue;
+  for (const task of source.tasks) {
+    if (!task.careKind || !include(task.rabbitId) || !task.lastCompletedAt) continue;
     events.push({
-      uid: `care-${schedule.rabbitId}-${schedule.kind}@rabbittracker`,
-      summary: `${name(schedule.rabbitId)}: ${capitalize(schedule.kind)} due`,
-      description: `Every ${schedule.intervalDays} days`,
-      start: addDays(last, schedule.intervalDays),
+      uid: `care-${task.id}@rabbittracker`,
+      summary: `${name(task.rabbitId)}: ${task.label} due`,
+      description: recurrenceLabel(task.recurrence),
+      start: addDays(task.lastCompletedAt.toISOString(), task.intervalDays),
       allDay: true,
     });
   }
@@ -143,10 +144,17 @@ export function buildFeedEvents(source: FeedSource, rabbitId?: number): FeedEven
 
   for (const treatment of source.treatments) {
     if (!include(treatment.rabbitId)) continue;
+    const repeat = treatment.recurrence ? recurrenceLabel(treatment.recurrence) : "";
     events.push({
       uid: `treatment-start-${treatment.id}@rabbittracker`,
       summary: `${name(treatment.rabbitId)}: ${treatment.medication} started`,
-      description: joinLines([treatment.dose, treatment.frequency, treatment.reason, treatment.notes]),
+      description: joinLines([
+        treatment.dose,
+        treatment.frequency,
+        repeat,
+        treatment.reason,
+        treatment.notes,
+      ]),
       start: treatment.startDate,
       allDay: true,
     });
@@ -154,7 +162,7 @@ export function buildFeedEvents(source: FeedSource, rabbitId?: number): FeedEven
       events.push({
         uid: `treatment-end-${treatment.id}@rabbittracker`,
         summary: `${name(treatment.rabbitId)}: ${treatment.medication} ends`,
-        description: joinLines([treatment.dose, treatment.frequency]),
+        description: joinLines([treatment.dose, treatment.frequency, repeat]),
         start: treatment.endDate,
         allDay: true,
       });
@@ -254,8 +262,4 @@ function addDays(value: string, days: number): string {
 
 function joinLines(parts: string[]): string {
   return parts.filter((part) => part.trim().length > 0).join("\n");
-}
-
-function capitalize(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
 }

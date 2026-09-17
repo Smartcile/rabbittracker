@@ -7,12 +7,14 @@ import {
   stockTotalMilliUnits,
 } from "../../../shared/drugs.ts";
 import { parseWeightInput, weightInputValue } from "../../../shared/health.ts";
+import { DEFAULT_RECURRENCE } from "../../../shared/recurrence.ts";
 import type { DaySlot } from "../../../shared/slots.ts";
 import { DAY_SLOT_LABELS, DAY_SLOTS } from "../../../shared/slots.ts";
 import { api } from "../api.ts";
 import { h } from "../dom.ts";
 import { lookupSelect } from "./lookupSelect.ts";
 import { openModal } from "./modal.ts";
+import { recurrenceEditor } from "./recurrenceEditor.ts";
 import { toast } from "./toast.ts";
 import { optionButtons } from "./toggle.ts";
 
@@ -54,6 +56,7 @@ export function openTreatmentModal(options: {
       slots = values as DaySlot[];
     },
   );
+  const recurrence = recurrenceEditor(editing?.recurrence ?? DEFAULT_RECURRENCE);
   const reason = lookupSelect("reason", { initialLabel: editing?.reason ?? "" });
   const startDate = h("input", {
     type: "date",
@@ -270,6 +273,7 @@ export function openTreatmentModal(options: {
             route: route.value().trim(),
             frequency: frequency.value().trim(),
             slots,
+            recurrence: recurrence.value(),
             reason: reason.value().trim(),
             startDate: startDate.value,
             endDate: endDate.value || null,
@@ -322,6 +326,17 @@ export function openTreatmentModal(options: {
           "span",
           { class: "dim small" },
           "Tick each time this is given, e.g. Morning and Evening. Leave empty for one dose a day with no set time.",
+        ),
+      ),
+      h(
+        "div",
+        { class: "field" },
+        h("label", null, "Repeat"),
+        recurrence.root,
+        h(
+          "span",
+          { class: "dim small" },
+          "How often this is due. 'Times per week' lets you log the doses on any days.",
         ),
       ),
       h("div", { class: "field" }, h("label", null, "Reason"), reason.root),

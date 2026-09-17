@@ -1,4 +1,5 @@
 import type { TaskDto } from "../../../shared/types.ts";
+import { TASK_SLOT_LABELS, taskSlotForTime } from "../../../shared/tasks.ts";
 import { api } from "../api.ts";
 import { h } from "../dom.ts";
 import { lastLoggedLine } from "./lastLogged.ts";
@@ -13,6 +14,15 @@ export function openTaskCompleteModal(options: {
 }): void {
   const when = h("input", { type: "datetime-local" });
   when.value = toLocalInputValue(defaultWhen(options.date));
+  const slotLine = h("span", { class: "dim small" });
+  const syncSlot = (): void => {
+    const at = new Date(when.value);
+    slotLine.textContent = Number.isNaN(at.getTime())
+      ? ""
+      : `Time of day: ${TASK_SLOT_LABELS[taskSlotForTime(at)]}`;
+  };
+  when.addEventListener("change", syncSlot);
+  syncSlot();
   const notes = h("textarea");
   const error = h("p", { class: "form-error" });
   error.style.display = "none";
@@ -57,6 +67,7 @@ export function openTaskCompleteModal(options: {
         h("label", null, "When was it done?"),
         when,
         h("span", { class: "dim small" }, "Change this to log a task you did earlier."),
+        slotLine,
       ),
       lastLoggedLine("Last done", options.task.lastCompletedAt),
       options.task.products.length > 0

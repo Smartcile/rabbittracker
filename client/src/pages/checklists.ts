@@ -4,10 +4,12 @@ import type {
   ChecklistSectionDto,
   CheckLogTypeDto,
 } from "../../../shared/types.ts";
+import { recurrenceLabel, type Recurrence } from "../../../shared/recurrence.ts";
 import { api } from "../api.ts";
 import { invalidateChecklist } from "../checklist.ts";
 import { invalidateCheckLogTypes } from "../dailyLogs.ts";
 import { confirmDialog, openModal } from "../components/modal.ts";
+import { recurrenceEditor } from "../components/recurrenceEditor.ts";
 import { toast } from "../components/toast.ts";
 import type { PageContext } from "../context.ts";
 import { h } from "../dom.ts";
@@ -148,6 +150,29 @@ export function renderChecklistsPage(_ctx: PageContext): HTMLElement {
       void addItem(checklist, kind === "t" ? { typeId: Number(id) } : { sectionId: Number(id) });
     });
 
+    const recurrence = recurrenceEditor(checklist.recurrence);
+    const schedule = checklist.isDaily
+      ? null
+      : h(
+          "details",
+          { class: "field" },
+          h("summary", null, `Schedule: ${recurrenceLabel(checklist.recurrence)}`),
+          recurrence.root,
+          h(
+            "div",
+            { class: "row" },
+            h(
+              "button",
+              {
+                class: "btn outline small",
+                type: "button",
+                onClick: () => void saveSchedule(checklist, recurrence.value()),
+              },
+              "Save schedule",
+            ),
+          ),
+        );
+
     return h(
       "div",
       { class: "card stack" },
@@ -160,11 +185,23 @@ export function renderChecklistsPage(_ctx: PageContext): HTMLElement {
         h("span", { class: "spacer" }),
         remove,
       ),
+      schedule,
       items.length > 0
         ? rows
         : h("p", { class: "dim small", style: { margin: 0 } }, "No items yet."),
       h("div", { class: "row" }, select),
     );
+  }
+
+  async function saveSchedule(checklist: ChecklistDto, recurrence: Recurrence): Promise<void> {
+    try {
+      await api.patch(`/api/checklists/${checklist.id}`, { recurrence });
+      invalidateChecklist();
+      toast("Schedule saved");
+      await reload();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Something went wrong", "error");
+    }
   }
 
   async function saveName(checklist: ChecklistDto, input: HTMLInputElement): Promise<void> {

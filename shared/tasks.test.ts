@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { taskScheduleDays } from "./tasks.ts";
+import { taskScheduleDays, taskSlotForTime } from "./tasks.ts";
 
 describe("taskScheduleDays", () => {
   it("schedules a daily task from its start date", () => {
@@ -51,5 +51,18 @@ describe("taskScheduleDays", () => {
     expect(
       taskScheduleDays({ startDate: "2026-10-01", intervalDays: 1 }, [], "2026-09-01", "2026-09-05"),
     ).toEqual([]);
+  });
+});
+
+describe("taskSlotForTime", () => {
+  it("maps the hour to a task slot", () => {
+    expect(taskSlotForTime(new Date(2026, 8, 1, 7, 30))).toBe("morning");
+    expect(taskSlotForTime(new Date(2026, 8, 1, 14, 0))).toBe("afternoon");
+    expect(taskSlotForTime(new Date(2026, 8, 1, 19, 0))).toBe("evening");
+  });
+
+  it("falls back to anytime outside the waking hours", () => {
+    expect(taskSlotForTime(new Date(2026, 8, 1, 23, 0))).toBe("anytime");
+    expect(taskSlotForTime(new Date(2026, 8, 1, 3, 0))).toBe("anytime");
   });
 });

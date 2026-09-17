@@ -416,6 +416,13 @@ a:hover {
   background: var(--accent-soft);
 }
 
+.badge.wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  text-align: left;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;

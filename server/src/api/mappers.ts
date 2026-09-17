@@ -11,9 +11,6 @@ import type {
   CalendarSubscriptionDto,
   CheckLogDto,
   CheckLogTypeDto,
-  CareKind,
-  CareRecordDto,
-  CareScheduleDto,
   ChecklistDto,
   ChecklistSectionDto,
   ClinicDto,
@@ -49,6 +46,7 @@ import type {
 import type { DrugForm } from "../../../shared/drugs.ts";
 import { summarizeBowl } from "../../../shared/bowls.ts";
 import { emptyChecklist } from "../../../shared/checklist.ts";
+import { normalizeRecurrence } from "../../../shared/recurrence.ts";
 import type { DaySlot } from "../../../shared/slots.ts";
 import { DAY_SLOTS } from "../../../shared/slots.ts";
 import type {
@@ -59,8 +57,6 @@ import type {
   CalendarEntryRow,
   CalendarEventRow,
   CalendarSubscriptionRow,
-  CareRecordRow,
-  CareScheduleRow,
   CheckLogPhotoRow,
   CheckLogRow,
   CheckLogTypeRow,
@@ -220,6 +216,7 @@ export function treatmentToDto(row: TreatmentRow): TreatmentDto {
     route: row.route,
     frequency: row.frequency,
     slots: daySlots(row.slots),
+    recurrence: normalizeRecurrence(row.recurrence),
     reason: row.reason,
     startDate: row.startDate,
     endDate: row.endDate,
@@ -278,28 +275,6 @@ export function vaccinationToDto(row: VaccinationRow): VaccinationDto {
     nextDueAt: row.nextDueAt,
     vet: row.vet,
     batch: row.batch,
-    notes: row.notes,
-    createdAt: row.createdAt.toISOString(),
-  };
-}
-
-export function careScheduleToDto(row: CareScheduleRow): CareScheduleDto {
-  return {
-    id: row.id,
-    rabbitId: row.rabbitId,
-    kind: row.kind as CareKind,
-    intervalDays: row.intervalDays,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
-}
-
-export function careRecordToDto(row: CareRecordRow): CareRecordDto {
-  return {
-    id: row.id,
-    rabbitId: row.rabbitId,
-    kind: row.kind as CareKind,
-    doneAt: row.doneAt,
     notes: row.notes,
     createdAt: row.createdAt.toISOString(),
   };
@@ -410,6 +385,7 @@ export function bowlToDto(
     label: row.label,
     kind: row.kind === "water" ? "water" : "food",
     slots: daySlots(row.slots),
+    recurrence: normalizeRecurrence(row.recurrence),
     tareGrams: row.tareGrams,
     productIds: row.productIds ?? [],
     currentWeightGrams: summary.currentWeightGrams,
@@ -484,8 +460,10 @@ export function taskToDto(
     id: row.id,
     rabbitId: row.rabbitId,
     label: row.label,
+    careKind: row.careKind,
     slot: taskSlot(row.slot),
     intervalDays: row.intervalDays,
+    recurrence: normalizeRecurrence(row.recurrence),
     startDate: row.startDate,
     products: (row.products ?? []).map((product) => ({
       productId: product.productId,
@@ -509,6 +487,7 @@ export function taskTemplateToDto(
     label: row.label,
     slot: taskSlot(row.slot),
     intervalDays: row.intervalDays,
+    recurrence: normalizeRecurrence(row.recurrence),
     startDate: row.startDate,
     products: (row.products ?? []).map((product) => ({
       productId: product.productId,
@@ -660,6 +639,7 @@ export function checklistToDto(row: ChecklistRow, itemCount: number): ChecklistD
     key: row.key,
     label: row.label,
     isDaily: row.isDaily,
+    recurrence: normalizeRecurrence(row.recurrence),
     sortOrder: row.sortOrder,
     itemCount,
   };

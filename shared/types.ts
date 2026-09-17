@@ -1,5 +1,6 @@
 import type { DrugForm } from "./drugs.ts";
 import type { HealthChecklistDto } from "./checklist.ts";
+import type { Recurrence } from "./recurrence.ts";
 import type { DaySlot } from "./slots.ts";
 
 export type UserDto = {
@@ -134,6 +135,7 @@ export type TreatmentDto = {
   route: string;
   frequency: string;
   slots: DaySlot[];
+  recurrence: Recurrence;
   reason: string;
   startDate: string;
   endDate: string | null;
@@ -190,26 +192,6 @@ export type VaccinationDto = {
   nextDueAt: string | null;
   vet: string;
   batch: string;
-  notes: string;
-  createdAt: string;
-};
-
-export type CareKind = string;
-
-export type CareScheduleDto = {
-  id: number;
-  rabbitId: number;
-  kind: CareKind;
-  intervalDays: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type CareRecordDto = {
-  id: number;
-  rabbitId: number;
-  kind: CareKind;
-  doneAt: string;
   notes: string;
   createdAt: string;
 };
@@ -348,6 +330,7 @@ export type BowlDto = {
   label: string;
   kind: "food" | "water";
   slots: DaySlot[];
+  recurrence: Recurrence;
   tareGrams: number | null;
   productIds: number[];
   currentWeightGrams: number | null;
@@ -381,8 +364,10 @@ export type TaskDto = {
   id: number;
   rabbitId: number;
   label: string;
+  careKind: string | null;
   slot: TaskSlot;
   intervalDays: number;
+  recurrence: Recurrence;
   startDate: string | null;
   products: TaskProductDto[];
   notes: string;
@@ -397,6 +382,7 @@ export type TaskTemplateDto = {
   label: string;
   slot: TaskSlot;
   intervalDays: number;
+  recurrence: Recurrence;
   startDate: string | null;
   products: TaskProductDto[];
   notes: string;
@@ -522,6 +508,7 @@ export type ChecklistDto = {
   key: string;
   label: string;
   isDaily: boolean;
+  recurrence: Recurrence;
   sortOrder: number;
   itemCount: number;
 };
@@ -543,8 +530,6 @@ export type ReportBundleDto = {
   checks: HealthCheckDto[];
   treatments: TreatmentDto[];
   vaccinations: VaccinationDto[];
-  careSchedules: CareScheduleDto[];
-  careRecords: CareRecordDto[];
   appointments: AppointmentDto[];
   journal: JournalEntryDto[];
   checkLogs: CheckLogDto[];

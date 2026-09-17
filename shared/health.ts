@@ -1,3 +1,10 @@
+import {
+  DEFAULT_RECURRENCE,
+  isScheduledOn,
+  recurrenceDays,
+  type Recurrence,
+} from "./recurrence.ts";
+
 export const WEIGHT_WATCH_PCT = 2;
 export const WEIGHT_ALERT_PCT = 5;
 export const WEIGHT_ALERT_FAST_PCT = 5;
@@ -198,12 +205,44 @@ function addDaysToKey(key: string, days: number): string | null {
   return new Date(Date.UTC(year, month - 1, day) + days * 86_400_000).toISOString().slice(0, 10);
 }
 
+function usesRecurrence(recurrence: Recurrence | undefined): recurrence is Recurrence {
+  return recurrence?.kind === "weekdays" || recurrence?.kind === "per_week";
+}
+
+function recurrenceAnchor(
+  startDate: string | null | undefined,
+  lastCompletedAt: string | null | undefined,
+  completionDays: readonly string[],
+  timeZone?: string,
+): string | null {
+  if (startDate) return startDate;
+  if (completionDays.length > 0) return [...completionDays].sort()[0];
+  if (lastCompletedAt) return dayKeyInZone(new Date(lastCompletedAt), timeZone);
+  return null;
+}
+
 export function taskNextDueOn(
   startDate: string | null | undefined,
   lastCompletedAt: string | null | undefined,
   intervalDays: number,
   timeZone?: string,
+  recurrence?: Recurrence,
+  completionDays: readonly string[] = [],
+  now: Date = new Date(),
 ): string | null {
+  if (usesRecurrence(recurrence)) {
+    const anchor = recurrenceAnchor(startDate, lastCompletedAt, completionDays, timeZone);
+    if (!anchor) return null;
+    const today = dayKeyInZone(now, timeZone);
+    if (today === null) return null;
+    const days = recurrenceDays(recurrence, {
+      anchorKey: anchor,
+      doneKeys: completionDays,
+      fromKey: today,
+      toKey: addDaysToKey(today, 400) ?? today,
+    });
+    return days[0] ?? null;
+  }
   if (lastCompletedAt) {
     if (!Number.isFinite(intervalDays) || intervalDays <= 0) return null;
     const key = dayKeyInZone(new Date(lastCompletedAt), timeZone);
@@ -220,9 +259,17 @@ export function taskDueStatus(
   intervalDays: number,
   now: Date,
   timeZone?: string,
+  recurrence?: Recurrence,
+  completionDays: readonly string[] = [],
 ): "due" | "upcoming" {
   const today = dayKeyInZone(now, timeZone);
   if (today === null) return "due";
+  if (usesRecurrence(recurrence)) {
+    const anchor = recurrenceAnchor(startDate, lastCompletedAt, completionDays, timeZone);
+    if (!anchor) return "due";
+    if (completionDays.includes(today)) return "upcoming";
+    return isScheduledOn(recurrence, today, anchor, completionDays) ? "due" : "upcoming";
+  }
   if (!lastCompletedAt) {
     if (!startDate) return "due";
     return startDate <= today ? "due" : "upcoming";
@@ -234,12 +281,19 @@ export function taskDueStatus(
 
 export type TreatmentScheduleState = "completed" | "up-to-date" | "due" | "missed" | "not-started";
 
+function utcDayKey(value: string): string | null {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+}
+
 export function treatmentScheduleStatus(
   treatment: {
     status: string;
     startDate: string;
     endDate: string | null;
     slots: readonly string[];
+    recurrence?: Recurrence;
   },
   logs: readonly { givenAt: string; slot: string | null; skipped: boolean }[],
   now: Date,
@@ -249,12 +303,19 @@ export function treatmentScheduleStatus(
   const started = utcDay(`${treatment.startDate}T00:00:00.000Z`);
   const todays = logs.filter((log) => utcDay(log.givenAt) === today);
   if (logs.some((log) => log.skipped)) return "missed";
+  if (started !== null && started > today) return "not-started";
+  const todayKey = new Date(today).toISOString().slice(0, 10);
+  const recurrence = treatment.recurrence ?? DEFAULT_RECURRENCE;
+  const doneKeys = logs
+    .filter((log) => !log.skipped)
+    .map((log) => utcDayKey(log.givenAt))
+    .filter((key): key is string => key !== null);
+  if (!isScheduledOn(recurrence, todayKey, treatment.startDate, doneKeys)) return "up-to-date";
   if (treatment.slots.length > 0) {
-    const done = new Set(todays.map((log) => log.slot));
+    const done = new Set(todays.filter((log) => !log.skipped).map((log) => log.slot));
     return treatment.slots.every((slot) => done.has(slot)) ? "up-to-date" : "due";
   }
-  if (todays.length > 0) return "up-to-date";
-  if (started !== null && started > today) return "not-started";
+  if (todays.some((log) => !log.skipped)) return "up-to-date";
   return "due";
 }
 

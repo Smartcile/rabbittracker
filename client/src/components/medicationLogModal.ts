@@ -6,6 +6,7 @@ import {
   DAY_SLOTS,
   nearestSlot,
   nextPendingSlot,
+  slotForTime,
   slotRangeLabel,
   slotTimeStatus,
 } from "../../../shared/slots.ts";
@@ -403,6 +404,12 @@ export function openMedicationLogModal(options: {
   drugSelect.addEventListener("change", syncHint);
   amount.addEventListener("input", syncHint);
   when.addEventListener("change", () => {
+    const treatment = selectedTreatment();
+    const at = when.value ? new Date(when.value) : new Date();
+    if (treatment && treatment.slots.length > 0 && !Number.isNaN(at.getTime())) {
+      slot = slotForTime(at);
+      slotTouched = true;
+    }
     renderSlotPicker();
     renderDayList();
   });

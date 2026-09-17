@@ -212,4 +212,20 @@ describe("task integration", () => {
     expect((await getProduct(litterId)).stockGrams).toBe(5000);
     expect((await getProduct(deodoriserId)).stockGrams).toBe(1000);
   });
+
+  it("tags a task as a care routine and validates the care type", async () => {
+    const rabbit = await createRabbit();
+    const task = await createTask(rabbit.id, { label: "Nails", careKind: "nails", intervalDays: 30 });
+    expect(task.careKind).toBe("nails");
+
+    const { tasks } = await api<{ tasks: TaskDto[] }>(ctx, `/api/tasks?rabbitId=${rabbit.id}`);
+    expect(tasks[0]?.careKind).toBe("nails");
+
+    await expect(
+      api(ctx, "/api/tasks", {
+        method: "POST",
+        body: { rabbitId: rabbit.id, label: "Bath", careKind: "not_a_type" },
+      }),
+    ).rejects.toThrow("Unknown care type");
+  });
 });

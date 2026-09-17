@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, lt, lte, min, ne, or } from "drizzle-orm";
 import { Router } from "express";
 import { summarizeBowl } from "../../../shared/bowls.ts";
+import { DEFAULT_RECURRENCE, normalizeRecurrence } from "../../../shared/recurrence.ts";
 import type { DaySlot } from "../../../shared/slots.ts";
 import { bowlToDto } from "../api/mappers.ts";
 import { db } from "../db/index.ts";
@@ -62,7 +63,9 @@ bowlsRouter.get("/schedule", requireAuth, async (req, res) => {
     .from(bowls)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(asc(bowls.id));
-  const scheduled = bowlRows.filter((row) => row.slots.length > 0);
+  const scheduled = bowlRows.filter(
+    (row) => row.slots.length > 0 || normalizeRecurrence(row.recurrence).kind !== "daily",
+  );
   const from = parseQueryDate(req.query.from);
   const to = parseQueryDate(req.query.to);
   const readingConditions = [];
@@ -120,6 +123,7 @@ bowlsRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (
       label: input.label,
       kind: input.kind,
       slots: input.slots,
+      recurrence: input.recurrence ?? DEFAULT_RECURRENCE,
       tareGrams: input.tareGrams ?? null,
       productIds: input.productIds,
     })
@@ -148,6 +152,7 @@ bowlsRouter.patch("/:id", requireAuth, requirePermission("canRecordHealth"), asy
       label: input.label ?? bowl.label,
       kind: input.kind ?? bowl.kind,
       slots: input.slots ?? bowl.slots,
+      recurrence: input.recurrence ?? bowl.recurrence,
       tareGrams: input.tareGrams !== undefined ? input.tareGrams : bowl.tareGrams,
       productIds: input.productIds ?? bowl.productIds,
       updatedAt: new Date(),

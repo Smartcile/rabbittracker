@@ -49,7 +49,7 @@ Desktop:
 - Quarantine flag with a release date, target weight range and a feeding plan.
 - Bonded-bunny links (symmetric) shown on each profile.
 - Photo gallery per bunny, combining check photos and journal photos.
-- A flat, grouped profile — Observations, Daily routine, Health checks, Treatments & medication,
+- A flat, grouped profile — Observations, Routine, Health checks, Treatments & medication,
   Notes & photos, Appointments and Bunny details — with every card visible.
 
 **Health**
@@ -58,9 +58,10 @@ Desktop:
 - The RRR weekly health checklist (posture, demeanour, eyes, breathing, coat & skin, behaviour,
   bum, ears, nails, genitals, hocks) with tick-button answers, per-section notes and example
   photos. The checklist itself is editable in Settings, and the full check form can also switch on
-  any of your daily check types (Poo, Behaviour, …) so the Sunday check captures them too.
-- Quick log — tick any checklist item from the bunny page and save it as a health check without
-  the full form.
+  any of your daily check types (Poo, Behaviour, …) so the Sunday check captures them too. Each
+  checklist has a recurrence (the weekly checklist is due on Sundays by default, editable in
+  Settings → Checklists); the Daily checks card on the bunny profile lists every checklist with a
+  **Due today** badge and a **Log** button that opens the check form.
 - **Daily checks** — define your own types in Settings (Poo, Behaviour, …) with option buttons
   (single or multi-select), a number with a unit and free text, plus photos on any log. A one-tap
   bar on the bunny profile logs a type in seconds. An **Add defaults** button in the editor pulls in
@@ -82,15 +83,19 @@ Desktop:
   calculated). **Feed now** records a top-up and the same amount eaten in one go for food that is
   eaten straight away — weigh the bowl afterwards if anything is left over. The logging pop-ups
   also show when each item was last logged.
-- **Food & supplies** — a catalog for hay, pellets, greens and treats with a running stock total
+- **Food and Supplies** — a catalog for hay, pellets, greens and treats with a running stock total
   (add or remove amounts), a low-stock level and a type list. Link products to a bowl and every
   top-up draws the amount added from the chosen product's stock; editing or deleting the top-up puts
   it back.
-- **Daily routine tasks** — repeating chores per bunny with morning, afternoon, evening or anytime
-  slots, a daily/weekly/monthly (or custom every-N-days) repeat and an optional start date that sets
-  the first due date. Define reusable templates in Settings → Daily routine and add one to a bunny
-  in a tap; link one or more stock items (product + amount) so completing a task draws each down
-  automatically. Tick them off from the bunny page, the home Today list or the calendar (choosing
+- **Routine** — one card for repeating chores and care routines. Chores have morning, afternoon,
+  evening or anytime slots, a daily/chosen-days/times-per-week/every-N-days repeat and an optional
+  start date that sets the first due date. Care routines (nails, teeth, grooming, or your own care
+  types) are tasks tagged with a care type, so the same edit pop-up handles both: pick a care type
+  or leave it as a plain chore. The card lists every care type with its last-done, schedule and
+  next-due status alongside the due chores. Define reusable templates in Settings → Daily routine
+  and add one to a bunny in a tap; link one or more stock items (product + amount) so completing a
+  task draws each down automatically. Tick them off from the bunny page, the home Today list or the
+  calendar (choosing
   the date it was done), and create or edit a task straight from the calendar with **+ New task** or
   the complete pop-up's **Edit task** button. Tapping a completed day opens that task's history,
   where each completion's date, time and notes can be edited, saved or deleted. A never-started task
@@ -110,6 +115,10 @@ Desktop:
   as **Missed** (no stock is deducted, the slot shows a red cross), and a course **auto-completes**
   once its end date has passed and the last scheduled dose has been recorded or marked missed.
   Pop-out forms warn before closing with unsaved changes.
+- **Flexible schedules** — treatments, bowls and routine tasks each choose how often they repeat:
+  every day, chosen days of the week (e.g. Mon and Thu), a number of times a week on **any** days
+  (log the two doses whenever suits), or every N days. The calendar only draws an item on its due
+  days, and a weekly quota stops appearing once it is met for that week.
 - **Growth norms** — starter adult weight ranges per breed (editable in Settings) scaled by age,
   plus expected daily food and water per kilogram. The weight card and the Food & water card flag
   when a bunny drifts into a watch or alert range.
@@ -132,8 +141,8 @@ Desktop:
   pulls in any missing starter drugs (Doxy 100 paste, Trimethoprim Sulfa/Deprim, …) on upgraded
   installs.
 - Vaccinations with next-due tracking (default booster intervals from the vaccine-type list).
-- Routine care schedules (nails, teeth, grooming, or your own care types) with dated records and
-  due/overdue badges.
+- Routine care (nails, teeth, grooming, or your own care types) is tracked through the Routine card
+  as care-typed tasks, with dated completions and due/overdue badges.
 - Vet appointments with status, cost, follow-up date and optional ICS/webcal calendar sync.
 - **Calendar events** — add your own events (hay collection, volunteer runs, fundraisers, cleaning)
   with a type list, all-day option, location, optional bunny link and simple repeating schedules

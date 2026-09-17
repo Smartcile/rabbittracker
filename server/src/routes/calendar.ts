@@ -7,10 +7,10 @@ import {
   appointments,
   calendarEvents,
   calendarSubscriptions,
-  careRecords,
-  careSchedules,
   healthChecks,
+  rabbitTasks,
   rabbits,
+  taskCompletions,
   treatments,
   vaccinations,
 } from "../db/schema.ts";
@@ -20,6 +20,7 @@ import { requireAuth } from "../lib/auth.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
 import { ensureFeedToken, getSettings, regenerateFeedToken } from "../lib/settingsStore.ts";
 import { tokenMatches } from "../lib/tokens.ts";
+import { normalizeRecurrence } from "../../../shared/recurrence.ts";
 import {
   calendarSubscriptionSchema,
   calendarSubscriptionUpdateSchema,
@@ -125,13 +126,13 @@ async function sendFeed(req: Request, res: Response, rabbitId: number | null): P
     throw new HttpError(404, "Not found");
   }
 
-  const [rabbitRows, appointmentRows, vaccinationRows, scheduleRows, recordRows, checkRows, treatmentRows] =
+  const [rabbitRows, appointmentRows, vaccinationRows, taskRows, completionRows, checkRows, treatmentRows] =
     await Promise.all([
       db.select().from(rabbits).orderBy(asc(rabbits.name)),
       db.select().from(appointments),
       db.select().from(vaccinations),
-      db.select().from(careSchedules),
-      db.select().from(careRecords),
+      db.select().from(rabbitTasks),
+      db.select().from(taskCompletions),
       db.select().from(healthChecks),
       db.select().from(treatments),
     ]);
@@ -139,13 +140,28 @@ async function sendFeed(req: Request, res: Response, rabbitId: number | null): P
   const rabbitName = rabbitId !== null ? rabbitRows.find((row) => row.id === rabbitId)?.name : undefined;
   if (rabbitId !== null && !rabbitName) throw new HttpError(404, "Not found");
 
+  const lastByTask = new Map<number, Date>();
+  for (const completion of completionRows) {
+    const existing = lastByTask.get(completion.taskId);
+    if (!existing || completion.completedAt > existing) {
+      lastByTask.set(completion.taskId, completion.completedAt);
+    }
+  }
+
   const events = buildFeedEvents(
     {
       rabbits: rabbitRows.map((row) => ({ id: row.id, name: row.name })),
       appointments: appointmentRows,
       vaccinations: vaccinationRows,
-      careSchedules: scheduleRows,
-      careRecords: recordRows,
+      tasks: taskRows.map((row) => ({
+        id: row.id,
+        rabbitId: row.rabbitId,
+        label: row.label,
+        careKind: row.careKind,
+        recurrence: normalizeRecurrence(row.recurrence),
+        intervalDays: row.intervalDays,
+        lastCompletedAt: lastByTask.get(row.id) ?? null,
+      })),
       healthChecks: checkRows,
       treatments: treatmentRows,
     },

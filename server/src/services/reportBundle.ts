@@ -3,8 +3,6 @@ import type { ReportBundleDto } from "../../../shared/types.ts";
 import {
   appointmentToDto,
   bowlToDto,
-  careRecordToDto,
-  careScheduleToDto,
   checkLogToDto,
   checkLogTypeToDto,
   drugToDto,
@@ -45,7 +43,6 @@ import { listChecklistConfig } from "../lib/checklistStore.ts";
 import { listLookups } from "../lib/lookupStore.ts";
 import { getSettings } from "../lib/settingsStore.ts";
 import { listAppointmentsForRabbit } from "../routes/appointments.ts";
-import { listRecordsForRabbit, listSchedulesForRabbit } from "../routes/care.ts";
 import { listChecksForRabbit } from "../routes/checks.ts";
 import { listJournalForRabbit } from "../routes/journal.ts";
 import { listTreatmentsForRabbit } from "../routes/treatments.ts";
@@ -68,8 +65,6 @@ export async function buildReportBundle(
     checks,
     treatments,
     vaccinations,
-    schedules,
-    records,
     appointmentRows,
     journalRows,
     bondRows,
@@ -89,8 +84,6 @@ export async function buildReportBundle(
     listChecksForRabbit(rabbitId),
     listTreatmentsForRabbit(rabbitId),
     listVaccinationsForRabbit(rabbitId),
-    listSchedulesForRabbit(rabbitId),
-    listRecordsForRabbit(rabbitId),
     listAppointmentsForRabbit(rabbitId),
     listJournalForRabbit(rabbitId),
     db
@@ -194,8 +187,6 @@ export async function buildReportBundle(
     checks: checks.map(healthCheckToDto),
     treatments: treatments.map(treatmentToDto),
     vaccinations: vaccinations.map(vaccinationToDto),
-    careSchedules: schedules.map(careScheduleToDto),
-    careRecords: records.map(careRecordToDto),
     appointments: appointmentRows.map((row) => appointmentToDto(row, options.hideCosts)),
     journal: journalRows.map((item) => journalEntryToDto(item.entry, item.photos)),
     checkLogs: logRows.map((row) =>

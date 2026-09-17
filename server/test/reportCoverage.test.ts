@@ -6,8 +6,6 @@ import * as schema from "../src/db/schema.ts";
 const REPORTED_TABLES = new Set([
   "appointments",
   "bowls",
-  "care_records",
-  "care_schedules",
   "check_logs",
   "health_checks",
   "journal_entries",

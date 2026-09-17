@@ -1,33 +1,31 @@
 import type { FoodProductDto, RabbitDto, TaskDto, TaskSlot, TaskTemplateDto } from "../../../shared/types.ts";
-import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
+import { DEFAULT_RECURRENCE } from "../../../shared/recurrence.ts";
+import { TASK_SLOTS, TASK_SLOT_LABELS, taskSlotForTime } from "../../../shared/tasks.ts";
 import { api } from "../api.ts";
 import { h } from "../dom.ts";
+import { loadLookups } from "../lookups.ts";
 import { confirmDialog, openModal } from "./modal.ts";
+import { recurrenceEditor } from "./recurrenceEditor.ts";
 import { taskProductRows } from "./taskProductRows.ts";
 import { toast } from "./toast.ts";
 import { optionButtons, toggleButton } from "./toggle.ts";
-
-type RepeatMode = "daily" | "weekly" | "monthly" | "custom";
-
-const REPEAT_DAYS: Record<Exclude<RepeatMode, "custom">, number> = {
-  daily: 1,
-  weekly: 7,
-  monthly: 30,
-};
 
 export function openTaskModal(options: {
   rabbit?: RabbitDto;
   rabbits?: RabbitDto[];
   task?: TaskDto;
+  careKind?: string;
+  label?: string;
   onSaved: () => void;
 }): void {
   const editing = options.task;
+  let careKind = editing?.careKind ?? options.careKind ?? "";
   const label = h("input", {
     required: true,
-    value: editing?.label ?? "",
+    value: editing?.label ?? options.label ?? "",
     placeholder: "e.g. Change litter box",
   });
-  let slot: TaskSlot = editing?.slot ?? "anytime";
+  let slot: TaskSlot = editing?.slot ?? taskSlotForTime(new Date());
   const slotGroup = optionButtons(
     TASK_SLOTS.map((value) => ({ value, label: TASK_SLOT_LABELS[value] })),
     [slot],
@@ -36,28 +34,7 @@ export function openTaskModal(options: {
       slot = (values[0] as TaskSlot | undefined) ?? "anytime";
     },
   );
-  const repeat = h(
-    "select",
-    null,
-    h("option", { value: "daily" }, "Daily"),
-    h("option", { value: "weekly" }, "Weekly"),
-    h("option", { value: "monthly" }, "Monthly"),
-    h("option", { value: "custom" }, "Custom (every N days)"),
-  );
-  repeat.value = repeatMode(editing?.intervalDays ?? 1);
-  const interval = h("input", {
-    type: "number",
-    min: "1",
-    max: "3650",
-    value: String(editing?.intervalDays ?? 1),
-  });
-  const customField = h(
-    "div",
-    { class: "field" },
-    h("label", null, "Every N days"),
-    interval,
-    h("span", { class: "dim small" }, "1 means every day."),
-  );
+  const recurrence = recurrenceEditor(editing?.recurrence ?? DEFAULT_RECURRENCE);
   const start = h("input", { type: "date", value: editing?.startDate ?? "" });
   const templateSelect = editing
     ? null
@@ -74,6 +51,25 @@ export function openTaskModal(options: {
         )
       : null;
 
+  const careSelect = h("select", null, h("option", { value: "" }, "— Routine task —"));
+  careSelect.value = careKind;
+  void loadLookups()
+    .then((lookups) => {
+      const careTypes = lookups.filter((lookup) => lookup.kind === "care_type");
+      for (const careType of careTypes) {
+        careSelect.append(h("option", { value: careType.value }, careType.label));
+      }
+      careSelect.value = careKind;
+      careSelect.addEventListener("change", () => {
+        careKind = careSelect.value;
+        const careType = careTypes.find((item) => item.value === careKind);
+        if (careType) label.value = careType.label;
+      });
+    })
+    .catch(() => {
+      careSelect.setAttribute("disabled", "true");
+    });
+
   const productRows = taskProductRows(editing?.products ?? []);
   const addProduct = h(
     "button",
@@ -86,12 +82,6 @@ export function openTaskModal(options: {
   const error = h("p", { class: "form-error" });
   error.style.display = "none";
   const save = h("button", { class: "btn primary", type: "submit" }, editing ? "Save" : "Add task");
-
-  const syncRepeat = (): void => {
-    customField.style.display = repeat.value === "custom" ? "" : "none";
-  };
-  repeat.addEventListener("change", syncRepeat);
-  syncRepeat();
 
   void Promise.all([
     api.get<{ templates: TaskTemplateDto[] }>("/api/task-templates"),
@@ -109,10 +99,8 @@ export function openTaskModal(options: {
           label.value = template.label;
           slot = template.slot;
           slotGroup.setValues([template.slot]);
-          repeat.value = repeatMode(template.intervalDays);
-          interval.value = String(template.intervalDays);
+          recurrence.setValue(template.recurrence);
           start.value = template.startDate ?? "";
-          syncRepeat();
           productRows.setValues(template.products);
           notes.value = template.notes;
         });
@@ -147,15 +135,6 @@ export function openTaskModal(options: {
             error.style.display = "";
             return;
           }
-          const intervalDays =
-            repeat.value === "custom"
-              ? Number(interval.value)
-              : REPEAT_DAYS[repeat.value as Exclude<RepeatMode, "custom">];
-          if (!Number.isInteger(intervalDays) || intervalDays < 1 || intervalDays > 3650) {
-            error.textContent = "Repeat every 1–3650 days.";
-            error.style.display = "";
-            return;
-          }
           const products = productRows.collect();
           if (products === null) {
             error.textContent = "Enter each product amount in grams.";
@@ -166,8 +145,9 @@ export function openTaskModal(options: {
           try {
             const payload = {
               label: name,
+              careKind: careKind || null,
               slot,
-              intervalDays,
+              recurrence: recurrence.value(),
               startDate: start.value || null,
               products,
               notes: notes.value.trim(),
@@ -198,10 +178,20 @@ export function openTaskModal(options: {
         ? h("div", { class: "field" }, h("label", null, "Start from a template"), templateSelect)
         : null,
       bunnySelect ? h("div", { class: "field" }, h("label", null, "Bunny"), bunnySelect) : null,
+      h(
+        "div",
+        { class: "field" },
+        h("label", null, "Care routine (optional)"),
+        careSelect,
+        h(
+          "span",
+          { class: "dim small" },
+          "Ties this routine to a care type so it appears in the Routine care overview.",
+        ),
+      ),
       h("div", { class: "field" }, h("label", null, "Name"), label),
       h("div", { class: "field" }, h("label", null, "Time of day"), slotGroup.root),
-      h("div", { class: "field" }, h("label", null, "Repeats"), repeat),
-      customField,
+      h("div", { class: "field" }, h("label", null, "Repeats"), recurrence.root),
       h(
         "div",
         { class: "field" },
@@ -256,9 +246,3 @@ export function openTaskModal(options: {
   }
 }
 
-function repeatMode(days: number): RepeatMode {
-  if (days === 1) return "daily";
-  if (days === 7) return "weekly";
-  if (days === 30) return "monthly";
-  return "custom";
-}

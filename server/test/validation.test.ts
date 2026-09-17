@@ -18,8 +18,6 @@ import {
   checkLogTypeCreateSchema,
   medicationLogCreateSchema,
   medicationLogUpdateSchema,
-  careRecordCreateSchema,
-  careSchedulePutSchema,
   checkCreateSchema,
   checkUpdateSchema,
   checklistSchema,
@@ -737,6 +735,28 @@ describe("task validation", () => {
     expect(taskCreateSchema.safeParse({ rabbitId: 1, label: "X", intervalDays: 0 }).success).toBe(false);
   });
 
+  it("accepts a recurrence and fills its defaults", () => {
+    const result = taskCreateSchema.parse({
+      rabbitId: 1,
+      label: "Twice weekly",
+      recurrence: { kind: "per_week", count: 2 },
+    });
+    expect(result.recurrence).toEqual({ kind: "per_week", days: [], count: 2, intervalDays: 1 });
+  });
+
+  it("rejects an unknown recurrence kind or weekday", () => {
+    expect(
+      taskCreateSchema.safeParse({ rabbitId: 1, label: "X", recurrence: { kind: "hourly" } }).success,
+    ).toBe(false);
+    expect(
+      taskCreateSchema.safeParse({
+        rabbitId: 1,
+        label: "X",
+        recurrence: { kind: "weekdays", days: ["mon", "funday"] },
+      }).success,
+    ).toBe(false);
+  });
+
   it("requires changes on update", () => {
     expect(taskUpdateSchema.safeParse({}).success).toBe(false);
     expect(taskUpdateSchema.safeParse({ active: false }).success).toBe(true);
@@ -1165,31 +1185,6 @@ describe("vaccination validation", () => {
 
   it("requires a given date", () => {
     expect(vaccinationCreateSchema.safeParse({ rabbitId: 1, vaccine: "Other" }).success).toBe(false);
-  });
-});
-
-describe("care validation", () => {
-  it("accepts a valid schedule", () => {
-    expect(careSchedulePutSchema.safeParse({ kind: "nails", intervalDays: 42 }).success).toBe(true);
-  });
-
-  it("rejects non-positive and absurd intervals", () => {
-    expect(careSchedulePutSchema.safeParse({ kind: "nails", intervalDays: 0 }).success).toBe(false);
-    expect(careSchedulePutSchema.safeParse({ kind: "nails", intervalDays: 4000 }).success).toBe(false);
-  });
-
-  it("accepts a custom care type (checked against the list in the route)", () => {
-    expect(careSchedulePutSchema.safeParse({ kind: "bath", intervalDays: 30 }).success).toBe(true);
-    expect(careSchedulePutSchema.safeParse({ kind: " ", intervalDays: 30 }).success).toBe(false);
-  });
-
-  it("accepts a care record and defaults notes", () => {
-    const result = careRecordCreateSchema.parse({
-      rabbitId: 1,
-      kind: "grooming",
-      doneAt: "2026-06-01",
-    });
-    expect(result.notes).toBe("");
   });
 });
 

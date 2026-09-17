@@ -7,6 +7,7 @@ import type { DrugRow, TreatmentRow } from "../db/schema.ts";
 import { findVisibleRabbit, requirePermission, visibleRabbitIds } from "../lib/access.ts";
 import { requireAuth } from "../lib/auth.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
+import { DEFAULT_RECURRENCE } from "../../../shared/recurrence.ts";
 import { autoCompleteTreatments } from "../lib/treatmentStatus.ts";
 import { treatmentCreateSchema, treatmentUpdateSchema } from "../lib/validation.ts";
 
@@ -53,6 +54,7 @@ treatmentsRouter.post("/", requireAuth, requirePermission("canRecordHealth"), as
       route: input.route,
       frequency: input.frequency,
       slots: input.slots,
+      recurrence: input.recurrence ?? DEFAULT_RECURRENCE,
       reason: input.reason,
       startDate: input.startDate,
       endDate: input.endDate ?? null,
@@ -82,6 +84,7 @@ treatmentsRouter.patch("/:id", requireAuth, requirePermission("canRecordHealth")
       route: input.route ?? existing.route,
       frequency: input.frequency ?? existing.frequency,
       slots: input.slots ?? existing.slots,
+      recurrence: input.recurrence ?? existing.recurrence,
       reason: input.reason ?? existing.reason,
       startDate: input.startDate ?? existing.startDate,
       endDate: input.endDate !== undefined ? input.endDate : existing.endDate,

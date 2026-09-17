@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { emptyChecklist } from "../../shared/checklist.ts";
+import { DEFAULT_RECURRENCE } from "../../shared/recurrence.ts";
 import {
   appointmentToDto,
   calendarEventToDto,
   calendarSubscriptionToDto,
-  careRecordToDto,
-  careScheduleToDto,
   faqEntryToDto,
   groupFaqEntries,
   healthCheckToDto,
@@ -20,8 +19,6 @@ import type {
   AppointmentRow,
   CalendarEventRow,
   CalendarSubscriptionRow,
-  CareRecordRow,
-  CareScheduleRow,
   FaqEntryRow,
   HealthCheckRow,
   RabbitRow,
@@ -386,6 +383,7 @@ describe("treatmentToDto", () => {
       route: "oral",
       frequency: "once daily",
       slots: ["morning"],
+      recurrence: DEFAULT_RECURRENCE,
       reason: "Post-op pain",
       startDate: "2026-05-01",
       endDate: "2026-05-10",
@@ -405,6 +403,7 @@ describe("treatmentToDto", () => {
       route: "oral",
       frequency: "once daily",
       slots: ["morning"],
+      recurrence: DEFAULT_RECURRENCE,
       reason: "Post-op pain",
       startDate: "2026-05-01",
       endDate: "2026-05-10",
@@ -427,6 +426,7 @@ describe("treatmentToDto", () => {
       route: "",
       frequency: "",
       slots: [],
+      recurrence: DEFAULT_RECURRENCE,
       reason: "",
       startDate: "2026-05-01",
       endDate: null,
@@ -465,46 +465,6 @@ describe("vaccinationToDto", () => {
       batch: "A123",
       notes: "",
       createdAt: "2026-03-01T00:00:00.000Z",
-    });
-  });
-});
-
-describe("care mappers", () => {
-  it("maps a care schedule row", () => {
-    const row: CareScheduleRow = {
-      id: 3,
-      rabbitId: 2,
-      kind: "nails",
-      intervalDays: 42,
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      updatedAt: new Date("2026-02-01T00:00:00.000Z"),
-    };
-    expect(careScheduleToDto(row)).toEqual({
-      id: 3,
-      rabbitId: 2,
-      kind: "nails",
-      intervalDays: 42,
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-02-01T00:00:00.000Z",
-    });
-  });
-
-  it("maps a care record row", () => {
-    const row: CareRecordRow = {
-      id: 4,
-      rabbitId: 2,
-      kind: "teeth",
-      doneAt: "2026-06-01",
-      notes: "All good",
-      createdAt: new Date("2026-06-01T10:00:00.000Z"),
-    };
-    expect(careRecordToDto(row)).toEqual({
-      id: 4,
-      rabbitId: 2,
-      kind: "teeth",
-      doneAt: "2026-06-01",
-      notes: "All good",
-      createdAt: "2026-06-01T10:00:00.000Z",
     });
   });
 });

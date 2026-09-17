@@ -2,8 +2,23 @@ import { z } from "zod";
 import { CALENDAR_REPEATS } from "../../../shared/calendar.ts";
 import type { HealthChecklistDto } from "../../../shared/checklist.ts";
 import { LOOKUP_KINDS } from "../../../shared/lookups.ts";
+import {
+  DEFAULT_RECURRENCE,
+  RECURRENCE_KINDS,
+  WEEKDAYS,
+} from "../../../shared/recurrence.ts";
 import { TASK_SLOTS } from "../../../shared/tasks.ts";
 import { DAY_SLOTS } from "../../../shared/slots.ts";
+
+const recurrenceFields = z.object({
+  kind: z.enum(RECURRENCE_KINDS),
+  days: z.array(z.enum(WEEKDAYS)).max(WEEKDAYS.length).default([]),
+  count: z.number().int().min(1).max(7).default(1),
+  intervalDays: z.number().int().min(1).max(3650).default(1),
+});
+
+export const recurrenceSchema = recurrenceFields.default(DEFAULT_RECURRENCE);
+export const recurrenceUpdateSchema = recurrenceFields.optional();
 
 export const usernameSchema = z.preprocess(
   (value) => (typeof value === "string" ? value.trim().toLowerCase() : value),
@@ -213,9 +228,14 @@ export const checklistCreateSchema = z.object({
   label: z.string().trim().min(1, "Label is required").max(100),
 });
 
-export const checklistUpdateSchema = z.object({
-  label: z.string().trim().min(1, "Label is required").max(100),
-});
+export const checklistUpdateSchema = z
+  .object({
+    label: z.string().trim().min(1, "Label is required").max(100).optional(),
+    recurrence: recurrenceUpdateSchema,
+  })
+  .refine((value) => value.label !== undefined || value.recurrence !== undefined, {
+    message: "No changes provided",
+  });
 
 export const checklistItemCreateSchema = z
   .object({
@@ -354,6 +374,7 @@ export const bowlCreateSchema = z.object({
   label: z.string().trim().min(1, "Name is required").max(100),
   kind: z.enum(["food", "water"]).default("food"),
   slots: z.array(z.enum(DAY_SLOTS)).max(DAY_SLOTS.length).default([]),
+  recurrence: recurrenceUpdateSchema,
   tareGrams: z.number().int().min(0).max(1_000_000).nullable().optional(),
   productIds: z.array(z.number().int().positive()).max(50).default([]),
   startWeightGrams: z.number().int().min(0).max(1_000_000),
@@ -366,6 +387,7 @@ export const bowlUpdateSchema = z
     label: z.string().trim().min(1, "Name is required").max(100).optional(),
     kind: z.enum(["food", "water"]).optional(),
     slots: z.array(z.enum(DAY_SLOTS)).max(DAY_SLOTS.length).optional(),
+    recurrence: recurrenceUpdateSchema,
     tareGrams: z.number().int().min(0).max(1_000_000).nullable().optional(),
     productIds: z.array(z.number().int().positive()).max(50).optional(),
   })
@@ -498,12 +520,16 @@ const taskProductSchema = z.object({
   amountGrams: z.number().int().min(0).max(1_000_000),
 });
 
+const careKindField = z.string().trim().min(1, "Care type is required").max(60).nullable();
+
 export const taskCreateSchema = z.object({
   rabbitId: z.number().int().positive(),
   templateId: z.number().int().positive().nullable().optional(),
   label: z.string().trim().min(1, "Name is required").max(200),
+  careKind: careKindField.optional(),
   slot: z.enum(TASK_SLOTS).default("anytime"),
   intervalDays: z.number().int().min(1).max(3650).default(1),
+  recurrence: recurrenceUpdateSchema,
   startDate: optionalDate,
   products: z.array(taskProductSchema).max(50).default([]),
   notes: z.string().trim().max(2000).default(""),
@@ -513,8 +539,10 @@ export const taskCreateSchema = z.object({
 export const taskUpdateSchema = z
   .object({
     label: z.string().trim().min(1, "Name is required").max(200).optional(),
+    careKind: careKindField.optional(),
     slot: z.enum(TASK_SLOTS).optional(),
     intervalDays: z.number().int().min(1).max(3650).optional(),
+    recurrence: recurrenceUpdateSchema,
     startDate: optionalDate,
     products: z.array(taskProductSchema).max(50).optional(),
     notes: z.string().trim().max(2000).optional(),
@@ -528,6 +556,7 @@ export const taskTemplateCreateSchema = z.object({
   label: z.string().trim().min(1, "Name is required").max(200),
   slot: z.enum(TASK_SLOTS).default("anytime"),
   intervalDays: z.number().int().min(1).max(3650).default(1),
+  recurrence: recurrenceUpdateSchema,
   startDate: optionalDate,
   products: z.array(taskProductSchema).max(50).default([]),
   notes: z.string().trim().max(2000).default(""),
@@ -539,6 +568,7 @@ export const taskTemplateUpdateSchema = z
     label: z.string().trim().min(1, "Name is required").max(200).optional(),
     slot: z.enum(TASK_SLOTS).optional(),
     intervalDays: z.number().int().min(1).max(3650).optional(),
+    recurrence: recurrenceUpdateSchema,
     startDate: optionalDate,
     products: z.array(taskProductSchema).max(50).optional(),
     notes: z.string().trim().max(2000).optional(),
@@ -711,6 +741,7 @@ export const treatmentCreateSchema = z.object({
   route: z.string().trim().max(100).default(""),
   frequency: z.string().trim().max(100).default(""),
   slots: z.array(z.enum(DAY_SLOTS)).max(DAY_SLOTS.length).default([]),
+  recurrence: recurrenceUpdateSchema,
   reason: z.string().trim().max(300).default(""),
   startDate: dateOnlySchema,
   endDate: optionalDate,
@@ -727,6 +758,7 @@ export const treatmentUpdateSchema = z
     route: z.string().trim().max(100).optional(),
     frequency: z.string().trim().max(100).optional(),
     slots: z.array(z.enum(DAY_SLOTS)).max(DAY_SLOTS.length).optional(),
+    recurrence: recurrenceUpdateSchema,
     reason: z.string().trim().max(300).optional(),
     startDate: dateOnlySchema.optional(),
     endDate: optionalDate,
@@ -823,24 +855,6 @@ export const vaccinationUpdateSchema = z
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: "No changes provided",
   });
-
-export const careKindSchema = z.string().trim().min(1, "Care type is required").max(60);
-
-export const careSchedulePutSchema = z.object({
-  kind: careKindSchema,
-  intervalDays: z
-    .number()
-    .int()
-    .min(1, "Interval must be at least 1 day")
-    .max(3650, "Interval is too long"),
-});
-
-export const careRecordCreateSchema = z.object({
-  rabbitId: z.number().int().positive(),
-  kind: careKindSchema,
-  doneAt: dateOnlySchema,
-  notes: z.string().trim().max(2000).default(""),
-});
 
 export const appointmentStatusSchema = z.enum(["scheduled", "completed", "cancelled"]);
 

@@ -25,7 +25,7 @@ export function renderFoodPage(ctx: PageContext): HTMLElement {
     h(
       "div",
       { class: "card-title" },
-      h("h1", null, "Food & supplies"),
+      h("h1", null, "Food and Supplies"),
       h("span", { class: "spacer" }),
       canEdit ? add : null,
     ),

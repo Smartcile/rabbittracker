@@ -63,7 +63,7 @@ const tabs = [
   { hash: "#/history", label: "History", icon: icons.history, adminOnly: false },
   { hash: "#/calendar", label: "Calendar", icon: icons.calendar, adminOnly: false },
   { hash: "#/drugs", label: "Drugs", icon: icons.drugs, adminOnly: false },
-  { hash: "#/food", label: "Food", icon: icons.food, adminOnly: false },
+  { hash: "#/food", label: "Food and Supplies", icon: icons.food, adminOnly: false },
   { hash: "#/faq", label: "FAQ", icon: icons.faq, adminOnly: false },
   { hash: "#/users", label: "Users", icon: icons.users, adminOnly: true },
   { hash: "#/settings", label: "Settings", icon: icons.settings, adminOnly: true },
@@ -192,7 +192,10 @@ function render(): void {
       if (!Number.isInteger(id) || id <= 0) {
         page = renderBunniesPage(ctx);
       } else {
-        page = params[1] === "report" ? renderRabbitReportPage(ctx, id) : renderRabbitPage(ctx, id);
+        page =
+          params[1] === "report"
+            ? renderRabbitReportPage(ctx, id)
+            : renderRabbitPage(ctx, id, params[1]);
       }
       break;
     }

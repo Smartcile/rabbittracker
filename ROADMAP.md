@@ -146,6 +146,29 @@
   now asks for the date and optional notes, shows a green ✓ badge when not yet due, and the Health
   checks card ticks when a check was logged today.
 
+- [x] **Time of day follows the time you enter.** Logging a bowl reading or a medication dose
+  re-selects the matching time of day (Morning/Afternoon/Evening/Night) when the time changes,
+  revealing every time of day when it is not part of the schedule. The task create/edit pop-up
+  defaults its time of day to the current one, and the task completion pop-up shows which time of
+  day the entered time falls into.
+
+- [x] **Flexible schedules (recurrence).** Treatments, bowls and routine tasks each carry a
+  structured repeat — every day, chosen weekdays, **N times a week on any days**, or every N days —
+  instead of showing every day of the course. The calendar only draws a dose/reading/chore on the
+  days it is due, a weekly quota stops showing once it is met for that week, and the same options
+  are available on routine templates. Existing interval tasks migrate to the new model.
+
+- [x] **One Routine card.** Routine care and daily routine are merged: care schedules/records became
+  care-typed tasks and completions (the old `care_schedules`/`care_records` tables migrate into
+  `rabbit_tasks`/`task_completions`), so a single card and a single edit pop-up cover chores and
+  care rounds. The card still lists every care type with its schedule and next-due status.
+- [x] **Checklists get a schedule, Quick log retires.** Quick log is gone; its checklist data now
+  surfaces in the Daily checks card, where each checklist shows a due badge and a Log button. Every
+  checklist carries a recurrence (the weekly checklist defaults to Sundays) and the recurrence
+  editor lives in Settings → Checklists.
+- [x] **Mobile + Log quick actions.** The home FAB opens a quick-action sheet: pick a bunny (skipped
+  when there is only one active bunny) and jump straight to that area on its profile.
+
 ## Planned features (agreed but not built)
 
 These are queued from the "bunny powerhouse" list; pick them up in any order.

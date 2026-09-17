@@ -1,12 +1,14 @@
 import type { BowlDto, BowlReadingDto, FoodProductDto, RabbitDto } from "../../../shared/types.ts";
 import { bowlReadingKindLabel, projectBowlWeight } from "../../../shared/bowls.ts";
 import { formatFoodAmount } from "../../../shared/food.ts";
+import { DEFAULT_RECURRENCE } from "../../../shared/recurrence.ts";
 import type { DaySlot } from "../../../shared/slots.ts";
 import {
   DAY_SLOT_LABELS,
   DAY_SLOTS,
   nearestSlot,
   nextPendingSlot,
+  slotForTime,
   slotRangeLabel,
   slotTimeStatus,
 } from "../../../shared/slots.ts";
@@ -14,6 +16,7 @@ import { api } from "../api.ts";
 import { fmtTime, h } from "../dom.ts";
 import { lastLoggedLine } from "./lastLogged.ts";
 import { confirmDialog, openModal } from "./modal.ts";
+import { recurrenceEditor } from "./recurrenceEditor.ts";
 import { slotTimeBadge } from "./slotChips.ts";
 import { toast } from "./toast.ts";
 import { optionButtons } from "./toggle.ts";
@@ -130,6 +133,7 @@ export function openBowlModal(options: {
       slots = values as DaySlot[];
     },
   );
+  const recurrence = recurrenceEditor(editing?.recurrence ?? DEFAULT_RECURRENCE);
   let kind: "food" | "water" = editing?.kind === "water" ? "water" : "food";
   const kindGroup = optionButtons(
     [
@@ -189,13 +193,14 @@ export function openBowlModal(options: {
           save.disabled = true;
           try {
             if (editing) {
-              await api.patch(`/api/bowls/${editing.id}`, { label: name, kind, slots, tareGrams, productIds: productIdList });
+              await api.patch(`/api/bowls/${editing.id}`, { label: name, kind, slots, recurrence: recurrence.value(), tareGrams, productIds: productIdList });
             } else {
               await api.post("/api/bowls", {
                 rabbitId: options.rabbit.id,
                 label: name,
                 kind,
                 slots,
+                recurrence: recurrence.value(),
                 tareGrams,
                 productIds: productIdList,
                 startWeightGrams,
@@ -232,6 +237,17 @@ export function openBowlModal(options: {
           "span",
           { class: "dim small" },
           "Tick each time this bowl is checked, topped up or weighed. Leave empty to keep it unscheduled.",
+        ),
+      ),
+      h(
+        "div",
+        { class: "field" },
+        h("label", null, "Repeat"),
+        recurrence.root,
+        h(
+          "span",
+          { class: "dim small" },
+          "How often this bowl is checked. 'Times per week' lets you log the readings on any days.",
         ),
       ),
       h(
@@ -847,6 +863,11 @@ export function openBowlReadingModal(options: {
   renderQueue();
   renderDayList();
   when.addEventListener("change", () => {
+    const at = when.value ? new Date(when.value) : new Date();
+    if (bowl.slots.length > 0 && !Number.isNaN(at.getTime())) {
+      slot = slotForTime(at);
+      slotTouched = true;
+    }
     renderSlotPicker();
     renderDayList();
   });

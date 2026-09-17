@@ -5,6 +5,7 @@ import { db } from "../db/index.ts";
 import { foodProducts, taskTemplates } from "../db/schema.ts";
 import { requireAdmin, requireAuth } from "../lib/auth.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
+import { recurrenceFromIntervalDays, recurrenceIntervalDays } from "../../../shared/recurrence.ts";
 import { taskTemplateCreateSchema, taskTemplateUpdateSchema } from "../lib/validation.ts";
 
 export const taskTemplatesRouter = Router();
@@ -27,12 +28,14 @@ taskTemplatesRouter.post("/", requireAuth, requireAdmin, async (req, res) => {
   const [{ value: highest }] = await db
     .select({ value: max(taskTemplates.sortOrder) })
     .from(taskTemplates);
+  const recurrence = input.recurrence ?? recurrenceFromIntervalDays(input.intervalDays);
   const [row] = await db
     .insert(taskTemplates)
     .values({
       label: input.label,
       slot: input.slot,
-      intervalDays: input.intervalDays,
+      intervalDays: recurrenceIntervalDays(recurrence),
+      recurrence,
       startDate: input.startDate ?? null,
       products: input.products,
       notes: input.notes,
@@ -51,7 +54,14 @@ taskTemplatesRouter.patch("/:id", requireAuth, requireAdmin, async (req, res) =>
     .set({
       label: input.label ?? template.label,
       slot: input.slot ?? template.slot,
-      intervalDays: input.intervalDays ?? template.intervalDays,
+      intervalDays: input.recurrence
+        ? recurrenceIntervalDays(input.recurrence)
+        : input.intervalDays ?? template.intervalDays,
+      recurrence:
+        input.recurrence ??
+        (input.intervalDays !== undefined
+          ? recurrenceFromIntervalDays(input.intervalDays)
+          : template.recurrence),
       startDate: input.startDate !== undefined ? input.startDate : template.startDate,
       products: input.products ?? template.products,
       notes: input.notes !== undefined ? input.notes : template.notes,

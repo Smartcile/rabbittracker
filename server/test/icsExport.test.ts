@@ -13,8 +13,7 @@ function source(overrides: Partial<FeedSource> = {}): FeedSource {
     ],
     appointments: [],
     vaccinations: [],
-    careSchedules: [],
-    careRecords: [],
+    tasks: [],
     healthChecks: [],
     treatments: [],
     ...overrides,
@@ -252,22 +251,34 @@ describe("buildFeedEvents", () => {
     });
   });
 
-  it("computes care due dates from the last record and interval", () => {
+  it("computes care due dates from the last completion and interval", () => {
     const events = buildFeedEvents(
       source({
-        careSchedules: [
-          { rabbitId: 1, kind: "nails", intervalDays: 42 },
-          { rabbitId: 1, kind: "teeth", intervalDays: 180 },
-        ],
-        careRecords: [
-          { rabbitId: 1, kind: "nails", doneAt: "2026-07-20" },
-          { rabbitId: 1, kind: "nails", doneAt: "2026-06-01" },
+        tasks: [
+          {
+            id: 7,
+            rabbitId: 1,
+            label: "Nails",
+            careKind: "nails",
+            intervalDays: 42,
+            recurrence: { kind: "interval", days: [], count: 1, intervalDays: 42 },
+            lastCompletedAt: new Date("2026-07-20T00:00:00.000Z"),
+          },
+          {
+            id: 8,
+            rabbitId: 1,
+            label: "Teeth",
+            careKind: "teeth",
+            intervalDays: 180,
+            recurrence: { kind: "interval", days: [], count: 1, intervalDays: 180 },
+            lastCompletedAt: null,
+          },
         ],
       }),
     );
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
-      uid: "care-1-nails@rabbittracker",
+      uid: "care-7@rabbittracker",
       summary: "Clover: Nails due",
       start: "2026-08-31",
       allDay: true,

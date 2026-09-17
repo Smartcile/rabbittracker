@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_RECURRENCE } from "../../shared/recurrence.ts";
 import { drugBatchToDto, drugToDto, treatmentToDto } from "../src/api/mappers.ts";
 import type { DrugBatchRow, DrugRow, TreatmentRow } from "../src/db/schema.ts";
 
@@ -12,6 +13,7 @@ describe("treatmentToDto", () => {
       route: "oral",
       frequency: "every 12 hours",
       slots: ["morning", "evening"],
+      recurrence: DEFAULT_RECURRENCE,
       reason: "pain relief",
       startDate: "2026-01-01",
       endDate: "2026-01-05",
@@ -31,6 +33,7 @@ describe("treatmentToDto", () => {
       route: "oral",
       frequency: "every 12 hours",
       slots: ["morning", "evening"],
+      recurrence: DEFAULT_RECURRENCE,
       reason: "pain relief",
       startDate: "2026-01-01",
       endDate: "2026-01-05",
@@ -53,6 +56,7 @@ describe("treatmentToDto", () => {
       route: "",
       frequency: "",
       slots: [],
+      recurrence: DEFAULT_RECURRENCE,
       reason: "",
       startDate: "2026-02-01",
       endDate: null,

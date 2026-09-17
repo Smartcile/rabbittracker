@@ -2,8 +2,6 @@ import { asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { Router } from "express";
 import {
   appointmentToDto,
-  careRecordToDto,
-  careScheduleToDto,
   healthCheckToDto,
   journalEntryToDto,
   rabbitToDto,
@@ -15,15 +13,15 @@ import {
 import { db } from "../db/index.ts";
 import {
   appointments,
-  careRecords,
-  careSchedules,
   healthChecks,
   journalEntries,
   journalPhotos,
   rabbitBonds,
   rabbitCarers,
   rabbitStageCompletions,
+  rabbitTasks,
   rabbits,
+  taskCompletions,
   users,
   vaccinations,
 } from "../db/schema.ts";
@@ -47,7 +45,6 @@ import { buildReportBundle } from "../services/reportBundle.ts";
 import { needsAttention, weightSummary } from "../../../shared/health.ts";
 import type { AttentionBadgeDto, WeightAlert } from "../../../shared/types.ts";
 import { listChecksForRabbit } from "./checks.ts";
-import { listRecordsForRabbit, listSchedulesForRabbit } from "./care.ts";
 import { listJournalForRabbit } from "./journal.ts";
 import { listAppointmentsForRabbit } from "./appointments.ts";
 import { photoUpload } from "./photos.ts";
@@ -83,14 +80,21 @@ rabbitsRouter.get("/", requireAuth, async (req, res) => {
       .from(vaccinations),
     db
       .select({
-        rabbitId: careSchedules.rabbitId,
-        kind: careSchedules.kind,
-        intervalDays: careSchedules.intervalDays,
+        rabbitId: rabbitTasks.rabbitId,
+        kind: rabbitTasks.careKind,
+        intervalDays: rabbitTasks.intervalDays,
       })
-      .from(careSchedules),
+      .from(rabbitTasks)
+      .where(isNotNull(rabbitTasks.careKind)),
     db
-      .select({ rabbitId: careRecords.rabbitId, kind: careRecords.kind, doneAt: careRecords.doneAt })
-      .from(careRecords),
+      .select({
+        rabbitId: rabbitTasks.rabbitId,
+        kind: rabbitTasks.careKind,
+        doneAt: taskCompletions.completedAt,
+      })
+      .from(taskCompletions)
+      .innerJoin(rabbitTasks, eq(taskCompletions.taskId, rabbitTasks.id))
+      .where(isNotNull(rabbitTasks.careKind)),
     db
       .select({
         rabbitId: appointments.rabbitId,
@@ -118,6 +122,7 @@ rabbitsRouter.get("/", requireAuth, async (req, res) => {
 
   const schedulesByRabbit = new Map<number, { kind: string; intervalDays: number }[]>();
   for (const row of scheduleRows) {
+    if (row.kind === null) continue;
     const list = schedulesByRabbit.get(row.rabbitId) ?? [];
     list.push({ kind: row.kind, intervalDays: row.intervalDays });
     schedulesByRabbit.set(row.rabbitId, list);
@@ -125,9 +130,11 @@ rabbitsRouter.get("/", requireAuth, async (req, res) => {
 
   const lastCare = new Map<string, string>();
   for (const row of recordRows) {
+    if (row.kind === null) continue;
     const key = `${row.rabbitId}:${row.kind}`;
+    const doneAt = row.doneAt.toISOString();
     const existing = lastCare.get(key);
-    if (!existing || row.doneAt > existing) lastCare.set(key, row.doneAt);
+    if (!existing || doneAt > existing) lastCare.set(key, doneAt);
   }
 
   const followUpsByRabbit = new Map<number, { title: string; followUpAt: string }[]>();
@@ -186,8 +193,6 @@ rabbitsRouter.get("/:id", requireAuth, async (req, res) => {
     checks,
     treatments,
     vaccinations,
-    schedules,
-    records,
     appointmentRows,
     carerRows,
     journalRows,
@@ -196,8 +201,6 @@ rabbitsRouter.get("/:id", requireAuth, async (req, res) => {
     listChecksForRabbit(id),
     listTreatmentsForRabbit(id),
     listVaccinationsForRabbit(id),
-    listSchedulesForRabbit(id),
-    listRecordsForRabbit(id),
     listAppointmentsForRabbit(id),
     req.user!.isAdmin
       ? db
@@ -222,8 +225,6 @@ rabbitsRouter.get("/:id", requireAuth, async (req, res) => {
     checks: checks.map(healthCheckToDto),
     treatments: treatments.map(treatmentToDto),
     vaccinations: vaccinations.map(vaccinationToDto),
-    careSchedules: schedules.map(careScheduleToDto),
-    careRecords: records.map(careRecordToDto),
     appointments: appointmentRows.map((row) => appointmentToDto(row, hideCosts(req.user!))),
     journal: journalRows.map((item) => journalEntryToDto(item.entry, item.photos)),
   });

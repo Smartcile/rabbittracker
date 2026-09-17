@@ -7,11 +7,13 @@ import type {
   MedicationLogDto,
   RabbitSummaryDto,
   SettingsDto,
+  TaskCompletionDto,
   TaskDto,
   TreatmentDto,
 } from "../../../shared/types.ts";
 import { ageLabel, taskDueStatus, upcomingAppointments } from "../../../shared/health.ts";
 import { checkLogValueSummary } from "../../../shared/checkLogs.ts";
+import { isScheduledOn, recurrenceLabel } from "../../../shared/recurrence.ts";
 import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
 import { DAY_SLOT_LABELS } from "../../../shared/slots.ts";
 import { api } from "../api.ts";
@@ -20,6 +22,7 @@ import { rabbitAvatar } from "../components/avatar.ts";
 import { openCheckLogModal } from "../components/checkLogModal.ts";
 import { openCheckModal } from "../components/checkModal.ts";
 import { openMedicationLogModal } from "../components/medicationLogModal.ts";
+import { openModal } from "../components/modal.ts";
 import { openTaskCompleteModal } from "../components/taskCompleteModal.ts";
 import { openRabbitModal } from "../components/rabbitModal.ts";
 import { slotChips } from "../components/slotChips.ts";
@@ -29,6 +32,20 @@ import type { PageContext } from "../context.ts";
 import { fmtDate, fmtTime, h } from "../dom.ts";
 import { can } from "../permissions.ts";
 import { sexLabel } from "./bunnies.ts";
+
+const QUICK_AREAS: { key: string; label: string }[] = [
+  { key: "daily-checks", label: "Daily checks" },
+  { key: "routine", label: "Routine" },
+  { key: "bowls", label: "Food & water" },
+  { key: "weight", label: "Weight" },
+  { key: "health-checks", label: "Health checks" },
+  { key: "vaccinations", label: "Vaccinations" },
+  { key: "treatments", label: "Treatments & medication" },
+  { key: "notes", label: "Notes & photos" },
+  { key: "appointments", label: "Appointments" },
+  { key: "feeding", label: "Feeding plan" },
+  { key: "growing-up", label: "Growing up" },
+];
 
 export function renderHomePage(ctx: PageContext): HTMLElement {
   const list = h("div", { class: "grid-cards" });
@@ -43,9 +60,9 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
     { class: "btn primary hide-mobile", onClick: () => void openQuickLog() },
     "Log a check",
   );
-  const fab = h("button", { class: "fab", type: "button", onClick: () => void openQuickLog() });
+  const fab = h("button", { class: "fab", type: "button", onClick: () => void openQuickActions() });
   fab.innerHTML =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Log a check</span>';
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Log</span>';
   const add = h(
     "button",
     { class: "btn outline small", onClick: () => openRabbitModal({ onSaved: () => void load() }) },
@@ -80,7 +97,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
       { treatments },
       { drugs },
       logTypes,
-      { tasks },
+      { tasks, completions: taskCompletions },
       { logs: medLogs },
       { logs: checkLogs },
       { settings },
@@ -90,7 +107,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
       api.get<{ treatments: TreatmentDto[] }>("/api/treatments"),
       api.get<{ drugs: DrugDto[] }>("/api/drugs"),
       loadCheckLogTypes(),
-      api.get<{ tasks: TaskDto[] }>("/api/tasks"),
+      api.get<{ tasks: TaskDto[]; completions: TaskCompletionDto[] }>("/api/tasks"),
       api.get<{ logs: MedicationLogDto[] }>("/api/medication-logs"),
       api.get<{ logs: CheckLogDto[] }>("/api/check-logs"),
       api.get<{ settings: SettingsDto }>("/api/settings"),
@@ -106,6 +123,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
       drugs,
       logTypes,
       tasks,
+      taskCompletions,
       medLogs,
       checkLogs,
       settings.timezone,
@@ -159,6 +177,7 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
     drugs: DrugDto[],
     logTypes: CheckLogTypeDto[],
     tasks: TaskDto[],
+    taskCompletions: TaskCompletionDto[],
     medLogs: MedicationLogDto[],
     checkLogs: CheckLogDto[],
     timezone: string,
@@ -167,6 +186,19 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
     const byId = new Map(activeRabbits.map((rabbit) => [rabbit.id, rabbit]));
     const todayKey = localDayKey(new Date());
     const rows: HTMLElement[] = [];
+    const completionDaysByTask = new Map<number, Set<string>>();
+    for (const completion of taskCompletions) {
+      const set = completionDaysByTask.get(completion.taskId) ?? new Set<string>();
+      set.add(localDayKey(new Date(completion.completedAt)));
+      completionDaysByTask.set(completion.taskId, set);
+    }
+    const medDoneDaysByTreatment = new Map<number, Set<string>>();
+    for (const log of medLogs) {
+      if (log.treatmentId === null || log.skipped) continue;
+      const set = medDoneDaysByTreatment.get(log.treatmentId) ?? new Set<string>();
+      set.add(localDayKey(new Date(log.givenAt)));
+      medDoneDaysByTreatment.set(log.treatmentId, set);
+    }
 
     const todaysAppointments = appointments
       .filter(
@@ -199,6 +231,8 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
             task.intervalDays,
             new Date(),
             timezone,
+            task.recurrence,
+            [...(completionDaysByTask.get(task.id) ?? [])],
           ) === "due",
       )
       .sort(
@@ -250,11 +284,23 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
         treatment.status === "active" &&
         byId.has(treatment.rabbitId) &&
         treatment.startDate <= todayKey &&
-        (treatment.endDate === null || treatment.endDate >= todayKey),
+        (treatment.endDate === null || treatment.endDate >= todayKey) &&
+        isScheduledOn(
+          treatment.recurrence,
+          todayKey,
+          treatment.startDate,
+          [...(medDoneDaysByTreatment.get(treatment.id) ?? [])],
+        ),
     );
     for (const treatment of activeTreatments) {
       const rabbit = byId.get(treatment.rabbitId)!;
-      const detail = [treatment.dose, treatment.frequency, treatment.reason]
+      const detail = [
+        treatment.dose,
+        treatment.recurrence.kind === "daily"
+          ? treatment.frequency
+          : recurrenceLabel(treatment.recurrence),
+        treatment.reason,
+      ]
         .filter(Boolean)
         .join(" · ");
       const todayLogs = medLogs.filter(
@@ -499,6 +545,65 @@ export function renderHomePage(ctx: PageContext): HTMLElement {
 
   void load();
   return container;
+}
+
+async function openQuickActions(): Promise<void> {
+  const { rabbits } = await api.get<{ rabbits: RabbitSummaryDto[] }>("/api/rabbits");
+  const active = rabbits.filter((rabbit) => rabbit.status === "active");
+  if (active.length === 0) return;
+  if (active.length === 1) {
+    openAreaSheet(active[0]);
+    return;
+  }
+  openBunnyPicker(active);
+}
+
+function openAreaSheet(rabbit: RabbitSummaryDto): void {
+  const modal = openModal({
+    title: `Log for ${rabbit.name}`,
+    body: h(
+      "div",
+      { class: "stack", style: { gap: "0.4rem" } },
+      ...QUICK_AREAS.map((area) =>
+        h(
+          "button",
+          {
+            class: "btn outline",
+            type: "button",
+            onClick: () => {
+              modal.close();
+              location.hash = `#/rabbit/${rabbit.id}/${area.key}`;
+            },
+          },
+          area.label,
+        ),
+      ),
+    ),
+  });
+}
+
+function openBunnyPicker(rabbits: RabbitSummaryDto[]): void {
+  const modal = openModal({
+    title: "Which bunny?",
+    body: h(
+      "div",
+      { class: "stack", style: { gap: "0.4rem" } },
+      ...rabbits.map((rabbit) =>
+        h(
+          "button",
+          {
+            class: "btn outline",
+            type: "button",
+            onClick: () => {
+              modal.close();
+              openAreaSheet(rabbit);
+            },
+          },
+          rabbit.name,
+        ),
+      ),
+    ),
+  });
 }
 
 function localDayKey(date: Date): string {

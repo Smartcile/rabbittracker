@@ -55,7 +55,11 @@ checklistsRouter.patch("/:id", requireAuth, requireAdmin, async (req, res) => {
   const input = parseInput(checklistUpdateSchema, req.body);
   const [row] = await db
     .update(checklists)
-    .set({ label: input.label, updatedAt: new Date() })
+    .set({
+      label: input.label ?? checklist.label,
+      recurrence: input.recurrence ?? checklist.recurrence,
+      updatedAt: new Date(),
+    })
     .where(eq(checklists.id, checklist.id))
     .returning();
   const items = await listChecklistItems(row.id);

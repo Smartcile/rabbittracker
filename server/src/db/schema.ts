@@ -10,6 +10,7 @@ import {
   unique,
 } from "drizzle-orm/pg-core";
 import type { HealthChecklistDto } from "../../../shared/checklist.ts";
+import { DEFAULT_RECURRENCE, type Recurrence } from "../../../shared/recurrence.ts";
 import type { TaskProductInput } from "../../../shared/types.ts";
 
 export const settings = pgTable("settings", {
@@ -156,6 +157,7 @@ export const bowls = pgTable("bowls", {
   label: text("label").notNull(),
   kind: text("kind").notNull().default("food"),
   slots: text("slots").array().notNull().default([]),
+  recurrence: jsonb("recurrence").$type<Recurrence>().notNull().default(DEFAULT_RECURRENCE),
   tareGrams: integer("tare_grams"),
   productId: integer("product_id").references(() => foodProducts.id, { onDelete: "set null" }),
   productIds: jsonb("product_ids").$type<number[]>().notNull().default([]),
@@ -331,6 +333,7 @@ export const treatments = pgTable("treatments", {
   route: text("route").notNull().default(""),
   frequency: text("frequency").notNull().default(""),
   slots: text("slots").array().notNull().default([]),
+  recurrence: jsonb("recurrence").$type<Recurrence>().notNull().default(DEFAULT_RECURRENCE),
   reason: text("reason").notNull().default(""),
   startDate: date("start_date").notNull(),
   endDate: date("end_date"),
@@ -357,32 +360,6 @@ export const vaccinations = pgTable("vaccinations", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const careSchedules = pgTable(
-  "care_schedules",
-  {
-    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-    rabbitId: integer("rabbit_id")
-      .notNull()
-      .references(() => rabbits.id, { onDelete: "cascade" }),
-    kind: text("kind").notNull(),
-    intervalDays: integer("interval_days").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [unique("care_schedules_rabbit_kind_unique").on(table.rabbitId, table.kind)],
-);
-
-export const careRecords = pgTable("care_records", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  rabbitId: integer("rabbit_id")
-    .notNull()
-    .references(() => rabbits.id, { onDelete: "cascade" }),
-  kind: text("kind").notNull(),
-  doneAt: date("done_at").notNull(),
-  notes: text("notes").notNull().default(""),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
 export const rabbitTasks = pgTable("rabbit_tasks", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   rabbitId: integer("rabbit_id")
@@ -390,8 +367,10 @@ export const rabbitTasks = pgTable("rabbit_tasks", {
     .references(() => rabbits.id, { onDelete: "cascade" }),
   templateId: integer("template_id").references(() => taskTemplates.id, { onDelete: "set null" }),
   label: text("label").notNull(),
+  careKind: text("care_kind"),
   slot: text("slot").notNull().default("anytime"),
   intervalDays: integer("interval_days").notNull().default(1),
+  recurrence: jsonb("recurrence").$type<Recurrence>().notNull().default(DEFAULT_RECURRENCE),
   startDate: date("start_date"),
   productId: integer("product_id").references(() => foodProducts.id, { onDelete: "set null" }),
   amountGrams: integer("amount_grams").notNull().default(0),
@@ -407,6 +386,7 @@ export const taskTemplates = pgTable("task_templates", {
   label: text("label").notNull(),
   slot: text("slot").notNull().default("anytime"),
   intervalDays: integer("interval_days").notNull().default(1),
+  recurrence: jsonb("recurrence").$type<Recurrence>().notNull().default(DEFAULT_RECURRENCE),
   startDate: date("start_date"),
   productId: integer("product_id").references(() => foodProducts.id, { onDelete: "set null" }),
   amountGrams: integer("amount_grams").notNull().default(0),
@@ -591,6 +571,7 @@ export const checklists = pgTable("checklists", {
   key: text("key").notNull().unique(),
   label: text("label").notNull(),
   isDaily: boolean("is_daily").notNull().default(false),
+  recurrence: jsonb("recurrence").$type<Recurrence>().notNull().default(DEFAULT_RECURRENCE),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -622,8 +603,6 @@ export type RabbitCarerRow = typeof rabbitCarers.$inferSelect;
 export type HealthCheckRow = typeof healthChecks.$inferSelect;
 export type TreatmentRow = typeof treatments.$inferSelect;
 export type VaccinationRow = typeof vaccinations.$inferSelect;
-export type CareScheduleRow = typeof careSchedules.$inferSelect;
-export type CareRecordRow = typeof careRecords.$inferSelect;
 export type RabbitTaskRow = typeof rabbitTasks.$inferSelect;
 export type TaskTemplateRow = typeof taskTemplates.$inferSelect;
 export type TaskCompletionRow = typeof taskCompletions.$inferSelect;

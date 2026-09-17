@@ -4,8 +4,6 @@ import {
   appointments,
   bowlReadings,
   bowls,
-  careRecords,
-  careSchedules,
   checkLogs,
   checkLogTypes,
   clinics,
@@ -25,7 +23,8 @@ import {
   vets,
 } from "../db/schema.ts";
 import type { HealthChecklistDto } from "../../../shared/checklist.ts";
-import type { CareKind, Vaccine } from "../../../shared/types.ts";
+import { recurrenceFromIntervalDays } from "../../../shared/recurrence.ts";
+import type { Vaccine } from "../../../shared/types.ts";
 import { deletePhotoDir } from "../services/photos.ts";
 import { ensureSettingsRow } from "./settingsStore.ts";
 
@@ -82,19 +81,6 @@ type DemoVaccination = {
   notes: string;
 };
 
-type DemoCareSchedule = {
-  rabbitIndex: number;
-  kind: CareKind;
-  intervalDays: number;
-};
-
-type DemoCareRecord = {
-  rabbitIndex: number;
-  kind: CareKind;
-  doneAt: string;
-  notes: string;
-};
-
 type DemoAppointment = {
   rabbitIndex: number;
   title: string;
@@ -148,6 +134,7 @@ type DemoBowl = {
 type DemoTask = {
   rabbitIndex: number;
   label: string;
+  careKind?: string;
   slot: "morning" | "afternoon" | "evening" | "anytime";
   intervalDays: number;
   notes: string;
@@ -160,8 +147,6 @@ export type DemoDataset = {
   checks: DemoCheck[];
   treatments: DemoTreatment[];
   vaccinations: DemoVaccination[];
-  careSchedules: DemoCareSchedule[];
-  careRecords: DemoCareRecord[];
   appointments: DemoAppointment[];
   journal: DemoJournalEntry[];
   checkLogs: DemoCheckLog[];
@@ -385,24 +370,6 @@ export function buildDemoDataset(now: Date): DemoDataset {
     },
   ];
 
-  const careSchedules: DemoCareSchedule[] = [
-    { rabbitIndex: 0, kind: "nails", intervalDays: 30 },
-    { rabbitIndex: 0, kind: "teeth", intervalDays: 90 },
-    { rabbitIndex: 0, kind: "grooming", intervalDays: 60 },
-    { rabbitIndex: 1, kind: "nails", intervalDays: 42 },
-    { rabbitIndex: 2, kind: "teeth", intervalDays: 180 },
-    { rabbitIndex: 2, kind: "grooming", intervalDays: 60 },
-  ];
-
-  const careRecords: DemoCareRecord[] = [
-    { rabbitIndex: 0, kind: "nails", doneAt: dateOnly(addDays(now, -40)), notes: "" },
-    { rabbitIndex: 0, kind: "teeth", doneAt: dateOnly(addDays(now, -20)), notes: "No spurs." },
-    { rabbitIndex: 0, kind: "grooming", doneAt: dateOnly(addDays(now, -55)), notes: "" },
-    { rabbitIndex: 1, kind: "nails", doneAt: dateOnly(addDays(now, -38)), notes: "" },
-    { rabbitIndex: 2, kind: "teeth", doneAt: dateOnly(addDays(now, -100)), notes: "" },
-    { rabbitIndex: 2, kind: "grooming", doneAt: dateOnly(addDays(now, -20)), notes: "" },
-  ];
-
   const monthAppointments: { day: number; rabbitIndex: number; title: string; costCents: number }[] = [
     { day: 5, rabbitIndex: 0, title: "Post-op check", costCents: 8500 },
     { day: 11, rabbitIndex: 1, title: "Vaccination booster", costCents: 12500 },
@@ -622,6 +589,15 @@ export function buildDemoDataset(now: Date): DemoDataset {
     },
   ];
 
+  const careTasks: DemoTask[] = [
+    { rabbitIndex: 0, label: "Nails", careKind: "nails", slot: "anytime", intervalDays: 30, notes: "", active: true, completionsHoursAgo: [40 * 24] },
+    { rabbitIndex: 0, label: "Teeth", careKind: "teeth", slot: "anytime", intervalDays: 90, notes: "", active: true, completionsHoursAgo: [20 * 24] },
+    { rabbitIndex: 0, label: "Grooming", careKind: "grooming", slot: "anytime", intervalDays: 60, notes: "", active: true, completionsHoursAgo: [55 * 24] },
+    { rabbitIndex: 1, label: "Nails", careKind: "nails", slot: "anytime", intervalDays: 42, notes: "", active: true, completionsHoursAgo: [38 * 24] },
+    { rabbitIndex: 2, label: "Teeth", careKind: "teeth", slot: "anytime", intervalDays: 180, notes: "", active: true, completionsHoursAgo: [100 * 24] },
+    { rabbitIndex: 2, label: "Grooming", careKind: "grooming", slot: "anytime", intervalDays: 60, notes: "", active: true, completionsHoursAgo: [20 * 24] },
+  ];
+
   const bonds = [{ a: 0, b: 1 }];
 
   return {
@@ -629,14 +605,12 @@ export function buildDemoDataset(now: Date): DemoDataset {
     checks,
     treatments,
     vaccinations,
-    careSchedules,
-    careRecords,
     appointments,
     journal,
     checkLogs,
     medicationLogs,
     bowls,
-    tasks,
+    tasks: [...tasks, ...careTasks],
     bonds,
     clinic: {
       name: "Happy Paws Vet Clinic",
@@ -732,25 +706,6 @@ export async function enableDemoData(): Promise<void> {
         })),
       );
     }
-    if (dataset.careSchedules.length > 0) {
-      await tx.insert(careSchedules).values(
-        dataset.careSchedules.map((schedule) => ({
-          rabbitId: rabbitIds[schedule.rabbitIndex],
-          kind: schedule.kind,
-          intervalDays: schedule.intervalDays,
-        })),
-      );
-    }
-    if (dataset.careRecords.length > 0) {
-      await tx.insert(careRecords).values(
-        dataset.careRecords.map((record) => ({
-          rabbitId: rabbitIds[record.rabbitIndex],
-          kind: record.kind,
-          doneAt: record.doneAt,
-          notes: record.notes,
-        })),
-      );
-    }
     if (dataset.appointments.length > 0) {
       await tx.insert(appointments).values(
         dataset.appointments.map((appointment) => ({
@@ -838,8 +793,10 @@ export async function enableDemoData(): Promise<void> {
           .values({
             rabbitId: rabbitIds[task.rabbitIndex],
             label: task.label,
+            careKind: task.careKind ?? null,
             slot: task.slot,
             intervalDays: task.intervalDays,
+            recurrence: recurrenceFromIntervalDays(task.intervalDays),
             notes: task.notes,
             active: task.active,
           })

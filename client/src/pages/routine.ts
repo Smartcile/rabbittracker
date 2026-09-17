@@ -1,20 +1,14 @@
 import type { FoodProductDto, TaskSlot, TaskTemplateDto } from "../../../shared/types.ts";
+import { DEFAULT_RECURRENCE, recurrenceLabel } from "../../../shared/recurrence.ts";
 import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
 import { api } from "../api.ts";
 import { confirmDialog, openModal } from "../components/modal.ts";
+import { recurrenceEditor } from "../components/recurrenceEditor.ts";
 import { taskProductRows } from "../components/taskProductRows.ts";
 import { toast } from "../components/toast.ts";
 import { optionButtons, toggleButton } from "../components/toggle.ts";
 import type { PageContext } from "../context.ts";
 import { h } from "../dom.ts";
-
-type RepeatMode = "daily" | "weekly" | "monthly" | "custom";
-
-const REPEAT_DAYS: Record<Exclude<RepeatMode, "custom">, number> = {
-  daily: 1,
-  weekly: 7,
-  monthly: 30,
-};
 
 export function renderRoutinePage(_ctx: PageContext): HTMLElement {
   const list = h("div", { class: "stack" });
@@ -67,7 +61,7 @@ export function renderRoutinePage(_ctx: PageContext): HTMLElement {
       .join(", ");
     const bits = [
       TASK_SLOT_LABELS[template.slot],
-      template.intervalDays === 1 ? "Every day" : `Every ${template.intervalDays} days`,
+      recurrenceLabel(template.recurrence),
       productsText ? productsText : null,
       template.active ? null : "Inactive",
     ].filter(Boolean);
@@ -127,28 +121,7 @@ function openTemplateModal(
       slot = (values[0] as TaskSlot | undefined) ?? "anytime";
     },
   );
-  const repeat = h(
-    "select",
-    null,
-    h("option", { value: "daily" }, "Daily"),
-    h("option", { value: "weekly" }, "Weekly"),
-    h("option", { value: "monthly" }, "Monthly"),
-    h("option", { value: "custom" }, "Custom (every N days)"),
-  );
-  repeat.value = repeatMode(template?.intervalDays ?? 1);
-  const interval = h("input", {
-    type: "number",
-    min: "1",
-    max: "3650",
-    value: String(template?.intervalDays ?? 1),
-  });
-  const customField = h(
-    "div",
-    { class: "field" },
-    h("label", null, "Every N days"),
-    interval,
-    h("span", { class: "dim small" }, "1 means every day."),
-  );
+  const recurrence = recurrenceEditor(template?.recurrence ?? DEFAULT_RECURRENCE);
   const start = h("input", { type: "date", value: template?.startDate ?? "" });
   const productRows = taskProductRows(template?.products ?? []);
   productRows.setProducts(products);
@@ -162,12 +135,6 @@ function openTemplateModal(
   const error = h("p", { class: "form-error" });
   error.style.display = "none";
   const save = h("button", { class: "btn primary", type: "submit" }, template ? "Save" : "Add");
-
-  const syncRepeat = (): void => {
-    customField.style.display = repeat.value === "custom" ? "" : "none";
-  };
-  repeat.addEventListener("change", syncRepeat);
-  syncRepeat();
 
   const modal = openModal({
     guardUnsaved: true,
@@ -184,15 +151,6 @@ function openTemplateModal(
             error.style.display = "";
             return;
           }
-          const intervalDays =
-            repeat.value === "custom"
-              ? Number(interval.value)
-              : REPEAT_DAYS[repeat.value as Exclude<RepeatMode, "custom">];
-          if (!Number.isInteger(intervalDays) || intervalDays < 1 || intervalDays > 3650) {
-            error.textContent = "Repeat every 1–3650 days.";
-            error.style.display = "";
-            return;
-          }
           const rows = productRows.collect();
           if (rows === null) {
             error.textContent = "Enter each product amount in grams.";
@@ -203,7 +161,7 @@ function openTemplateModal(
           const payload = {
             label: name,
             slot,
-            intervalDays,
+            recurrence: recurrence.value(),
             startDate: start.value || null,
             products: rows,
             notes: notes.value.trim(),
@@ -229,8 +187,7 @@ function openTemplateModal(
       error,
       h("div", { class: "field" }, h("label", null, "Name"), label),
       h("div", { class: "field" }, h("label", null, "Time of day"), slotGroup.root),
-      h("div", { class: "field" }, h("label", null, "Repeats"), repeat),
-      customField,
+      h("div", { class: "field" }, h("label", null, "Repeats"), recurrence.root),
       h(
         "div",
         { class: "field" },
@@ -262,9 +219,3 @@ function openTemplateModal(
   });
 }
 
-function repeatMode(days: number): RepeatMode {
-  if (days === 1) return "daily";
-  if (days === 7) return "weekly";
-  if (days === 30) return "monthly";
-  return "custom";
-}

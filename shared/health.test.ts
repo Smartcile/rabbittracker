@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Recurrence } from "./recurrence.ts";
 import {
   ageFromDob,
   ageLabel,
@@ -564,5 +565,36 @@ describe("treatmentScheduleStatus", () => {
         now,
       ),
     ).toBe("not-started");
+  });
+});
+
+describe("treatmentScheduleStatus with recurrence", () => {
+  const base = { status: "active", startDate: "2026-09-01", endDate: null, slots: ["morning"] };
+  const weekdays: Recurrence = { kind: "weekdays", days: ["mon", "thu"], count: 1, intervalDays: 1 };
+
+  it("is up to date on a day the course is not scheduled", () => {
+    const tuesday = new Date("2026-09-08T10:00:00.000Z");
+    expect(treatmentScheduleStatus({ ...base, recurrence: { ...weekdays } }, [], tuesday)).toBe(
+      "up-to-date",
+    );
+  });
+
+  it("is due on a scheduled weekday with no dose", () => {
+    const thursday = new Date("2026-09-10T10:00:00.000Z");
+    expect(treatmentScheduleStatus({ ...base, recurrence: { ...weekdays } }, [], thursday)).toBe(
+      "due",
+    );
+  });
+
+  it("is up to date once a weekly quota is met", () => {
+    const wednesday = new Date("2026-09-09T10:00:00.000Z");
+    const logs = [{ givenAt: "2026-09-08T08:00:00.000Z", slot: "morning", skipped: false }];
+    expect(
+      treatmentScheduleStatus(
+        { ...base, recurrence: { kind: "per_week", days: [], count: 1, intervalDays: 1 } },
+        logs,
+        wednesday,
+      ),
+    ).toBe("up-to-date");
   });
 });

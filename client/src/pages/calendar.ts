@@ -1,5 +1,6 @@
 import { expandEntryStart } from "../../../shared/calendar.ts";
 import { checkLogValueSummary } from "../../../shared/checkLogs.ts";
+import { isScheduledOn, recurrenceLabel } from "../../../shared/recurrence.ts";
 import { DAY_SLOT_SHORT_LABELS, allSlotsDone, slotStatus, slotTimeStatus } from "../../../shared/slots.ts";
 import { taskScheduleDays } from "../../../shared/tasks.ts";
 import type {
@@ -225,7 +226,7 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         `/api/check-logs?from=${from.toISOString()}&to=${to.toISOString()}`,
       ),
       api.get<{ logs: MedicationLogDto[] }>(
-        `/api/medication-logs?from=${from.toISOString()}&to=${to.toISOString()}`,
+        `/api/medication-logs?from=${gridFrom.toISOString()}&to=${gridTo.toISOString()}`,
       ),
       api.get<{ drugs: DrugDto[] }>("/api/drugs"),
       api.get<{ bowls: BowlDto[] }>(
@@ -284,15 +285,27 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
     const entriesByDay = groupByDay(occurrences, (item) => item.at.toISOString());
     const logsByDay = groupByDay(logs, (log) => log.loggedAt);
     const medLogsByDay = groupByDay(medLogs, (log) => log.givenAt);
+    const medDoneDaysByTreatment = new Map<number, Set<string>>();
+    for (const log of medLogs) {
+      if (log.treatmentId === null || log.skipped) continue;
+      const doneKey = dayKey(new Date(log.givenAt));
+      const set = medDoneDaysByTreatment.get(log.treatmentId) ?? new Set<string>();
+      set.add(doneKey);
+      medDoneDaysByTreatment.set(log.treatmentId, set);
+    }
     const bowlReadingsByDay = new Map<string, Map<number, BowlDto["readings"]>>();
+    const bowlDoneDays = new Map<number, Set<string>>();
     for (const bowl of bowls) {
       for (const reading of bowl.readings) {
         const key = dayKey(new Date(reading.readAt));
         const byBowl = bowlReadingsByDay.get(key) ?? new Map();
         const list = byBowl.get(bowl.id) ?? [];
         list.push(reading);
-        byBowl.set(bowl.id, list);
+        byBowl.set(key, list);
         bowlReadingsByDay.set(key, byBowl);
+        const doneSet = bowlDoneDays.get(bowl.id) ?? new Set<string>();
+        doneSet.add(key);
+        bowlDoneDays.set(bowl.id, doneSet);
       }
     }
     const rabbitNames = new Map(rabbits.map((rabbit) => [rabbit.id, rabbit.name]));
@@ -365,27 +378,29 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         const startsToday = treatment.startDate === key;
         const endsToday = treatment.endDate === key;
         const showsEnd = endsToday && treatment.endDate !== treatment.startDate;
-        const activeToday =
-          date.getMonth() === view.getMonth() &&
+        const doneDays = medDoneDaysByTreatment.get(treatment.id) ?? new Set<string>();
+        const scheduledToday =
           treatment.startDate <= key &&
-          (treatment.endDate === null || treatment.endDate >= key);
+          (treatment.endDate === null || treatment.endDate >= key) &&
+          isScheduledOn(treatment.recurrence, key, treatment.startDate, [...doneDays]);
+        const activeToday = date.getMonth() === view.getMonth() && scheduledToday;
         if (!startsToday && !showsEnd && !activeToday) continue;
         const dayLogs = (medLogsByDay.get(key) ?? []).filter(
           (log) => log.treatmentId === treatment.id,
         );
         const statuses =
-          treatment.slots.length > 0
+          scheduledToday && treatment.slots.length > 0
             ? slotStatus(
                 treatment.slots,
                 dayLogs.map((log) => ({ slot: log.slot, at: log.givenAt, skipped: log.skipped })),
               )
             : [];
-        const done = allSlotsDone(treatment.slots, dayLogs);
+        const done = scheduledToday && allSlotsDone(treatment.slots, dayLogs);
         const parts: (HTMLElement | string)[] = [];
         if (startsToday) parts.push("▶ ");
         else if (showsEnd) parts.push("■ ");
         parts.push(`${rabbitName}: ${treatment.medication}`);
-        if (startsToday && treatment.frequency) parts.push(` · ${treatment.frequency}`);
+        if (startsToday) parts.push(` · ${recurrenceLabel(treatment.recurrence)}`);
         if (showsEnd) parts.push(" ends");
         if (statuses.length > 0) {
           parts.push(
@@ -430,6 +445,9 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
         const rabbitName = rabbitNames.get(bowl.rabbitId) ?? "Bunny";
         const startKey = bowl.startedAt ? dayKey(new Date(bowl.startedAt)) : null;
         if (startKey !== null && key < startKey) continue;
+        const anchorKey = startKey ?? dayKey(new Date(bowl.createdAt));
+        const bowlDone = bowlDoneDays.get(bowl.id) ?? new Set<string>();
+        if (!isScheduledOn(bowl.recurrence, key, anchorKey, [...bowlDone])) continue;
         const dayReadings = bowlReadingsByDay.get(key)?.get(bowl.id) ?? [];
         const statuses = slotStatus(
           bowl.slots,

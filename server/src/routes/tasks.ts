@@ -6,7 +6,9 @@ import { rabbitTasks, taskCompletions, foodProducts, foodStockEntries } from "..
 import type { RabbitTaskRow, TaskCompletionRow } from "../db/schema.ts";
 import { findVisibleRabbit, requirePermission, visibleRabbitIds } from "../lib/access.ts";
 import { requireAuth } from "../lib/auth.ts";
+import { recurrenceFromIntervalDays, recurrenceIntervalDays } from "../../../shared/recurrence.ts";
 import { HttpError, parseInput } from "../lib/http.ts";
+import { lookupValues } from "../lib/lookupStore.ts";
 import { taskCompleteSchema, taskCompletionUpdateSchema, taskCreateSchema, taskUpdateSchema } from "../lib/validation.ts";
 
 export const tasksRouter = Router();
@@ -54,14 +56,18 @@ tasksRouter.get("/", requireAuth, async (req, res) => {
 tasksRouter.post("/", requireAuth, requirePermission("canRecordHealth"), async (req, res) => {
   const input = parseInput(taskCreateSchema, req.body);
   await findVisibleRabbit(req.user!, input.rabbitId);
+  if (input.careKind) await requireCareKind(input.careKind);
+  const recurrence = input.recurrence ?? recurrenceFromIntervalDays(input.intervalDays);
   const [row] = await db
     .insert(rabbitTasks)
     .values({
       rabbitId: input.rabbitId,
       templateId: input.templateId ?? null,
       label: input.label,
+      careKind: input.careKind ?? null,
       slot: input.slot,
-      intervalDays: input.intervalDays,
+      intervalDays: recurrenceIntervalDays(recurrence),
+      recurrence,
       startDate: input.startDate ?? null,
       products: input.products,
       notes: input.notes,
@@ -75,12 +81,21 @@ tasksRouter.patch("/:id", requireAuth, requirePermission("canRecordHealth"), asy
   const task = await findTask(parseId(String(req.params.id)));
   await findVisibleRabbit(req.user!, task.rabbitId);
   const input = parseInput(taskUpdateSchema, req.body);
+  if (input.careKind) await requireCareKind(input.careKind);
   const [row] = await db
     .update(rabbitTasks)
     .set({
       label: input.label ?? task.label,
+      careKind: input.careKind !== undefined ? input.careKind : task.careKind,
       slot: input.slot ?? task.slot,
-      intervalDays: input.intervalDays ?? task.intervalDays,
+      intervalDays: input.recurrence
+        ? recurrenceIntervalDays(input.recurrence)
+        : input.intervalDays ?? task.intervalDays,
+      recurrence:
+        input.recurrence ??
+        (input.intervalDays !== undefined
+          ? recurrenceFromIntervalDays(input.intervalDays)
+          : task.recurrence),
       startDate: input.startDate !== undefined ? input.startDate : task.startDate,
       products: input.products ?? task.products,
       notes: input.notes !== undefined ? input.notes : task.notes,
@@ -208,4 +223,9 @@ async function productNames(ids: number[]): Promise<Map<number, string>> {
 
 async function productNamesFor(products: { productId: number }[]): Promise<Map<number, string>> {
   return productNames(products.map((product) => product.productId));
+}
+
+async function requireCareKind(kind: string): Promise<void> {
+  const values = await lookupValues("care_type");
+  if (!values.includes(kind)) throw new HttpError(400, "Unknown care type");
 }

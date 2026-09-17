@@ -17,8 +17,6 @@ const BUSINESS_TABLES = [
   "health_checks",
   "treatments",
   "vaccinations",
-  "care_schedules",
-  "care_records",
   "appointments",
   "calendar_subscriptions",
   "calendar_events",

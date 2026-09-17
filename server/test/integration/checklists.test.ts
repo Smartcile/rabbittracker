@@ -128,4 +128,23 @@ describe("checklist integration", () => {
     expect(Array.isArray(sections)).toBe(true);
     expect(typeKeys).toContain(type.key);
   });
+
+  it("schedules a checklist and defaults the weekly list to Sunday", async () => {
+    const { checklists } = await api<{ checklists: ChecklistDto[] }>(ctx, "/api/checklists");
+    const weekly = checklists.find((checklist) => checklist.key === "weekly");
+    if (!weekly) throw new Error("weekly checklist missing");
+    expect(weekly.recurrence.kind).toBe("weekdays");
+    expect(weekly.recurrence.days).toEqual(["sun"]);
+
+    const { checklist: updated } = await api<{ checklist: ChecklistDto }>(
+      ctx,
+      `/api/checklists/${weekly.id}`,
+      {
+        method: "PATCH",
+        body: { recurrence: { kind: "per_week", days: [], count: 2, intervalDays: 1 } },
+      },
+    );
+    expect(updated.recurrence.kind).toBe("per_week");
+    expect(updated.recurrence.count).toBe(2);
+  });
 });

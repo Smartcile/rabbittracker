@@ -9,7 +9,6 @@ import { authRouter } from "./routes/auth.ts";
 import { bowlsRouter } from "./routes/bowls.ts";
 import { breedNormsRouter } from "./routes/breedNorms.ts";
 import { calendarRouter } from "./routes/calendar.ts";
-import { careRabbitRouter, careRecordsRouter } from "./routes/care.ts";
 import { calendarEntriesRouter } from "./routes/calendarEntries.ts";
 import { checkLogsRouter } from "./routes/checkLogs.ts";
 import { checksRouter } from "./routes/checks.ts";
@@ -47,7 +46,6 @@ export function createApp(): Express {
   app.use("/api/users", usersRouter);
   app.use("/api/settings", settingsRouter);
   app.use("/api/share", shareRouter);
-  app.use("/api/rabbits", careRabbitRouter);
   app.use("/api/rabbits", rabbitStagesRouter);
   app.use("/api/rabbits", rabbitsRouter);
   app.use("/api/checks", checksRouter);
@@ -69,7 +67,6 @@ export function createApp(): Express {
   app.use("/api/growth-stages", growthStagesRouter);
   app.use("/api/treatments", treatmentsRouter);
   app.use("/api/vaccinations", vaccinationsRouter);
-  app.use("/api/care-records", careRecordsRouter);
   app.use("/api/appointments", appointmentsRouter);
   app.use("/api/calendar", calendarRouter);
   app.use("/api/faq", faqRouter);

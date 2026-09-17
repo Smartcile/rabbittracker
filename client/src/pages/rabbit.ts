@@ -1,4 +1,3 @@
-import { emptyChecklist } from "../../../shared/checklist.ts";
 import { bowlReadingKindLabel } from "../../../shared/bowls.ts";
 import { checkLogValueParts } from "../../../shared/checkLogs.ts";
 import { TASK_SLOTS, TASK_SLOT_LABELS } from "../../../shared/tasks.ts";
@@ -6,11 +5,9 @@ import { DAY_SLOT_LABELS } from "../../../shared/slots.ts";
 import type {
   AppointmentDto,
   BowlDto,
-  CareKind,
-  CareRecordDto,
-  CareScheduleDto,
   CheckLogDto,
   CheckLogTypeDto,
+  ChecklistDto,
   ChecklistSectionDto,
   BreedNormDto,
   DrugDto,
@@ -38,12 +35,14 @@ import {
   stagePhase,
 } from "../../../shared/growth.ts";
 import { summarizeBowlByDay } from "../../../shared/bowls.ts";
+import { isScheduledOn, recurrenceLabel } from "../../../shared/recurrence.ts";
 import {
   ageLabel,
-  careDueStatus,
+  dayKeyInZone,
   dueStatus,
   formatWeight,
   taskDueStatus,
+  taskNextDueOn,
   weightTrend,
 } from "../../../shared/health.ts";
 import { api } from "../api.ts";
@@ -58,16 +57,14 @@ import { renderBowlsChart } from "../components/bowlChart.ts";
 import { openBowlModal, openBowlReadingModal } from "../components/bowlModal.ts";
 import { renderChecksTable } from "../components/checksTable.ts";
 import { openCheckModal } from "../components/checkModal.ts";
-import { renderChecklistPhotos } from "../components/checklistPhotos.ts";
 import { openDrugModal } from "../components/drugModal.ts";
 import { expandableList } from "../components/expandable.ts";
 import { confirmDialog, openModal } from "../components/modal.ts";
-import { openLightbox, photoPicker } from "../components/photoPicker.ts";
+import { openLightbox } from "../components/photoPicker.ts";
 import { openRabbitModal } from "../components/rabbitModal.ts";
 import { openTaskModal } from "../components/taskModal.ts";
 import { openTaskCompleteModal } from "../components/taskCompleteModal.ts";
 import { toast } from "../components/toast.ts";
-import { optionButtons } from "../components/toggle.ts";
 import { openTreatmentModal } from "../components/treatmentModal.ts";
 import { slotChips, slotTimeBadge } from "../components/slotChips.ts";
 import { openStageCompleteModal } from "../components/stageModal.ts";
@@ -87,13 +84,11 @@ type RabbitBundle = {
   checks: HealthCheckDto[];
   treatments: TreatmentDto[];
   vaccinations: VaccinationDto[];
-  careSchedules: CareScheduleDto[];
-  careRecords: CareRecordDto[];
   appointments: AppointmentDto[];
   journal: JournalEntryDto[];
 };
 
-export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
+export function renderRabbitPage(ctx: PageContext, id: number, focus?: string): HTMLElement {
   const container = h("section", { class: "stack" });
   const canRecord = can(ctx.user, "canRecordHealth");
   const canEdit = can(ctx.user, "canEditRabbits");
@@ -115,6 +110,7 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
         normsResponse,
         settingsResponse,
         stagesResponse,
+        checklistResponse,
       ] = await Promise.all([
         api.get<RabbitBundle>(`/api/rabbits/${id}`),
         api.get<{ drugs: DrugDto[] }>("/api/drugs"),
@@ -129,12 +125,21 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
         api.get<{ norms: BreedNormDto[] }>("/api/breed-norms"),
         api.get<{ settings: SettingsDto }>("/api/settings"),
         api.get<{ stages: GrowthStageDto[] }>("/api/growth-stages"),
+        api.get<{ checklists: ChecklistDto[] }>("/api/checklists"),
       ]);
       const careTypes = lookups.filter((lookup) => lookup.kind === "care_type");
       const sections: (HTMLElement | null)[] = [
         header(bundle.rabbit, bundle.checks, load, canEdit),
         stagesCard(bundle.rabbit, stagesResponse.stages, bundle.stageCompletions, load, canRecord),
-        dailyChecksCard(bundle.rabbit, logTypes, checkLogResponse.logs, load, canRecord),
+        dailyChecksCard(
+          bundle.rabbit,
+          logTypes,
+          checkLogResponse.logs,
+          checklistResponse.checklists.filter((item) => !item.isDaily),
+          settingsResponse.settings.timezone,
+          load,
+          canRecord,
+        ),
         bowlsCard(
           bundle.rabbit,
           bowlResponse.bowls,
@@ -144,11 +149,11 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
           load,
           canRecord,
         ),
-        quickLogCard(bundle.rabbit, checklistSections, load, canRecord),
-        tasksCard(
+        routineCard(
           bundle.rabbit,
           taskResponse.tasks,
           taskResponse.completions,
+          careTypes,
           load,
           canRecord,
           settingsResponse.settings.timezone,
@@ -156,7 +161,6 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
         weightCard(bundle.rabbit, bundle.checks, normsResponse.norms, load, canRecord),
         checksCard(bundle.rabbit, bundle.checks, checklistSections, logTypes, load, canRecord),
         vaccinationsCard(bundle.rabbit, bundle.vaccinations, load, canRecord),
-        careCard(bundle.rabbit, bundle.careSchedules, bundle.careRecords, careTypes, load, canRecord),
         treatmentsCard(
           bundle.rabbit,
           bundle.treatments,
@@ -181,6 +185,14 @@ export function renderRabbitPage(ctx: PageContext, id: number): HTMLElement {
         ctx.user.isAdmin ? carersCard(bundle.rabbit, bundle.carers) : null,
       ];
       container.replaceChildren(...sections.filter((section): section is HTMLElement => section !== null));
+      if (focus) {
+        const target = container.querySelector(`#card-${focus}`);
+        if (target) {
+          requestAnimationFrame(() =>
+            target.scrollIntoView({ behavior: "smooth", block: "start" }),
+          );
+        }
+      }
     } catch (err) {
       container.replaceChildren(
         h("div", { class: "empty" }, err instanceof Error ? err.message : "Could not load this bunny."),
@@ -388,7 +400,7 @@ function weightCard(
 
   return h(
     "div",
-    { class: "card" },
+    { class: "card", id: "card-weight" },
     h(
       "div",
       { class: "card-title" },
@@ -437,7 +449,7 @@ function stagesCard(
   for (const entry of ordered) list.append(stageRow(rabbit, entry, reload, canRecord));
   return h(
     "div",
-    { class: "card" },
+    { class: "card", id: "card-growing-up" },
     h(
       "div",
       { class: "card-title" },
@@ -552,7 +564,7 @@ function feedingCard(
   );
   return h(
     "div",
-    { class: "card" },
+    { class: "card", id: "card-feeding" },
     h(
       "div",
       { class: "card-title" },
@@ -720,11 +732,50 @@ function dailyChecksCard(
   rabbit: RabbitDto,
   types: CheckLogTypeDto[],
   logs: CheckLogDto[],
+  checklists: ChecklistDto[],
+  timezone: string,
   reload: () => Promise<void>,
   canRecord: boolean,
 ): HTMLElement {
   const openLog = (initialTypeId?: number) =>
     openCheckLogModal({ rabbit, types, logs, initialTypeId, onSaved: () => void reload() });
+
+  const todayKey = dayKeyInZone(new Date(), timezone);
+  const checklistRows = checklists.map((checklist) => {
+    const scheduled = todayKey ? isScheduledOn(checklist.recurrence, todayKey, null) : false;
+    return h(
+      "div",
+      { class: "list-row" },
+      h(
+        "div",
+        { class: "stack", style: { gap: "0.15rem" } },
+        h("strong", null, checklist.label),
+        h("span", { class: "dim small" }, recurrenceLabel(checklist.recurrence)),
+      ),
+      h("span", { class: "spacer" }),
+      scheduled ? h("span", { class: "badge watch" }, "Due today") : null,
+      canRecord
+        ? h(
+            "button",
+            {
+              class: "btn primary small",
+              type: "button",
+              onClick: () => openCheckModal({ rabbits: [rabbit], onSaved: () => void reload() }),
+            },
+            "Log",
+          )
+        : null,
+    );
+  });
+  const checklistSection =
+    checklistRows.length === 0
+      ? null
+      : h(
+          "div",
+          { class: "stack", style: { gap: "0" } },
+          h("p", { class: "task-slot dim small" }, "Checklists"),
+          ...checklistRows,
+        );
 
   const quickButtons =
     canRecord && types.length > 0
@@ -813,7 +864,7 @@ function dailyChecksCard(
   );
   return h(
     "div",
-    { class: "card" },
+    { class: "card", id: "card-daily-checks" },
     h(
       "div",
       { class: "card-title" },
@@ -828,6 +879,7 @@ function dailyChecksCard(
     ),
     quickButtons,
     list,
+    checklistSection,
   );
 }
 
@@ -867,7 +919,7 @@ function bowlsCard(
   for (const bowl of bowls) list.append(bowlPanel(rabbit, bowl, products, reload, canRecord));
   return h(
     "div",
-    { class: "card" },
+    { class: "card", id: "card-bowls" },
     h("div", { class: "card-title" }, h("h2", null, "Food & water"), h("span", { class: "spacer" }), add),
     h(
       "p",
@@ -1024,7 +1076,11 @@ function bowlPanel(
           "div",
           { class: "row wrap", style: { gap: "0.35rem" } },
           linkedProducts.map((item) =>
-            h("span", { class: "badge" }, `${item.name} · ${formatFoodAmount(item.stockGrams)}`),
+            h(
+              "span",
+              { class: "badge wrap" },
+              `${item.name} · ${formatFoodAmount(item.stockGrams)}`,
+            ),
           ),
         )
       : null,
@@ -1144,26 +1200,108 @@ async function removeBowlReading(
   await reload();
 }
 
-function tasksCard(
+function routineCard(
   rabbit: RabbitDto,
   tasks: TaskDto[],
   completions: TaskCompletionDto[],
+  careTypes: LookupDto[],
   reload: () => Promise<void>,
   canRecord: boolean,
   timezone: string,
 ): HTMLElement {
   const now = new Date();
   const taskById = new Map(tasks.map((task) => [task.id, task]));
-  const due = tasks
+  const careTaskByKind = new Map<string, TaskDto>();
+  for (const task of tasks) {
+    if (task.careKind) careTaskByKind.set(task.careKind, task);
+  }
+  const customTasks = tasks.filter((task) => task.careKind === null);
+  const completionDaysByTask = new Map<number, Set<string>>();
+  for (const completion of completions) {
+    const set = completionDaysByTask.get(completion.taskId) ?? new Set<string>();
+    set.add(localDayKey(new Date(completion.completedAt)));
+    completionDaysByTask.set(completion.taskId, set);
+  }
+  const due = customTasks
     .filter(
       (task) =>
         task.active &&
-        taskDueStatus(task.startDate, task.lastCompletedAt, task.intervalDays, now, timezone) ===
-          "due",
+        taskDueStatus(
+          task.startDate,
+          task.lastCompletedAt,
+          task.intervalDays,
+          now,
+          timezone,
+          task.recurrence,
+          [...(completionDaysByTask.get(task.id) ?? [])],
+        ) === "due",
     )
     .sort((a, b) => TASK_SLOTS.indexOf(a.slot) - TASK_SLOTS.indexOf(b.slot) || a.id - b.id);
 
   const list = h("div", { class: "stack", style: { gap: "0" } });
+  if (careTypes.length > 0) {
+    list.append(h("p", { class: "task-slot dim small" }, "Care routines"));
+    for (const careType of careTypes) {
+      const task = careTaskByKind.get(careType.value);
+      const last = task?.lastCompletedAt ?? null;
+      const dueAt = task
+        ? taskNextDueOn(
+            task.startDate,
+            task.lastCompletedAt,
+            task.intervalDays,
+            timezone,
+            task.recurrence,
+            [...(completionDaysByTask.get(task.id) ?? [])],
+          )
+        : null;
+      const status = dueStatus(dueAt, now, 7);
+      list.append(
+        h(
+          "div",
+          { class: "list-row" },
+          h(
+            "div",
+            { class: "stack", style: { gap: "0.15rem" } },
+            h("strong", null, careType.label),
+            h(
+              "span",
+              { class: "dim small" },
+              `${last ? `Last done ${fmtCalendarDate(last)}` : "Never recorded"} · ${
+                task ? recurrenceLabel(task.recurrence) : "No schedule"
+              }${dueAt ? ` · Next due ${fmtCalendarDate(dueAt)}` : ""}`,
+            ),
+          ),
+          h("span", { class: "spacer" }),
+          status === "ok" ? h("span", { class: "badge ok" }, "✓") : dueBadge(status),
+          canRecord && task
+            ? h(
+                "button",
+                { class: "btn primary small", type: "button", onClick: () => void completeTask(task) },
+                "Mark done",
+              )
+            : null,
+          canRecord
+            ? h(
+                "button",
+                {
+                  class: "btn ghost small",
+                  type: "button",
+                  onClick: () =>
+                    openTaskModal({
+                      rabbit,
+                      task,
+                      careKind: task ? undefined : careType.value,
+                      label: task ? undefined : careType.label,
+                      onSaved: () => void reload(),
+                    }),
+                },
+                task ? "Edit" : "Set schedule",
+              )
+            : null,
+        ),
+      );
+    }
+  }
   if (due.length === 0) {
     list.append(h("p", { class: "dim small", style: { margin: 0 } }, "Nothing due right now."));
   }
@@ -1174,7 +1312,7 @@ function tasksCard(
       list.append(h("p", { class: "task-slot dim small" }, TASK_SLOT_LABELS[task.slot]));
     }
     const detail = [
-      task.intervalDays === 1 ? "every day" : `every ${task.intervalDays} days`,
+      recurrenceLabel(task.recurrence),
       task.lastCompletedAt ? `last done ${fmtDate(task.lastCompletedAt)}` : "not done yet",
       task.products.length > 0
         ? `uses ${task.products
@@ -1274,12 +1412,12 @@ function tasksCard(
 
   return h(
     "div",
-    { class: "card" },
-    h("div", { class: "card-title" }, h("h2", null, "Daily routine"), h("span", { class: "spacer" }), add),
+    { class: "card", id: "card-routine" },
+    h("div", { class: "card-title" }, h("h2", null, "Routine"), h("span", { class: "spacer" }), add),
     h(
       "p",
       { class: "dim small" },
-      "Repeating chores and care rounds. Tap Done when finished.",
+      "Care routines and repeating chores. Tap Done when finished.",
     ),
     list,
   );
@@ -1428,109 +1566,6 @@ async function removeMedicationLog(entry: MedicationLogDto, reload: () => Promis
   await reload();
 }
 
-function quickLogCard(
-  rabbit: RabbitDto,
-  sections: ChecklistSectionDto[],
-  reload: () => Promise<void>,
-  canRecord: boolean,
-): HTMLElement | null {
-  if (!canRecord || sections.length === 0) return null;
-
-  const fields = sections.map((section) => {
-    const otherInput = h("input", { type: "text", placeholder: "Other details…" });
-    const otherField = h(
-      "div",
-      { class: "field checklist-other" },
-      h("label", null, "Other details"),
-      otherInput,
-    );
-    otherField.style.display = "none";
-    const group = optionButtons(section.options, [], section.multiple, (values) => {
-      otherField.style.display = values.includes("other") ? "" : "none";
-    });
-    return {
-      section,
-      group,
-      otherInput,
-      reset: () => {
-        group.setValues([]);
-        otherInput.value = "";
-        otherField.style.display = "none";
-      },
-      root: h(
-        "details",
-        { class: "quick-section" },
-        h("summary", null, section.label),
-        renderChecklistPhotos(section),
-        group.root,
-        otherField,
-      ),
-    };
-  });
-
-  const note = h("textarea", { placeholder: "What did you notice?" });
-  const picker = photoPicker({ label: "Add photo" });
-  const error = h("p", { class: "form-error" });
-  error.style.display = "none";
-  const save = h("button", { class: "btn primary small", type: "button" }, "Log observation");
-
-  save.addEventListener("click", async () => {
-    error.style.display = "none";
-    const checklist = emptyChecklist();
-    for (const field of fields) {
-      const values = field.group.read();
-      const other = field.otherInput.value.trim();
-      if (values.length > 0 || other) checklist[field.section.key] = { values, other };
-    }
-    const text = note.value.trim();
-    if (Object.keys(checklist).length === 0 && !text) {
-      error.textContent = "Tick at least one item or add a note.";
-      error.style.display = "";
-      return;
-    }
-    save.disabled = true;
-    try {
-      const result = await api.post<{ check: HealthCheckDto }>("/api/checks", {
-        rabbitId: rabbit.id,
-        checkedAt: new Date().toISOString(),
-        checklist,
-        notes: text,
-      });
-      const file = picker.file();
-      if (file) {
-        const form = new FormData();
-        form.append("photo", file);
-        await api.upload(`/api/checks/${result.check.id}/photo`, form);
-      }
-      note.value = "";
-      for (const field of fields) field.reset();
-      toast("Observation logged");
-      await reload();
-    } catch (err) {
-      error.textContent = err instanceof Error ? err.message : "Something went wrong";
-      error.style.display = "";
-    } finally {
-      save.disabled = false;
-    }
-  });
-
-  return h(
-    "div",
-    { class: "card" },
-    h("h2", null, "Quick log"),
-    h(
-      "p",
-      { class: "dim small" },
-      "Tick anything you noticed and log it as a health check — no full form needed.",
-    ),
-    error,
-    h("div", { class: "quick-grid" }, fields.map((field) => field.root)),
-    h("div", { class: "field" }, h("label", null, "Note"), note),
-    h("div", { class: "field" }, h("label", null, "Photo"), picker.root),
-    h("div", { class: "row" }, save),
-  );
-}
-
 function journalCard(
   rabbit: RabbitDto,
   entries: JournalEntryDto[],
@@ -1539,7 +1574,7 @@ function journalCard(
 ): HTMLElement {
   return h(
     "div",
-    { class: "card" },
+    { class: "card", id: "card-notes" },
     h("h2", null, "Notes & photos"),
     h(
       "p",
@@ -1774,7 +1809,7 @@ function checksCard(
   );
   return h(
     "div",
-    { class: "card" },
+    { class: "card", id: "card-health-checks" },
       h(
         "div",
         { class: "card-title" },
@@ -1847,7 +1882,7 @@ function treatmentsCard(
   );
   return h(
     "div",
-    { class: "card" },
+    { class: "card", id: "card-treatments" },
     h(
       "div",
       { class: "card-title" },
@@ -1882,13 +1917,21 @@ function treatmentRow(
     : null;
   const history = logs.filter((entry) => entry.treatmentId === treatment.id);
   const slotLabels = treatment.slots.map((slot) => DAY_SLOT_LABELS[slot]).join(", ");
+  const todayKey = localDayKey(new Date());
   const todayLogs = logs.filter(
     (entry) =>
-      entry.treatmentId === treatment.id &&
-      localDayKey(new Date(entry.givenAt)) === localDayKey(new Date()),
+      entry.treatmentId === treatment.id && localDayKey(new Date(entry.givenAt)) === todayKey,
   );
+  const doneDays = history
+    .filter((entry) => !entry.skipped)
+    .map((entry) => localDayKey(new Date(entry.givenAt)));
+  const scheduledToday =
+    treatment.status === "active" &&
+    treatment.startDate <= todayKey &&
+    (treatment.endDate === null || treatment.endDate >= todayKey) &&
+    isScheduledOn(treatment.recurrence, todayKey, treatment.startDate, doneDays);
   const schedule =
-    treatment.status === "active"
+    scheduledToday
       ? slotChips({
           slots: treatment.slots,
           logs: todayLogs.map((entry) => ({
@@ -1920,7 +1963,14 @@ function treatmentRow(
       h(
         "span",
         { class: "dim small" },
-        [treatment.dose, treatment.frequency, slotLabels, treatment.reason]
+        [
+          treatment.dose,
+          treatment.recurrence.kind === "daily"
+            ? treatment.frequency
+            : recurrenceLabel(treatment.recurrence),
+          slotLabels,
+          treatment.reason,
+        ]
           .filter(Boolean)
           .join(" · ") || "—",
       ),
@@ -2068,7 +2118,7 @@ function vaccinationsCard(
   const now = new Date();
   return h(
     "div",
-    { class: "card" },
+    { class: "card", id: "card-vaccinations" },
     h(
       "div",
       { class: "card-title" },
@@ -2150,202 +2200,6 @@ async function removeVaccination(
   await reload();
 }
 
-function careCard(
-  rabbit: RabbitDto,
-  schedules: CareScheduleDto[],
-  records: CareRecordDto[],
-  careTypes: LookupDto[],
-  reload: () => Promise<void>,
-  canRecord: boolean,
-): HTMLElement {
-  const now = new Date();
-  return h(
-    "div",
-    { class: "card" },
-    h("h2", null, "Routine care"),
-    h(
-      "div",
-      null,
-      careTypes.map((careType) => {
-        const kind = careType.value;
-        const schedule = schedules.find((item) => item.kind === kind);
-        const last = records
-          .filter((record) => record.kind === kind)
-          .sort((a, b) => b.doneAt.localeCompare(a.doneAt))[0];
-        const intervalDays = schedule?.intervalDays ?? 0;
-        const status = careDueStatus(last?.doneAt ?? null, intervalDays, now, 7);
-        const dueAt = nextDueDate(last?.doneAt ?? null, intervalDays);
-        const statusBadge =
-          status === "ok"
-            ? h("span", { class: "badge ok" }, "✓")
-            : dueBadge(status);
-        return h(
-          "div",
-          { class: "list-row" },
-          h(
-            "div",
-            { class: "stack", style: { gap: "0.15rem" } },
-            h("strong", null, careType.label),
-            h(
-              "span",
-              { class: "dim small" },
-              `${last ? `Last done ${fmtCalendarDate(last.doneAt)}` : "Never recorded"} · ${
-                schedule ? `Every ${schedule.intervalDays} days` : "No schedule"
-              }${dueAt ? ` · Next due ${fmtCalendarDate(dueAt)}` : ""}`,
-            ),
-          ),
-          h("span", { class: "spacer" }),
-          statusBadge,
-          canRecord
-            ? h(
-                "button",
-                {
-                  class: "btn outline small",
-                  type: "button",
-                  onClick: () => openCareDoneModal(rabbit, kind, careType.label, reload),
-                },
-                "Mark done",
-              )
-            : null,
-          canRecord
-            ? h(
-                "button",
-                {
-                  class: "btn ghost small",
-                  type: "button",
-                  onClick: () =>
-                    openIntervalModal(
-                      rabbit,
-                      kind,
-                      careType.label,
-                      schedule,
-                      careType.defaultInt ?? 30,
-                      reload,
-                    ),
-                },
-                schedule ? "Edit interval" : "Set interval",
-              )
-            : null,
-        );
-      }),
-    ),
-  );
-}
-
-function openCareDoneModal(
-  rabbit: RabbitDto,
-  kind: CareKind,
-  label: string,
-  reload: () => Promise<void>,
-): void {
-  const when = h("input", { type: "date" });
-  when.value = todayInputValue();
-  const notes = h("textarea");
-  const error = h("p", { class: "form-error" });
-  error.style.display = "none";
-  const save = h("button", { class: "btn primary", type: "submit" }, `Mark ${label} done`);
-
-  const modal = openModal({
-    guardUnsaved: true,
-    title: `Mark ${label} done`,
-    body: h(
-      "form",
-      {
-        onSubmit: async (event: Event) => {
-          event.preventDefault();
-          error.style.display = "none";
-          if (!when.value) {
-            error.textContent = "Pick a date.";
-            error.style.display = "";
-            return;
-          }
-          save.disabled = true;
-          try {
-            await api.post("/api/care-records", {
-              rabbitId: rabbit.id,
-              kind,
-              doneAt: when.value,
-              notes: notes.value.trim(),
-            });
-            toast(`${label} marked done`);
-            await reload();
-            modal.close();
-          } catch (err) {
-            error.textContent = err instanceof Error ? err.message : "Something went wrong";
-            error.style.display = "";
-          } finally {
-            save.disabled = false;
-          }
-        },
-      },
-      error,
-      h("div", { class: "field" }, h("label", null, "When"), when),
-      h("div", { class: "field" }, h("label", null, "Notes (optional)"), notes),
-      h(
-        "div",
-        { class: "modal-actions" },
-        h("button", { class: "btn outline", type: "button", onClick: () => modal.close() }, "Cancel"),
-        save,
-      ),
-    ),
-  });
-}
-
-function openIntervalModal(
-  rabbit: RabbitDto,
-  kind: CareKind,
-  label: string,
-  schedule: CareScheduleDto | undefined,
-  defaultDays: number,
-  reload: () => Promise<void>,
-): void {
-  const interval = h("input", {
-    type: "number",
-    min: "1",
-    max: "3650",
-    value: schedule ? String(schedule.intervalDays) : String(defaultDays),
-  });
-  const error = h("p", { class: "form-error" });
-  error.style.display = "none";
-  const save = h("button", { class: "btn primary", type: "submit" }, "Save interval");
-
-  const modal = openModal({
-    guardUnsaved: true,
-    title: `${label} schedule`,
-    body: h(
-      "form",
-      {
-        onSubmit: async (event: Event) => {
-          event.preventDefault();
-          error.style.display = "none";
-          save.disabled = true;
-          try {
-            await api.put(`/api/rabbits/${rabbit.id}/care-schedules`, {
-              kind,
-              intervalDays: Number(interval.value),
-            });
-            await reload();
-            modal.close();
-          } catch (err) {
-            error.textContent = err instanceof Error ? err.message : "Something went wrong";
-            error.style.display = "";
-          } finally {
-            save.disabled = false;
-          }
-        },
-      },
-      error,
-      h("div", { class: "field" }, h("label", null, "Interval in days"), interval),
-      h(
-        "div",
-        { class: "modal-actions" },
-        h("button", { class: "btn outline", type: "button", onClick: () => modal.close() }, "Cancel"),
-        save,
-      ),
-    ),
-  });
-}
-
 function appointmentsCard(
   rabbit: RabbitDto,
   appointments: AppointmentDto[],
@@ -2376,7 +2230,7 @@ function appointmentsCard(
     .sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt));
   return h(
     "div",
-    { class: "card" },
+    { class: "card", id: "card-appointments" },
     h(
       "div",
       { class: "card-title" },
@@ -2558,19 +2412,6 @@ function dueBadge(status: ReturnType<typeof dueStatus>): Node | null {
   if (status === "due-soon") return h("span", { class: "badge watch" }, "Due soon");
   if (status === "ok") return h("span", { class: "badge ok" }, "OK");
   return null;
-}
-
-function nextDueDate(lastDoneAt: string | null, intervalDays: number): string | null {
-  if (!lastDoneAt || intervalDays <= 0) return null;
-  const date = new Date(`${lastDoneAt}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + intervalDays);
-  return date.toISOString().slice(0, 10);
-}
-
-function todayInputValue(): string {
-  const now = new Date();
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 function capitalize(value: string): string {

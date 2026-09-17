@@ -128,6 +128,7 @@ describe("buildDemoDataset", () => {
       expect(dataset.rabbits[task.rabbitIndex]).toBeDefined();
       expect(slots.has(task.slot)).toBe(true);
       expect(task.intervalDays).toBeGreaterThan(0);
+      if (task.careKind) continue;
       for (const hours of task.completionsHoursAgo) {
         expect(hours).toBeGreaterThan(0);
         expect(hours).toBeLessThan(7 * 24);
@@ -175,10 +176,14 @@ describe("buildDemoDataset", () => {
       checksByRabbit.set(check.rabbitIndex, list);
     }
     const lastCare = new Map<string, string>();
-    for (const record of dataset.careRecords) {
-      const key = `${record.rabbitIndex}:${record.kind}`;
-      const existing = lastCare.get(key);
-      if (!existing || record.doneAt > existing) lastCare.set(key, record.doneAt);
+    for (const task of dataset.tasks) {
+      if (!task.careKind) continue;
+      for (const hours of task.completionsHoursAgo) {
+        const key = `${task.rabbitIndex}:${task.careKind}`;
+        const doneAt = new Date(now.getTime() - hours * 3_600_000).toISOString();
+        const existing = lastCare.get(key);
+        if (!existing || doneAt > existing) lastCare.set(key, doneAt);
+      }
     }
 
     const badges = dataset.rabbits.flatMap((_, rabbitIndex) => {
@@ -192,12 +197,12 @@ describe("buildDemoDataset", () => {
               vaccine: vaccination.vaccine,
               nextDueAt: vaccination.nextDueAt,
             })),
-          care: dataset.careSchedules
-            .filter((schedule) => schedule.rabbitIndex === rabbitIndex)
-            .map((schedule) => ({
-              kind: schedule.kind,
-              lastDoneAt: lastCare.get(`${rabbitIndex}:${schedule.kind}`) ?? null,
-              intervalDays: schedule.intervalDays,
+          care: dataset.tasks
+            .filter((task) => task.rabbitIndex === rabbitIndex && task.careKind)
+            .map((task) => ({
+              kind: task.careKind as string,
+              lastDoneAt: lastCare.get(`${rabbitIndex}:${task.careKind}`) ?? null,
+              intervalDays: task.intervalDays,
             })),
           followUps: dataset.appointments
             .filter(

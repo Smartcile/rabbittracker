@@ -4,6 +4,7 @@ import { formatDrugAmount } from "../../../shared/drugs.ts";
 import {
   ageLabel,
   careDueStatus,
+  dayKeyInZone,
   dueStatus,
   formatWeight,
   taskDueStatus,
@@ -11,6 +12,7 @@ import {
   treatmentScheduleStatus,
   weightTrend,
 } from "../../../shared/health.ts";
+import { recurrenceLabel } from "../../../shared/recurrence.ts";
 import {
   checklistAnswerLines,
   dateRangesOverlap,
@@ -23,8 +25,6 @@ import { DAY_SLOT_LABELS } from "../../../shared/slots.ts";
 import type {
   AppointmentDto,
   BowlDto,
-  CareRecordDto,
-  CareScheduleDto,
   CheckLogDto,
   GrowthStageDto,
   CheckLogTypeDto,
@@ -83,7 +83,7 @@ export function renderReportSections(view: ReportView): HTMLElement[] {
     weightSection(bundle.rabbit, bundle.checks, range, timezone),
     checksSection(bundle.checks, bundle.checklist, bundle.logTypes, range, includePhotos, timezone, photoUrl),
     vaccinationsSection(bundle.vaccinations, range, now),
-    careSection(bundle.careSchedules, bundle.careRecords, bundle.careTypes, range, now),
+    careSection(bundle.tasks, bundle.taskCompletions, bundle.careTypes, range, now),
     treatmentsSection(bundle.treatments, bundle.medicationLogs, range, now),
     medicationSection(bundle.medicationLogs, bundle.drugs, range, timezone),
     appointmentsSection(bundle.appointments, range, showCost, timezone, now),
@@ -476,13 +476,38 @@ function tasksSection(
     return section("Daily routine", empty("No routine tasks."));
   }
   const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const completionDaysByTask = new Map<number, Set<string>>();
+  for (const completion of completions) {
+    const key = dayKeyInZone(new Date(completion.completedAt), timezone);
+    if (key === null) continue;
+    const set = completionDaysByTask.get(completion.taskId) ?? new Set<string>();
+    set.add(key);
+    completionDaysByTask.set(completion.taskId, set);
+  }
   const sorted = [...tasks].sort(
     (a, b) => TASK_SLOTS.indexOf(a.slot) - TASK_SLOTS.indexOf(b.slot) || a.id - b.id,
   );
   const rows = sorted.map((task) => {
-    const dueOn = taskNextDueOn(task.startDate, task.lastCompletedAt, task.intervalDays, timezone);
+    const completionDays = [...(completionDaysByTask.get(task.id) ?? [])];
+    const dueOn = taskNextDueOn(
+      task.startDate,
+      task.lastCompletedAt,
+      task.intervalDays,
+      timezone,
+      task.recurrence,
+      completionDays,
+      now,
+    );
     const due =
-      taskDueStatus(task.startDate, task.lastCompletedAt, task.intervalDays, now, timezone) === "due";
+      taskDueStatus(
+        task.startDate,
+        task.lastCompletedAt,
+        task.intervalDays,
+        now,
+        timezone,
+        task.recurrence,
+        completionDays,
+      ) === "due";
     return [
       h(
         "div",
@@ -491,7 +516,7 @@ function tasksSection(
         task.notes ? h("div", { class: "dim small" }, task.notes) : null,
       ),
       TASK_SLOT_LABELS[task.slot],
-      task.intervalDays === 1 ? "Every day" : `Every ${task.intervalDays} days`,
+      recurrenceLabel(task.recurrence),
       task.lastCompletedAt ? fmtDate(task.lastCompletedAt, timezone) : "Never",
       dueOn ? fmtCalendarDate(dueOn) : "—",
       task.active
@@ -596,7 +621,9 @@ function treatmentsSection(
         treatment.notes ? h("div", { class: "dim small" }, treatment.notes) : null,
       ),
       [treatment.dose, treatment.route].filter(Boolean).join(" · ") || "—",
-      treatment.frequency || "—",
+      treatment.recurrence.kind === "daily"
+        ? treatment.frequency || "Every day"
+        : recurrenceLabel(treatment.recurrence),
       treatment.slots.map((slot) => DAY_SLOT_LABELS[slot]).join(", ") || "—",
       treatment.reason || "—",
       `${fmtCalendarDate(treatment.startDate)} → ${
@@ -646,8 +673,8 @@ function vaccinationsSection(
 }
 
 function careSection(
-  schedules: CareScheduleDto[],
-  records: CareRecordDto[],
+  tasks: TaskDto[],
+  completions: TaskCompletionDto[],
   careTypes: LookupDto[],
   range: ReportRange,
   now: Date,
@@ -656,22 +683,22 @@ function careSection(
     return section("Routine care", empty("No care types configured."));
   }
   const rows = careTypes.map((careType) => {
-    const kind = careType.value;
-    const schedule = schedules.find((item) => item.kind === kind);
-    const done = records
-      .filter((record) => record.kind === kind)
-      .sort((a, b) => b.doneAt.localeCompare(a.doneAt));
-    const last = done[0];
-    const intervalDays = schedule?.intervalDays ?? 0;
-    const due = last ? nextDueDate(last.doneAt, intervalDays) : null;
-    const inRange = done.filter((record) => isDateWithinRange(record.doneAt, range));
+    const task = tasks.find((item) => item.careKind === careType.value);
+    const done = completions
+      .filter((completion) => completion.taskId === task?.id)
+      .map((completion) => completion.completedAt)
+      .sort((a, b) => b.localeCompare(a));
+    const last = done[0] ?? null;
+    const intervalDays = task?.intervalDays ?? 0;
+    const due = last ? nextDueDate(last, intervalDays) : null;
+    const inRange = done.filter((value) => isDateWithinRange(value, range));
     return [
       careType.label,
-      schedule ? `Every ${schedule.intervalDays} days` : "No schedule",
-      last ? fmtCalendarDate(last.doneAt) : "Never",
+      task ? `Every ${task.intervalDays} days` : "No schedule",
+      last ? fmtCalendarDate(last) : "Never",
       due ? fmtCalendarDate(due) : "—",
-      dueBadge(careDueStatus(last?.doneAt ?? null, intervalDays, now, 7)) ?? "—",
-      inRange.length > 0 ? inRange.map((record) => fmtCalendarDate(record.doneAt)).join(", ") : "—",
+      dueBadge(careDueStatus(last, intervalDays, now, 7)) ?? "—",
+      inRange.length > 0 ? inRange.map((value) => fmtCalendarDate(value)).join(", ") : "—",
     ];
   });
   return section(
@@ -887,7 +914,7 @@ function scheduleBadge(state: ReturnType<typeof treatmentScheduleStatus>): HTMLE
 
 function nextDueDate(lastDoneAt: string | null, intervalDays: number): string | null {
   if (!lastDoneAt || intervalDays <= 0) return null;
-  const date = new Date(`${lastDoneAt}T00:00:00Z`);
+  const date = new Date(`${lastDoneAt.slice(0, 10)}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + intervalDays);
   return date.toISOString().slice(0, 10);
 }
