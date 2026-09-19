@@ -8,6 +8,7 @@ import {
   DAY_SLOTS,
   nearestSlot,
   nextPendingSlot,
+  sameTimeOfDay,
   slotForTime,
   slotRangeLabel,
   slotTimeStatus,
@@ -862,9 +863,13 @@ export function openBowlReadingModal(options: {
   renderSlotPicker();
   renderQueue();
   renderDayList();
+  let lastWhen: Date | null = when.value ? new Date(when.value) : null;
   when.addEventListener("change", () => {
     const at = when.value ? new Date(when.value) : new Date();
-    if (bowl.slots.length > 0 && !Number.isNaN(at.getTime())) {
+    const valid = !Number.isNaN(at.getTime());
+    const timeChanged = lastWhen === null || !valid || !sameTimeOfDay(lastWhen, at);
+    lastWhen = valid ? at : null;
+    if (timeChanged && bowl.slots.length > 0 && valid) {
       slot = slotForTime(at);
       slotTouched = true;
     }

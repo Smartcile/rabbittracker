@@ -4,6 +4,7 @@ import {
   recurrenceDays,
   type Recurrence,
 } from "./recurrence.ts";
+import { allSlotsDone, type DaySlot } from "./slots.ts";
 
 export const WEIGHT_WATCH_PCT = 2;
 export const WEIGHT_ALERT_PCT = 5;
@@ -312,8 +313,7 @@ export function treatmentScheduleStatus(
     .filter((key): key is string => key !== null);
   if (!isScheduledOn(recurrence, todayKey, treatment.startDate, doneKeys)) return "up-to-date";
   if (treatment.slots.length > 0) {
-    const done = new Set(todays.filter((log) => !log.skipped).map((log) => log.slot));
-    return treatment.slots.every((slot) => done.has(slot)) ? "up-to-date" : "due";
+    return allSlotsDone(treatment.slots as readonly DaySlot[], todays) ? "up-to-date" : "due";
   }
   if (todays.some((log) => !log.skipped)) return "up-to-date";
   return "due";

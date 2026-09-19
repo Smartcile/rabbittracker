@@ -416,7 +416,13 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
                     }${entry.missed ? " missed" : ""}`,
                   },
                   `${DAY_SLOT_SHORT_LABELS[entry.slot]}${
-                    entry.done ? (entry.missed ? " ✗" : entry.status === "late" ? " !" : " ✓") : ""
+                    entry.done
+                      ? entry.missed
+                        ? " ✗"
+                        : entry.status === "late" || entry.offSchedule
+                          ? " !"
+                          : " ✓"
+                      : ""
                   }`,
                 ),
               ),
@@ -469,7 +475,11 @@ export function renderCalendarPage(ctx: PageContext): HTMLElement {
                     }`,
                   },
                   `${DAY_SLOT_SHORT_LABELS[entry.slot]}${
-                    entry.done ? (entry.status === "late" ? " !" : " ✓") : ""
+                    entry.done
+                      ? entry.status === "late" || entry.offSchedule
+                        ? " !"
+                        : " ✓"
+                      : ""
                   }`,
                 ),
               ),

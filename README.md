@@ -77,6 +77,7 @@ Desktop:
   drawn in blue), readings can be
   edited or deleted, and bowls can be scheduled with times of day: the calendar shows a chip per
   bowl per time from the bowl's start date onward, and tapping it logs a reading for that slot.
+  Backfilling a reading on another date keeps the scheduled time of day, so the chip ticks.
   Record the bowl's empty weight to see
   how much is actually in it, link one or more food products so top-ups draw from the chosen
   product's stock, and enter consumption directly for greens and treats (the new weight is
@@ -105,7 +106,9 @@ Desktop:
   dose is given, each with a window (early morning 05:00–08:00, morning 08:00–12:00, afternoon
   12:00–17:00, evening 17:00–21:00, night 21:00–05:00). Logging preselects the slot for the current
   time, and doses logged outside the window are flagged **Early** or **Late** so mistakes stand
-  out. The calendar shows the doses due each day with ticks per time; tap a treatment to see what
+  out. A dose logged for a time of day outside the schedule (e.g. early morning for a
+  morning-and-night course) stands in for the nearest scheduled time, shown green with **!**
+  instead of a tick. The calendar shows the doses due each day with ticks per time; tap a treatment to see what
   is logged, log another dose or pick a different time for that day (tick **Change going forward**
   to add it to the schedule). Multiple
   doses can be logged per day, linked doses are grouped under the treatment on the bunny page,

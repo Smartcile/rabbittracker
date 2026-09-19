@@ -1834,6 +1834,7 @@ span.slot-chip {
 
 .cal-chip.bowl.done {
   border-color: var(--ok);
+  background: var(--ok-soft);
   color: var(--ok);
 }
 

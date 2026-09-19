@@ -148,9 +148,10 @@
 
 - [x] **Time of day follows the time you enter.** Logging a bowl reading or a medication dose
   re-selects the matching time of day (Morning/Afternoon/Evening/Night) when the time changes,
-  revealing every time of day when it is not part of the schedule. The task create/edit pop-up
-  defaults its time of day to the current one, and the task completion pop-up shows which time of
-  day the entered time falls into.
+  revealing every time of day when it is not part of the schedule. An off-schedule log stands in
+  for the nearest scheduled time on the chips, shown green with **!** instead of a tick. The task
+  create/edit pop-up defaults its time of day to the current one, and the task completion pop-up
+  shows which time of day the entered time falls into.
 
 - [x] **Flexible schedules (recurrence).** Treatments, bowls and routine tasks each carry a
   structured repeat — every day, chosen weekdays, **N times a week on any days**, or every N days —

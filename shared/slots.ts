@@ -52,6 +52,10 @@ export function slotTimeStatus(slot: DaySlot, at: Date): SlotTimeStatus {
   return minutes - end <= gap / 2 ? "late" : "early";
 }
 
+export function sameTimeOfDay(a: Date, b: Date): boolean {
+  return a.getHours() === b.getHours() && a.getMinutes() === b.getMinutes();
+}
+
 export function slotForTime(at: Date): DaySlot {
   const minutes = at.getHours() * 60 + at.getMinutes();
   return (
@@ -101,7 +105,26 @@ export type SlotStatus = {
   done: boolean;
   missed: boolean;
   status: SlotTimeStatus | null;
+  offSchedule: boolean;
 };
+
+function nearestScheduledSlot(slots: readonly DaySlot[], extra: DaySlot): DaySlot | null {
+  const target = DAY_SLOTS.indexOf(extra);
+  let best: DaySlot | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  let bestForward = Number.POSITIVE_INFINITY;
+  for (const slot of slots) {
+    const index = DAY_SLOTS.indexOf(slot);
+    const forward = (index - target + DAY_SLOTS.length) % DAY_SLOTS.length;
+    const distance = Math.min(forward, DAY_SLOTS.length - forward);
+    if (distance < bestDistance || (distance === bestDistance && forward < bestForward)) {
+      best = slot;
+      bestDistance = distance;
+      bestForward = forward;
+    }
+  }
+  return best;
+}
 
 export function slotStatus(
   slots: readonly DaySlot[],
@@ -111,15 +134,49 @@ export function slotStatus(
   for (const log of dayLogs) {
     if (log.slot && !bySlot.has(log.slot)) bySlot.set(log.slot, log);
   }
-  return slots.map((slot) => {
+  const scheduled = new Set<string>(slots);
+  const extras = [...bySlot.keys()].filter((slot) => !scheduled.has(slot)) as DaySlot[];
+  const claimed = new Set<DaySlot>();
+  const entries: SlotStatus[] = slots.map((slot) => {
     const log = bySlot.get(slot);
-    return {
-      slot,
-      done: log !== undefined,
-      missed: log?.skipped === true,
-      status: log?.at ? slotTimeStatus(slot, new Date(log.at)) : null,
-    };
+    if (log) {
+      claimed.add(slot);
+      return {
+        slot,
+        done: true,
+        missed: log.skipped === true,
+        status: log.at ? slotTimeStatus(slot, new Date(log.at)) : null,
+        offSchedule: false,
+      };
+    }
+    const substitute = extras.find(
+      (extra) => !claimed.has(extra) && nearestScheduledSlot(slots, extra) === slot,
+    );
+    if (substitute) {
+      claimed.add(substitute);
+      const extraLog = bySlot.get(substitute)!;
+      return {
+        slot: substitute,
+        done: true,
+        missed: extraLog.skipped === true,
+        status: extraLog.at ? slotTimeStatus(substitute, new Date(extraLog.at)) : null,
+        offSchedule: true,
+      };
+    }
+    return { slot, done: false, missed: false, status: null, offSchedule: false };
   });
+  for (const extra of extras) {
+    if (claimed.has(extra)) continue;
+    const log = bySlot.get(extra)!;
+    entries.push({
+      slot: extra,
+      done: true,
+      missed: log.skipped === true,
+      status: log.at ? slotTimeStatus(extra, new Date(log.at)) : null,
+      offSchedule: true,
+    });
+  }
+  return entries;
 }
 
 export function allSlotsDone(

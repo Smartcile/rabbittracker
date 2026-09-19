@@ -542,6 +542,16 @@ describe("treatmentScheduleStatus", () => {
     );
   });
 
+  it("counts an off-schedule dose for the nearest scheduled slot", () => {
+    const logs = [
+      { givenAt: "2026-09-15T06:30:00.000Z", slot: "early_morning", skipped: false },
+      { givenAt: "2026-09-15T18:00:00.000Z", slot: "evening", skipped: false },
+    ];
+    expect(treatmentScheduleStatus({ ...base, slots: ["morning", "evening"] }, logs, now)).toBe(
+      "up-to-date",
+    );
+  });
+
   it("is due when a slot is still pending", () => {
     const logs = [{ givenAt: "2026-09-15T08:00:00.000Z", slot: "morning", skipped: false }];
     expect(treatmentScheduleStatus({ ...base, slots: ["morning", "evening"] }, logs, now)).toBe("due");

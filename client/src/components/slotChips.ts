@@ -21,25 +21,13 @@ export function slotChips(options: {
 }): HTMLElement | null {
   if (options.slots.length === 0) return null;
   const statuses = slotStatus(options.slots, options.logs);
-  const extras = [
-    ...new Set(
-      options.logs
-        .map((log) => log.slot)
-        .filter(
-          (slot): slot is DaySlot => slot !== null && !options.slots.includes(slot as DaySlot),
-        ),
-    ),
-  ].map((slot) => {
-    const log = options.logs.find((entry) => entry.slot === slot);
-    return { slot, done: true, missed: log?.skipped === true, status: null };
-  });
-  const chips = [...statuses, ...extras];
   return h(
     "div",
     { class: "row wrap", style: { gap: "0.3rem" } },
-    chips.map((entry) => {
+    statuses.map((entry) => {
       const late = entry.status === "late";
-      const mark = entry.missed ? " ✗" : late ? " !" : " ✓";
+      const flagged = late || entry.offSchedule;
+      const mark = entry.missed ? " ✗" : flagged ? " !" : " ✓";
       const label = `${DAY_SLOT_LABELS[entry.slot]}${entry.done ? mark : ""}`;
       const classes = `slot-chip${entry.done ? " done" : ""}${late ? " late" : ""}${
         entry.missed ? " missed" : ""

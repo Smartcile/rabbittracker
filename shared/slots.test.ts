@@ -5,6 +5,7 @@ import {
   allSlotsDone,
   nearestSlot,
   nextPendingSlot,
+  sameTimeOfDay,
   slotForTime,
   slotRangeLabel,
   slotStatus,
@@ -28,6 +29,14 @@ describe("slotForTime", () => {
     expect(slotForTime(new Date(2026, 8, 1, 19, 0))).toBe("evening");
     expect(slotForTime(new Date(2026, 8, 1, 23, 0))).toBe("night");
     expect(slotForTime(new Date(2026, 8, 1, 2, 0))).toBe("night");
+  });
+});
+
+describe("sameTimeOfDay", () => {
+  it("ignores the date but compares hours and minutes", () => {
+    expect(sameTimeOfDay(new Date(2026, 8, 1, 12, 0), new Date(2026, 8, 16, 12, 0))).toBe(true);
+    expect(sameTimeOfDay(new Date(2026, 8, 1, 12, 0), new Date(2026, 8, 1, 12, 30))).toBe(false);
+    expect(sameTimeOfDay(new Date(2026, 8, 1, 12, 0), new Date(2026, 8, 1, 13, 0))).toBe(false);
   });
 });
 
@@ -65,9 +74,31 @@ describe("slotStatus", () => {
   it("marks slots that have a matching log", () => {
     const status = slotStatus(["morning", "evening"], [{ slot: "morning" }, { slot: null }]);
     expect(status).toEqual([
-      { slot: "morning", done: true, missed: false, status: null },
-      { slot: "evening", done: false, missed: false, status: null },
+      { slot: "morning", done: true, missed: false, status: null, offSchedule: false },
+      { slot: "evening", done: false, missed: false, status: null, offSchedule: false },
     ]);
+  });
+
+  it("lets an off-schedule log stand in for the nearest scheduled slot", () => {
+    const status = slotStatus(["morning", "night"], [
+      { slot: "early_morning", at: new Date(2026, 8, 1, 6, 30).toISOString() },
+    ]);
+    expect(status[0]).toMatchObject({
+      slot: "early_morning",
+      done: true,
+      offSchedule: true,
+    });
+    expect(status[1]).toMatchObject({ slot: "night", done: false, offSchedule: false });
+  });
+
+  it("does not double-count an off-schedule log when its slot is already logged", () => {
+    const status = slotStatus(["morning", "night"], [
+      { slot: "morning" },
+      { slot: "early_morning", at: new Date(2026, 8, 1, 6, 30).toISOString() },
+    ]);
+    expect(status[0]).toMatchObject({ slot: "morning", done: true, offSchedule: false });
+    expect(status[1]).toMatchObject({ slot: "night", done: false });
+    expect(status[2]).toMatchObject({ slot: "early_morning", done: true, offSchedule: true });
   });
 
   it("marks skipped doses as missed but accounted for", () => {

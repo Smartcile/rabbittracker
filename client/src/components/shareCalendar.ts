@@ -198,7 +198,13 @@ function slotChips(statuses: ReturnType<typeof slotStatus>): HTMLElement {
           }`,
         },
         `${DAY_SLOT_SHORT_LABELS[entry.slot]}${
-          entry.done ? (entry.missed ? " ✗" : entry.status === "late" ? " !" : " ✓") : ""
+          entry.done
+            ? entry.missed
+              ? " ✗"
+              : entry.status === "late" || entry.offSchedule
+                ? " !"
+                : " ✓"
+            : ""
         }`,
       ),
     ),

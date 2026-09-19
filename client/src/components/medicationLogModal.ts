@@ -6,6 +6,7 @@ import {
   DAY_SLOTS,
   nearestSlot,
   nextPendingSlot,
+  sameTimeOfDay,
   slotForTime,
   slotRangeLabel,
   slotTimeStatus,
@@ -403,10 +404,14 @@ export function openMedicationLogModal(options: {
   treatmentSelect.addEventListener("change", syncFromTreatment);
   drugSelect.addEventListener("change", syncHint);
   amount.addEventListener("input", syncHint);
+  let lastWhen: Date | null = when.value ? new Date(when.value) : null;
   when.addEventListener("change", () => {
     const treatment = selectedTreatment();
     const at = when.value ? new Date(when.value) : new Date();
-    if (treatment && treatment.slots.length > 0 && !Number.isNaN(at.getTime())) {
+    const valid = !Number.isNaN(at.getTime());
+    const timeChanged = lastWhen === null || !valid || !sameTimeOfDay(lastWhen, at);
+    lastWhen = valid ? at : null;
+    if (timeChanged && treatment && treatment.slots.length > 0 && valid) {
       slot = slotForTime(at);
       slotTouched = true;
     }
